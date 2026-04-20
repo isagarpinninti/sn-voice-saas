@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyUploadToken } from '@/lib/upload-tokens'
 import { resolvePendingUpload, hasPendingUpload } from '@/lib/upload-registry'
+import { extractText } from '@/lib/file-extract'
 import { addLog } from '@/lib/log-store'
 import { logAudit } from '@/lib/audit'
 
@@ -152,6 +153,20 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     },
   })
 
+  // Server-side text extraction for PDF + XLSX — lets the agent reason about
+  // file contents, not just the filename. Best-effort: a parse failure never
+  // blocks the attach; the agent just won't see the text.
+  const extraction = await extractText({
+    bytes,
+    mimeType: file.type || 'application/octet-stream',
+    fileName: file.name,
+  })
+  if (extraction.kind === 'error') {
+    addLog('warn', 'upload', `Extraction error for ${file.name}: ${extraction.error}`, { tenantId })
+  } else if (extraction.kind !== 'unsupported') {
+    addLog('info', 'upload', `Extracted ${extraction.kind}: ${extraction.note} (${extraction.text.length} chars)`, { tenantId })
+  }
+
   // Notify the live voice pipeline so the agent can reference the file mid-call
   resolvePendingUpload(token, {
     fileName: file.name,
@@ -160,6 +175,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     snAttachmentSysId,
     snInstanceUrl: inst.snInstanceUrl,
     downloadUrl,
+    extractedText: extraction.text || undefined,
+    extractedNote: extraction.note,
+    extractedTruncated: extraction.truncated,
   })
 
   return NextResponse.json({ ok: true, fileName: file.name, size: file.size, snAttachmentSysId })

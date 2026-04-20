@@ -264,11 +264,22 @@ export class VoicePipeline extends EventEmitter {
     registerPendingUpload(token, (meta) => {
       this.pendingUploadToken = ''
       const kb = (meta.sizeBytes / 1024).toFixed(1)
-      const note =
+      let note =
         `[SYSTEM] The user has uploaded the file "${meta.fileName}" (${kb} KB, ${meta.mimeType}). ` +
-        `It is attached to the current voice session (sys_attachment ${meta.snAttachmentSysId}). ` +
-        `Briefly acknowledge the upload and continue with the original request.`
-      addLog('info', 'pipeline', 'Attachment uploaded, notifying LLM: ' + meta.fileName, { tenantId: this.tenant.id })
+        `It is attached to the current voice session (sys_attachment ${meta.snAttachmentSysId}).`
+
+      if (meta.extractedText && meta.extractedText.length > 0) {
+        const summary = meta.extractedNote ? ` (${meta.extractedNote})` : ''
+        const trunc = meta.extractedTruncated ? '\n[… truncated — only the first portion is shown.]' : ''
+        note +=
+          `\n\nExtracted contents${summary}:\n` +
+          '```\n' + meta.extractedText + trunc + '\n```\n\n' +
+          'Use this content to answer the user\'s request. Keep your spoken reply concise — summarize what you see rather than reading it verbatim.'
+      } else {
+        note += ' Contents could not be extracted automatically — acknowledge the upload and ask the user what they would like you to do with the file.'
+      }
+
+      addLog('info', 'pipeline', 'Attachment uploaded, notifying LLM: ' + meta.fileName + (meta.extractedText ? ' (with ' + meta.extractedText.length + ' chars of text)' : ''), { tenantId: this.tenant.id })
       this.processUserMessage(note).catch(() => {})
     })
 

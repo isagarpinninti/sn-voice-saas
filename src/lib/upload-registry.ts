@@ -18,6 +18,12 @@ export type UploadMeta = {
   snAttachmentSysId: string
   snInstanceUrl: string
   downloadUrl: string
+  /** Extracted plaintext for PDF/XLSX; undefined for unsupported types or errors. */
+  extractedText?: string
+  /** Summary note — e.g. "5 pages", "2 sheets, 42 rows". Surface on the LLM side. */
+  extractedNote?: string
+  /** True when text was longer than MAX_EXTRACTED_CHARS and was cut off. */
+  extractedTruncated?: boolean
 }
 
 type Entry = {
