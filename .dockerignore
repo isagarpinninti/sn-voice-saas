@@ -1,0 +1,45 @@
+# Keep Docker build context small and reproducible.
+# Anything listed here is excluded from `COPY . .` in the Dockerfile.
+
+# Dependencies — reinstalled inside the image
+node_modules
+.pnpm-store
+.yarn
+
+# Build artifacts — rebuilt inside the image
+.next
+out
+build
+dist
+*.tsbuildinfo
+
+# Local env files — secrets must be set in Railway dashboard, never baked into the image
+.env
+.env.*
+!.env.example
+
+# VCS
+.git
+.gitignore
+.gitattributes
+
+# Editor / OS
+.vscode
+.idea
+.DS_Store
+*.swp
+*.swo
+
+# Testing / coverage
+coverage
+.nyc_output
+
+# Misc
+README.md
+RAILWAY_DEPLOYMENT.md
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.vercel

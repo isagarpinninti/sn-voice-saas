@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// Auth (NextAuth)
+// =====================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// =====================================================
+// Users & Tenants
+// =====================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  isAdmin       Boolean   @default(false)
+  accounts      Account[]
+  sessions      Session[]
+  tenant        Tenant?
+  createdAt     DateTime  @default(now())
+}
+
+model Tenant {
+  id                String         @id @default(cuid())
+  userId            String         @unique
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan              Plan           @default(FREE)
+  revenuecat_id     String?        @unique
+  subscription_id   String?
+  plan_expires_at   DateTime?
+
+  minutes_per_month Int            @default(50)
+  concurrent_limit  Int            @default(1)
+  max_agents        Int            @default(1)
+  max_instances     Int            @default(1)
+
+  instances         Instance[]
+  tokens            ApiToken[]
+  agents            Agent[]
+  usageLogs         UsageLog[]
+
+  company           String?
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  PRO_VOICE
+  BUSINESS
+  ENTERPRISE
+}
+
+// =====================================================
+// Instances (multi-instance per tenant)
+// =====================================================
+
+model Instance {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name           String   @default("Default Instance")
+  snInstanceUrl  String
+  snUsername     String
+  snPassword     String
+
+  // Widget customization (one widget per instance)
+  widgetColor        String?  @default("#10b981")
+  widgetPosition     String?  @default("right")
+  widgetVoiceOnly    Boolean  @default(false)
+  widgetAutoOpen     Boolean  @default(false)
+  widgetGreeting     String?
+  widgetAgentName    String?
+  widgetShowBranding Boolean  @default(true)
+  widgetLogoUrl      String?
+  widgetBorderRadius String?  @default("full")
+
+  active         Boolean  @default(true)
+  agents         Agent[]
+  tokens         ApiToken[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// =====================================================
+// Agents (multi-agent per instance)
+// =====================================================
+
+model Agent {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  instanceId String?
+  instance   Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+
+  // Identity
+  name       String   @default("Default Agent")
+  snAgentId  String?
+
+  active     Boolean  @default(true)
+  tokens     ApiToken[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([instanceId])
+}
+
+// =====================================================
+// API Tokens
+// =====================================================
+
+model ApiToken {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId    String?
+  agent      Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  instanceId String?
+  instance   Instance? @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  token      String    @unique @default(cuid())
+  name       String    @default("Default")
+  active     Boolean   @default(true)
+  lastUsed   DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([token])
+  @@index([agentId])
+  @@index([instanceId])
+}
+
+// =====================================================
+// Usage Tracking
+// =====================================================
+
+model UsageLog {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  date          DateTime @default(now()) @db.Date
+  calls         Int      @default(0)
+  minutes       Float    @default(0)
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  toolCalls     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@unique([tenantId, date])
+  @@index([tenantId, date])
+}
+
+// =====================================================
+// Audit Log (tenant-scoped, append-only)
+// =====================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  actorId    String?
+  actorType  String   @default("user")
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([action, createdAt])
+}
+
+// =====================================================
+// Feature Flags (tenant-scoped overrides + global defaults)
+// =====================================================
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String
+  tenantId    String?  // null = global default
+  enabled     Boolean  @default(false)
+  rolloutPct  Int      @default(0)
+  description String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@unique([key, tenantId])
+  @@index([tenantId])
+}
+
+// =====================================================
+// Waitlist (early-access signups for features like phone calls)
+// =====================================================
+
+model Waitlist {
+  id        String   @id @default(cuid())
+  email     String
+  feature   String   @default("phone_calls")
+  source    String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@unique([email, feature])
+  @@index([feature, createdAt])
+}
+
+// =====================================================
+// Plan Definitions (DB-backed replacement for hardcoded PLANS)
+// Keyed by the Plan enum value (FREE / PRO / ENTERPRISE).
+// =====================================================
+
+model PlanDefinition {
+  id               String   @id @default(cuid())
+  key              String   @unique
+  name             String
+  price            Int      @default(0)
+  minutesPerMonth  Int      @default(0)
+  concurrentLimit  Int      @default(1)
+  maxAgents        Int      @default(1)
+  maxInstances     Int      @default(1)
+  overageRate      Float?
+  oneTimeTrial     Boolean  @default(false)
+  features         Json
+  cta              String   @default("Get started")
+  popular          Boolean  @default(false)
+  displayOrder     Int      @default(100)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
