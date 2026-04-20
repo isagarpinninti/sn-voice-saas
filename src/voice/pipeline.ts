@@ -4,6 +4,8 @@
  */
 import { EventEmitter } from 'events'
 import { addLog } from '../lib/log-store'
+import { signUploadToken } from '../lib/upload-tokens'
+import { registerPendingUpload, unregisterPendingUpload } from '../lib/upload-registry'
 
 // ServiceNow client types
 interface SNConfig {
@@ -62,6 +64,10 @@ export class VoicePipeline extends EventEmitter {
   // 'phone' = Twilio Media Streams (mulaw @ 8k both directions).
   private audioFormat: 'widget' | 'phone' = 'widget'
 
+  // Token of the currently-pending attachment upload. At most one in flight
+  // per call — cleared when the upload resolves or the call stops.
+  private pendingUploadToken: string = ''
+
   constructor(tenant: Tenant, opts: { audioFormat?: 'widget' | 'phone' } = {}) {
     super()
     this.tenant = tenant
@@ -96,6 +102,31 @@ export class VoicePipeline extends EventEmitter {
       this.snSessionId = config.session_id
       this.selectedAgentId = config.selected_agent_id || agentId || ''
       this.tools = config.tools || []
+
+      // Widget-only built-in: lets the agent ask the user to upload a file.
+      // Skipped on the phone channel because the caller can't click a link.
+      if (this.audioFormat === 'widget') {
+        this.tools.push({
+          type: 'function',
+          function: {
+            name: 'request_attachment',
+            description:
+              "Ask the user to upload a file (PDF, image, Excel sheet, or PowerPoint). Returns a secure upload URL that the widget will display to the user. Use this when the user offers to share a document, when seeing a file would help you answer, or when a process requires an attachment. You'll be notified with the file name once it arrives — at that point acknowledge and continue. Only call once per request; wait for the upload before calling again.",
+            parameters: {
+              type: 'object',
+              properties: {
+                reason: {
+                  type: 'string',
+                  description:
+                    'Short reason shown to the user. Example: "the invoice you mentioned" or "a screenshot of the error".',
+                },
+              },
+              required: ['reason'],
+            },
+          },
+        })
+      }
+
       this.agentConfig = config.agent || {}
       // Store LLM model from config
       this.agentConfig.llm_model = config.llm_config?.model || 'llama-3.3-70b-versatile'
@@ -194,6 +225,68 @@ export class VoicePipeline extends EventEmitter {
     if (text.trim()) this.processUserMessage(text.trim())
   }
 
+  /**
+   * Built-in tool handler — called from the tool dispatch loop when the LLM
+   * invokes `request_attachment`. Mints a signed upload URL, emits an event
+   * so the widget can surface the link, and registers a callback that fires
+   * when the file arrives (injecting a message back into the conversation).
+   *
+   * Returns the tool result shape the dispatch loop expects (same fields as
+   * what /gateway/tool would return).
+   */
+  private handleRequestAttachment(args: any): { success: boolean; tool_name: string; tool_sys_id: string; output: any; error?: string } {
+    // Tear down any existing pending upload — only one in flight at a time.
+    if (this.pendingUploadToken) {
+      unregisterPendingUpload(this.pendingUploadToken)
+      this.pendingUploadToken = ''
+    }
+
+    const reason = String(args?.reason || '').slice(0, 200) || 'the file you mentioned'
+    const appBase = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+    if (!appBase) {
+      return {
+        success: false,
+        tool_name: 'request_attachment',
+        tool_sys_id: 'builtin:request_attachment',
+        output: {},
+        error: 'NEXT_PUBLIC_APP_URL not configured — cannot mint upload URL',
+      }
+    }
+
+    const token = signUploadToken({
+      tenantId: this.tenant.id,
+      sessionId: this.snSessionId,
+      agentId: this.selectedAgentId,
+    })
+    const url = `${appBase}/upload/${token}`
+    this.pendingUploadToken = token
+
+    registerPendingUpload(token, (meta) => {
+      this.pendingUploadToken = ''
+      const kb = (meta.sizeBytes / 1024).toFixed(1)
+      const note =
+        `[SYSTEM] The user has uploaded the file "${meta.fileName}" (${kb} KB, ${meta.mimeType}). ` +
+        `It is attached to the current voice session (sys_attachment ${meta.snAttachmentSysId}). ` +
+        `Briefly acknowledge the upload and continue with the original request.`
+      addLog('info', 'pipeline', 'Attachment uploaded, notifying LLM: ' + meta.fileName, { tenantId: this.tenant.id })
+      this.processUserMessage(note).catch(() => {})
+    })
+
+    addLog('info', 'pipeline', 'Attachment requested: ' + reason, { tenantId: this.tenant.id })
+    this.emit('attachment_requested', { url, reason })
+
+    return {
+      success: true,
+      tool_name: 'request_attachment',
+      tool_sys_id: 'builtin:request_attachment',
+      output: {
+        message:
+          `I've sent you a secure upload link for ${reason}. Please open the link shown in the widget and upload your file — it expires in 15 minutes. I'll continue as soon as it arrives.`,
+        url,
+      },
+    }
+  }
+
   getUsageStats() {
     // Count tokens from messages (rough estimate: 4 chars per token)
     let inputTokens = 0, outputTokens = 0
@@ -212,6 +305,12 @@ export class VoicePipeline extends EventEmitter {
   async stop() {
     if (this.stopped) return // Prevent double stop
     this.stopped = true
+
+    // Tear down any attachment upload link so late arrivals 410 cleanly
+    if (this.pendingUploadToken) {
+      unregisterPendingUpload(this.pendingUploadToken)
+      this.pendingUploadToken = ''
+    }
 
     if (this.stt) {
       try {
@@ -524,13 +623,21 @@ export class VoicePipeline extends EventEmitter {
           // can tell runtime-injected fields from LLM-supplied ones.
           const enrichedInput = { ...(tc.arguments || {}), __origin_portal: this.originPortal }
 
-          // Execute tool (no extra filler — the initial ack covers the wait)
-          const toolResult = await this.snFetch('POST', '/gateway/tool', {
-            session_id: this.snSessionId,
-            agent_id: this.selectedAgentId,
-            tool_name: tc.name,
-            tool_input: enrichedInput,
-          })
+          // Built-in: request_attachment is handled in-SaaS (the LLM sees it in
+          // the tool list but it never hits /gateway/tool). Skipped for phone
+          // calls because the caller can't click a link.
+          let toolResult: any
+          if (tc.name === 'request_attachment' && this.audioFormat === 'widget') {
+            toolResult = this.handleRequestAttachment(tc.arguments)
+          } else {
+            // Execute tool (no extra filler — the initial ack covers the wait)
+            toolResult = await this.snFetch('POST', '/gateway/tool', {
+              session_id: this.snSessionId,
+              agent_id: this.selectedAgentId,
+              tool_name: tc.name,
+              tool_input: enrichedInput,
+            })
+          }
 
           if ((toolResult as any).requires_confirmation) {
             // Voice-native confirmation: speak the prompt, store the pending state,

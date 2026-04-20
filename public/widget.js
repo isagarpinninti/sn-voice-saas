@@ -217,6 +217,18 @@
 #zv-mute.on svg{color:#fff}
 #zv-br{font-size:11px;color:#bbb;margin-top:12px}
 #zv-br a{color:#999;text-decoration:underline}
+
+/* ── Attachment request banner ── */
+#zv-attach{display:none;width:100%;margin-top:14px;padding:12px;border-radius:12px;background:${C.color}14;border:1px solid ${C.color}33;text-align:left;animation:zvFadeUp .35s cubic-bezier(.22,1,.36,1)}
+#zv-attach.on{display:block}
+#zv-attach.done{background:#10b98114;border-color:#10b98133}
+#zv-attach-title{font-size:12px;font-weight:600;color:#1a1a1a;margin-bottom:2px}
+#zv-attach-reason{font-size:11px;color:#666;margin-bottom:10px;line-height:1.4}
+#zv-attach-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px 12px;border-radius:8px;background:#1a1a1a;color:#fff;font-size:12px;font-weight:500;cursor:pointer;border:none;text-decoration:none;font-family:inherit;transition:background .15s}
+#zv-attach-btn:hover{background:#000}
+#zv-attach-btn svg{width:12px;height:12px}
+#zv-attach-status{font-size:11px;color:#10b981;font-weight:500;display:flex;align-items:center;gap:4px}
+@keyframes zvFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 </style>
 <div id="zv-launcher">
   <button id="zv-orb" aria-label="Voice agent"></button>
@@ -230,6 +242,7 @@
     <button id="zv-end"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.68 13.31a16 16 0 003.41 2.6l1.1-1.1a1 1 0 011.11-.27c1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02l-1.1 1.1"/></svg> End</button>
     <button id="zv-mute"><svg id="zv-mon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg><svg id="zv-mof" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .34-.03.67-.08 1"/></svg></button>
   </div>
+  <div id="zv-attach"></div>
   <div id="zv-br"></div>
 </div>`
     document.body.appendChild(el)
@@ -261,6 +274,28 @@
   }
 
   function g(id){return document.getElementById(id)}
+
+  // ── Attachment request UI ──
+  // The agent has called request_attachment. Surface a panel with a link that
+  // opens the upload page in a new tab. After upload, the agent is notified
+  // server-side so we don't need to poll — the LLM will speak about the file
+  // on its next turn. We still flip to a "Uploaded" state when the user opens
+  // the upload tab so they get visible confirmation.
+  function showAttachmentRequest(url,reason){
+    var box=g('zv-attach');if(!box)return
+    var safeReason=(reason||'a file').toString().replace(/[<>&"']/g,'')
+    box.className='on'
+    box.innerHTML=''
+      +'<div id="zv-attach-title">Share a file</div>'
+      +'<div id="zv-attach-reason">The agent has asked for '+safeReason+'. Tap below to open a secure upload page.</div>'
+      +'<a id="zv-attach-btn" href="'+url+'" target="_blank" rel="noopener">'
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+      +'Open upload page</a>'
+  }
+  function resetAttachmentUI(){
+    var box=g('zv-attach');if(!box)return
+    box.className='';box.innerHTML=''
+  }
   function setSt(main,sub){g('zv-status').textContent=main;g('zv-sub').textContent=sub||''}
   function setRing(on){var r=g('zv-ring');if(r)r.className=on?'on':''}
 
@@ -301,6 +336,7 @@
           }
           else if(m.type==='barge_in')clearAudio()
           else if(m.type==='navigate')openNavUrls(m.urls)
+          else if(m.type==='attachment_requested')showAttachmentRequest(m.url,m.reason)
           else if(m.type==='error'){setSt('Error',m.message);endCallGraceful()}
           else if(m.type==='ended')endCallGraceful()
         }catch(e){}
@@ -315,7 +351,7 @@
     try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch(e){}
     ws=null;stopMic();clearAudio();active=false;muted=false;setRing(false)
     pendingNavUrls=[]
-    g('zv-card').classList.remove('on')
+    g('zv-card').classList.remove('on');resetAttachmentUI()
     g('zv-launcher').style.display='flex'
   }
 
@@ -344,7 +380,7 @@
       ws=null
       clearAudio()
       muted=false
-      g('zv-card').classList.remove('on')
+      g('zv-card').classList.remove('on');resetAttachmentUI()
       g('zv-launcher').style.display='flex'
     },6000)
   }
