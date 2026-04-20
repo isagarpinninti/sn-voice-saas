@@ -58,9 +58,14 @@ export class VoicePipeline extends EventEmitter {
   private ttsVoice: string = 'aura-asteria-en'
   private llm: any = null
 
-  constructor(tenant: Tenant) {
+  // Audio transport. 'widget' = browser mic/speaker (linear16 @ 16k in, 24k out).
+  // 'phone' = Twilio Media Streams (mulaw @ 8k both directions).
+  private audioFormat: 'widget' | 'phone' = 'widget'
+
+  constructor(tenant: Tenant, opts: { audioFormat?: 'widget' | 'phone' } = {}) {
     super()
     this.tenant = tenant
+    this.audioFormat = opts.audioFormat || 'widget'
   }
 
   async start(agentId?: string, endUserSnId?: string, originPortal?: string) {
@@ -122,8 +127,8 @@ export class VoicePipeline extends EventEmitter {
         interim_results: true,
         utterance_end_ms: 1500,
         endpointing: config.stt_config?.endpointing_ms || 800,
-        encoding: 'linear16',
-        sample_rate: 16000,
+        encoding: this.audioFormat === 'phone' ? 'mulaw' : 'linear16',
+        sample_rate: this.audioFormat === 'phone' ? 8000 : 16000,
         channels: 1,
       })
 
@@ -1044,7 +1049,9 @@ export class VoicePipeline extends EventEmitter {
   private async connectTtsWs(): Promise<void> {
     const WebSocket = require('ws')
     return new Promise((resolve, reject) => {
-      const url = `wss://api.deepgram.com/v1/speak?model=${this.ttsVoice}&encoding=linear16&sample_rate=24000`
+      const ttsEncoding = this.audioFormat === 'phone' ? 'mulaw' : 'linear16'
+      const ttsSampleRate = this.audioFormat === 'phone' ? 8000 : 24000
+      const url = `wss://api.deepgram.com/v1/speak?model=${this.ttsVoice}&encoding=${ttsEncoding}&sample_rate=${ttsSampleRate}`
       this.ttsWs = new WebSocket(url, { headers: { 'Authorization': `Token ${this.ttsKey}` } })
 
       this.ttsWs.on('open', () => resolve())

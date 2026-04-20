@@ -7,7 +7,7 @@ import { CheckCircle2, AlertTriangle, XCircle, RefreshCw } from 'lucide-react'
 
 type Check = {
   name: string
-  category: 'storage' | 'voice' | 'llm' | 'billing' | 'auth'
+  category: 'storage' | 'voice' | 'llm' | 'billing' | 'auth' | 'telephony'
   status: 'ok' | 'warn' | 'error'
   latencyMs?: number
   detail: string
@@ -22,6 +22,7 @@ type HealthResponse = {
 const CATEGORY_LABEL: Record<Check['category'], string> = {
   storage: 'Storage',
   voice: 'Voice providers',
+  telephony: 'Telephony',
   llm: 'LLM providers',
   billing: 'Billing',
   auth: 'Auth',

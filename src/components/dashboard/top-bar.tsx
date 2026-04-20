@@ -23,6 +23,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/admin/logs': 'Live Logs',
   '/admin/audit': 'Audit Log',
   '/admin/tenants': 'Tenants',
+  '/admin/phone-numbers': 'Phone Numbers',
   '/admin/usage': 'Usage',
   '/admin/users': 'Users',
   '/admin/subscriptions': 'Subscriptions',

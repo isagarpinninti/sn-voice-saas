@@ -22,7 +22,25 @@ app.prepare().then(() => {
     }
     handle(req, res, parse(req.url!, true))
   })
-  const wss = new WebSocketServer({ server, path: '/voice' })
+
+  // Two WebSocket routes on the same HTTP server:
+  //   /voice — browser widget (linear16 @ 16kHz)
+  //   /phone — Twilio Media Streams (mulaw @ 8kHz)
+  const wssVoice = new WebSocketServer({ noServer: true })
+  const wssPhone = new WebSocketServer({ noServer: true })
+
+  server.on('upgrade', (req, socket, head) => {
+    const { pathname } = parse(req.url || '', true)
+    if (pathname === '/voice') {
+      wssVoice.handleUpgrade(req, socket, head, (ws) => wssVoice.emit('connection', ws, req))
+    } else if (pathname === '/phone') {
+      wssPhone.handleUpgrade(req, socket, head, (ws) => wssPhone.emit('connection', ws, req))
+    } else {
+      socket.destroy()
+    }
+  })
+
+  const wss = wssVoice
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const url = parse(req.url || '', true)
@@ -172,6 +190,151 @@ app.prepare().then(() => {
       for (const b of buffer) processMessage(b.data, b.isBinary)
       buffer.length = 0
     })()
+  })
+
+  // ── /phone — Twilio Media Streams bridge ──
+  // Twilio sends JSON text frames with base64-encoded mulaw@8k payloads.
+  // We identify the tenant/agent from the `phoneId` query param set by
+  // /api/phone/incoming (which already authenticated the call), plan-gate,
+  // then bridge the stream into a VoicePipeline configured for 'phone' audio.
+  wssPhone.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    const url = parse(req.url || '', true)
+    const phoneId = (url.query.phoneId as string) || ''
+    addLog('info', 'phone-ws', 'Phone stream connecting phoneId=' + phoneId)
+
+    let pipeline: VoicePipeline | null = null
+    let streamSid = ''
+    let tenantRef: any = null
+    let phoneRef: any = null
+    const connectionStartTime = Date.now()
+    let frameCount = 0
+
+    function sendTwilio(obj: any) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj))
+    }
+
+    ws.on('close', (code) => {
+      addLog('info', 'phone-ws', 'Closed code=' + code, { tenantId: tenantRef?.id })
+      if (tenantRef) {
+        const durationMin = Math.round((Date.now() - connectionStartTime) / 60000 * 100) / 100
+        if (durationMin > 0.01) {
+          const stats = pipeline ? pipeline.getUsageStats() : { inputTokens: 0, outputTokens: 0, toolCalls: 0 }
+          recordUsage(tenantRef.id, durationMin, stats.inputTokens, stats.outputTokens, stats.toolCalls)
+            .catch((err: any) => addLog('error', 'phone-ws', 'Usage record failed: ' + err.message, { tenantId: tenantRef.id }))
+        }
+      }
+      if (pipeline) pipeline.stop().catch(() => {})
+    })
+    ws.on('error', (err) => addLog('error', 'phone-ws', 'Err: ' + err.message))
+
+    ws.on('message', async (data: RawData) => {
+      let msg: any
+      try { msg = JSON.parse(data.toString()) } catch { return }
+
+      switch (msg.event) {
+        case 'connected':
+          addLog('info', 'phone-ws', 'Twilio protocol connected: ' + msg.protocol)
+          return
+
+        case 'start': {
+          streamSid = msg.start?.streamSid || msg.streamSid || ''
+          addLog('info', 'phone-ws', 'Stream start sid=' + streamSid + ' callSid=' + (msg.start?.callSid || ''))
+
+          // Resolve phone → tenant/agent/instance
+          if (!phoneId) { ws.close(1008, 'phoneId required'); return }
+          const phone = await db.phoneNumber.findUnique({
+            where: { id: phoneId },
+            include: { tenant: true, agent: true, instance: true },
+          })
+          if (!phone || !phone.active) { ws.close(1008, 'Unknown phone'); return }
+          if (!phone.instance?.active || !phone.instance.snInstanceUrl) { ws.close(1011, 'No SN instance'); return }
+
+          // Second-line plan gate (webhook already checked, but the phoneId could be
+          // replayed and the plan may have changed between TwiML and Media Stream)
+          if (phone.tenant.plan !== 'PRO_VOICE' && phone.tenant.plan !== 'ENTERPRISE') {
+            addLog('warn', 'phone-ws', 'Plan gate blocked stream — ' + phone.tenant.plan, { tenantId: phone.tenantId })
+            ws.close(1008, 'Plan not eligible'); return
+          }
+
+          // Quota gate
+          const gate = await checkRateLimit(phone.tenantId)
+          if (!gate.allowed) {
+            addLog('warn', 'phone-ws', 'Quota blocked: ' + gate.reason, { tenantId: phone.tenantId })
+            await notifyAdmins({
+              tenantId: phone.tenantId,
+              severity: 'warn',
+              kind: 'quota.exceeded',
+              message: 'Phone call rejected — quota exceeded',
+              data: { usage: gate.usage, channel: 'phone' },
+            })
+            ws.close(4402, 'Quota exceeded'); return
+          }
+
+          tenantRef = phone.tenant
+          phoneRef = phone
+
+          pipeline = new VoicePipeline(
+            {
+              id: phone.tenant.id,
+              snInstanceUrl: phone.instance.snInstanceUrl,
+              snUsername: phone.instance.snUsername,
+              snPassword: phone.instance.snPassword,
+            },
+            { audioFormat: 'phone' },
+          )
+
+          pipeline.on('ready', (d: any) => addLog('info', 'phone-ws', 'Pipeline ready ' + d.sessionId, { tenantId: tenantRef.id }))
+          pipeline.on('user_message', (t: string) => addLog('info', 'phone-ws', 'USER: ' + t.substring(0, 80), { tenantId: tenantRef.id }))
+          pipeline.on('agent_message', (t: string) => addLog('info', 'phone-ws', 'AGENT: ' + t.substring(0, 80), { tenantId: tenantRef.id }))
+          pipeline.on('audio', (b: Buffer) => {
+            if (ws.readyState !== WebSocket.OPEN || !streamSid) return
+            // Convert binary mulaw@8k buffer → base64 → Twilio media frame
+            sendTwilio({
+              event: 'media',
+              streamSid,
+              media: { payload: b.toString('base64') },
+            })
+          })
+          pipeline.on('error', (e: any) => addLog('error', 'phone-ws', String(e.message || e), { tenantId: tenantRef.id }))
+          pipeline.on('ended', () => { try { ws.close(1000, 'Call ended') } catch {} })
+
+          // Start the pipeline bound to this phone number's agent
+          const agentSnId = phone.agent?.snAgentId || undefined
+          pipeline.start(agentSnId, undefined, 'phone')
+            .then(() => addLog('info', 'phone-ws', 'Pipeline started', { tenantId: tenantRef.id }))
+            .catch((e: any) => {
+              addLog('error', 'phone-ws', 'Start failed: ' + e.message, { tenantId: tenantRef.id })
+              try { ws.close(1011, 'Pipeline failed') } catch {}
+            })
+          return
+        }
+
+        case 'media': {
+          if (!pipeline) return
+          frameCount++
+          if (frameCount === 1 || frameCount % 200 === 0) {
+            addLog('debug', 'phone-ws', 'Audio frame #' + frameCount, { tenantId: tenantRef?.id })
+          }
+          const payload = msg.media?.payload
+          if (typeof payload !== 'string') return
+          const buf = Buffer.from(payload, 'base64')
+          pipeline.feedAudio(buf)
+          return
+        }
+
+        case 'stop':
+          addLog('info', 'phone-ws', 'Twilio stop', { tenantId: tenantRef?.id })
+          if (pipeline) pipeline.stop().catch(() => {})
+          return
+
+        case 'mark':
+          // Optional — Twilio acks named marks we sent. Not used yet.
+          return
+
+        default:
+          return
+      }
+    })
   })
 
   server.listen(port, () => {

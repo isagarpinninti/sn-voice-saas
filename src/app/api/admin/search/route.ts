@@ -119,6 +119,7 @@ export async function GET(req: NextRequest) {
   const ACTIONS: SearchResult[] = [
     { type: 'action', id: 'nav-overview', label: 'Go to Overview', href: '/admin' },
     { type: 'action', id: 'nav-tenants', label: 'Go to Tenants', href: '/admin/tenants' },
+    { type: 'action', id: 'nav-phone', label: 'Go to Phone Numbers', href: '/admin/phone-numbers' },
     { type: 'action', id: 'nav-users', label: 'Go to Users', href: '/admin/users' },
     { type: 'action', id: 'nav-audit', label: 'Go to Audit log', href: '/admin/audit' },
     { type: 'action', id: 'nav-revenue', label: 'Go to Revenue', href: '/admin/revenue' },

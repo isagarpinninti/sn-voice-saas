@@ -7,7 +7,7 @@ import { db } from '@/lib/db'
 
 type Check = {
   name: string
-  category: 'storage' | 'voice' | 'llm' | 'billing' | 'auth'
+  category: 'storage' | 'voice' | 'llm' | 'billing' | 'auth' | 'telephony'
   status: 'ok' | 'warn' | 'error'
   latencyMs?: number
   detail: string
@@ -87,6 +87,13 @@ export async function GET() {
     Promise.resolve(envCheck('Razorpay', 'billing', 'RAZORPAY_KEY_ID', false)),
     Promise.resolve(envCheck('NextAuth secret', 'auth', 'NEXTAUTH_SECRET')),
     Promise.resolve(envCheck('Google OAuth', 'auth', 'GOOGLE_CLIENT_ID', false)),
+    Promise.resolve(envCheck('Twilio account', 'telephony', 'TWILIO_ACCOUNT_SID', false)),
+    Promise.resolve(envCheck('Twilio auth token', 'telephony', 'TWILIO_AUTH_TOKEN', false)),
+    Promise.resolve(
+      process.env.TWILIO_SIGNATURE_VALIDATION === 'true'
+        ? { name: 'Twilio signature validation', category: 'telephony' as const, status: 'ok' as const, detail: 'Enforced' }
+        : { name: 'Twilio signature validation', category: 'telephony' as const, status: 'warn' as const, detail: 'Disabled (set TWILIO_SIGNATURE_VALIDATION=true in production)' },
+    ),
   ])
 
   const overall: Check['status'] = checks.some((c) => c.status === 'error')

@@ -81,6 +81,7 @@ model Tenant {
   tokens            ApiToken[]
   agents            Agent[]
   usageLogs         UsageLog[]
+  phoneNumbers      PhoneNumber[]
 
   company           String?
 
@@ -125,6 +126,7 @@ model Instance {
   active         Boolean  @default(true)
   agents         Agent[]
   tokens         ApiToken[]
+  phoneNumbers   PhoneNumber[]
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -149,6 +151,7 @@ model Agent {
 
   active     Boolean  @default(true)
   tokens     ApiToken[]
+  phoneNumbers PhoneNumber[]
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -235,6 +238,32 @@ model FeatureFlag {
 
   @@unique([key, tenantId])
   @@index([tenantId])
+}
+
+// =====================================================
+// Phone Numbers (Twilio-provisioned DIDs bound to a tenant/agent)
+// =====================================================
+
+model PhoneNumber {
+  id         String    @id @default(cuid())
+  e164       String    @unique // e.g. +14155550123
+  friendly   String?
+  twilioSid  String?   @unique // Twilio PN sid, for provisioning automation
+
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId    String?
+  agent      Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  instanceId String?
+  instance   Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+
+  active     Boolean   @default(true)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([agentId])
 }
 
 // =====================================================
