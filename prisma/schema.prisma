@@ -82,6 +82,7 @@ model Tenant {
   agents            Agent[]
   usageLogs         UsageLog[]
   phoneNumbers      PhoneNumber[]
+  attachmentUploads AttachmentUpload[]
 
   company           String?
 
@@ -264,6 +265,49 @@ model PhoneNumber {
 
   @@index([tenantId])
   @@index([agentId])
+}
+
+// =====================================================
+// Attachment Uploads (pending + completed file uploads from voice widget)
+// Stored in DB (not in-memory) so state survives rolling deploys / restarts.
+// =====================================================
+
+model AttachmentUpload {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  sessionId  String   // SN conversation session sys_id
+  agentId    String
+
+  // Agent-requested target (optional). Resolved to sys_id at upload time.
+  targetTable  String?
+  targetNumber String?
+
+  // Lifecycle. Pipeline polls for 'completed'. Set to 'cancelled' on stop().
+  status     String   @default("pending")    // pending | completed | cancelled
+  expiresAt  DateTime
+  completedAt DateTime?
+
+  // Populated on completion by the upload route
+  fileName              String?
+  mimeType              String?
+  sizeBytes             Int?
+  snAttachmentSysId     String?
+  attachedTable         String?
+  attachedSysId         String?
+  attachedNumber        String?
+  extractedText         String?  @db.Text
+  extractedNote         String?
+  extractedTruncated    Boolean?
+  targetResolutionError String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([token])
+  @@index([tenantId, status])
 }
 
 // =====================================================

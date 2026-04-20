@@ -4,7 +4,7 @@ export const runtime = 'nodejs'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyUploadToken } from '@/lib/upload-tokens'
-import { resolvePendingUpload, hasPendingUpload } from '@/lib/upload-registry'
+import { findActivePendingUpload, completePendingUpload } from '@/lib/upload-registry'
 import { extractText } from '@/lib/file-extract'
 import { addLog } from '@/lib/log-store'
 import { logAudit } from '@/lib/audit'
@@ -30,9 +30,11 @@ export async function GET(_req: NextRequest, ctx: RouteCtx) {
   const { token } = await ctx.params
   const v = verifyUploadToken(token)
   if (!v.ok) return NextResponse.json({ ok: false, reason: v.reason }, { status: 410 })
+  const row = await findActivePendingUpload(token)
   return NextResponse.json({
     ok: true,
-    ready: hasPendingUpload(token),
+    ready: !!row && row.status === 'pending',
+    status: row?.status || 'not-found',
     expSeconds: v.payload.exp - Math.floor(Date.now() / 1000),
     maxBytes: MAX_BYTES,
     allowed: Array.from(ALLOWED_EXT_FALLBACK),
@@ -47,8 +49,12 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   }
   const { tenantId, sessionId, agentId } = v.payload
 
-  if (!hasPendingUpload(token)) {
+  const pending = await findActivePendingUpload(token)
+  if (!pending) {
     return NextResponse.json({ ok: false, error: 'Call ended — upload no longer accepted' }, { status: 410 })
+  }
+  if (pending.status !== 'pending') {
+    return NextResponse.json({ ok: false, error: 'This link has already been used or cancelled' }, { status: 410 })
   }
 
   const form = await req.formData().catch(() => null)
@@ -220,8 +226,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     addLog('info', 'upload', `Extracted ${extraction.kind}: ${extraction.note} (${extraction.text.length} chars)`, { tenantId })
   }
 
-  // Notify the live voice pipeline so the agent can reference the file mid-call
-  resolvePendingUpload(token, {
+  // Persist completion to the DB — the pipeline poller (running in any
+  // container) will pick this up on its next poll and notify the LLM.
+  await completePendingUpload(token, {
     fileName: file.name,
     mimeType: file.type || 'application/octet-stream',
     sizeBytes: file.size,

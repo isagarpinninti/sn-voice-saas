@@ -5,7 +5,7 @@
 import { EventEmitter } from 'events'
 import { addLog } from '../lib/log-store'
 import { signUploadToken } from '../lib/upload-tokens'
-import { registerPendingUpload, unregisterPendingUpload } from '../lib/upload-registry'
+import { createPendingUpload, cancelPendingUpload, readCompletedMeta, type UploadMeta } from '../lib/upload-registry'
 
 // ServiceNow client types
 interface SNConfig {
@@ -67,6 +67,9 @@ export class VoicePipeline extends EventEmitter {
   // Token of the currently-pending attachment upload. At most one in flight
   // per call — cleared when the upload resolves or the call stops.
   private pendingUploadToken: string = ''
+  // Poller that watches AttachmentUpload rows for status='completed'. Cleared
+  // on completion, on call stop, or when TTL expires.
+  private uploadPoller: ReturnType<typeof setInterval> | null = null
 
   constructor(tenant: Tenant, opts: { audioFormat?: 'widget' | 'phone' } = {}) {
     super()
@@ -246,9 +249,11 @@ export class VoicePipeline extends EventEmitter {
    */
   private handleRequestAttachment(args: any): { success: boolean; tool_name: string; tool_sys_id: string; output: any; error?: string } {
     // Tear down any existing pending upload — only one in flight at a time.
+    if (this.uploadPoller) { clearInterval(this.uploadPoller); this.uploadPoller = null }
     if (this.pendingUploadToken) {
-      unregisterPendingUpload(this.pendingUploadToken)
+      const prev = this.pendingUploadToken
       this.pendingUploadToken = ''
+      cancelPendingUpload(prev).catch(() => {})
     }
 
     const reason = String(args?.reason || '').slice(0, 200) || 'the file you mentioned'
@@ -282,39 +287,46 @@ export class VoicePipeline extends EventEmitter {
     const url = `${appBase}/upload/${token}`
     this.pendingUploadToken = token
 
-    registerPendingUpload(token, (meta) => {
-      this.pendingUploadToken = ''
-      const kb = (meta.sizeBytes / 1024).toFixed(1)
-      // Where did the file actually end up? The upload route may have resolved
-      // a target record, or fallen back to the session if resolution failed.
-      const landedOn =
-        meta.attachedTable && meta.attachedNumber
-          ? `ServiceNow ${meta.attachedTable} ${meta.attachedNumber}`
-          : meta.attachedTable
-          ? `ServiceNow ${meta.attachedTable} (sys_id ${meta.attachedSysId})`
-          : 'the current voice session'
-      let note =
-        `[SYSTEM] The user has uploaded the file "${meta.fileName}" (${kb} KB, ${meta.mimeType}). ` +
-        `It is attached to ${landedOn} as sys_attachment ${meta.snAttachmentSysId}.`
-
-      if (meta.targetResolutionError) {
-        note += ` NOTE: the user asked to attach to ${meta.targetResolutionError} — that lookup failed, so the file was placed on the voice session as a fallback. Mention this to the user so they can retry with the correct record.`
-      }
-
-      if (meta.extractedText && meta.extractedText.length > 0) {
-        const summary = meta.extractedNote ? ` (${meta.extractedNote})` : ''
-        const trunc = meta.extractedTruncated ? '\n[… truncated — only the first portion is shown.]' : ''
-        note +=
-          `\n\nExtracted contents${summary}:\n` +
-          '```\n' + meta.extractedText + trunc + '\n```\n\n' +
-          'Use this content to answer the user\'s request. Keep your spoken reply concise — summarize what you see rather than reading it verbatim.'
-      } else {
-        note += ' Contents could not be extracted automatically — acknowledge the upload and ask the user what they would like you to do with the file.'
-      }
-
-      addLog('info', 'pipeline', 'Attachment uploaded, notifying LLM: ' + meta.fileName + (meta.extractedText ? ' (with ' + meta.extractedText.length + ' chars of text)' : ''), { tenantId: this.tenant.id })
-      this.processUserMessage(note).catch(() => {})
+    // Fire-and-forget DB write. If it fails, log — the link would still mint
+    // but upload would 410; we'd rather fail fast than silently misbehave.
+    createPendingUpload({
+      token,
+      tenantId: this.tenant.id,
+      sessionId: this.snSessionId,
+      agentId: this.selectedAgentId,
+      targetTable: target_table || undefined,
+      targetNumber: target_number || undefined,
+      ttlSeconds: 900,
+    }).catch((e: any) => {
+      addLog('error', 'pipeline', 'Failed to create pending upload row: ' + e.message, { tenantId: this.tenant.id })
     })
+
+    // Poll the row for completion. 2s cadence, stops on completion / stop() /
+    // TTL. Runs across container boundaries — any node handling the upload
+    // writes status='completed' and any node running the pipeline picks it up.
+    const startedAt = Date.now()
+    const MAX_WAIT_MS = 15 * 60 * 1000
+    this.uploadPoller = setInterval(async () => {
+      if (this.pendingUploadToken !== token) {
+        // Superseded or cleared — stop polling.
+        return
+      }
+      if (Date.now() - startedAt > MAX_WAIT_MS) {
+        if (this.uploadPoller) { clearInterval(this.uploadPoller); this.uploadPoller = null }
+        this.pendingUploadToken = ''
+        return
+      }
+      try {
+        const meta = await readCompletedMeta(token)
+        if (!meta) return
+        // Arrived — stop polling, clear state, notify LLM.
+        if (this.uploadPoller) { clearInterval(this.uploadPoller); this.uploadPoller = null }
+        this.pendingUploadToken = ''
+        this.notifyUploadArrived(meta)
+      } catch (e: any) {
+        addLog('warn', 'pipeline', 'Upload poll error: ' + e.message, { tenantId: this.tenant.id })
+      }
+    }, 2000)
 
     const targetLabel = target_table && target_number ? ` (targeting ${target_table} ${target_number})` : ''
     addLog('info', 'pipeline', 'Attachment requested: ' + reason + targetLabel, { tenantId: this.tenant.id })
@@ -330,6 +342,37 @@ export class VoicePipeline extends EventEmitter {
         url,
       },
     }
+  }
+
+  private notifyUploadArrived(meta: UploadMeta) {
+    const kb = (meta.sizeBytes / 1024).toFixed(1)
+    const landedOn =
+      meta.attachedTable && meta.attachedNumber
+        ? `ServiceNow ${meta.attachedTable} ${meta.attachedNumber}`
+        : meta.attachedTable
+        ? `ServiceNow ${meta.attachedTable} (sys_id ${meta.attachedSysId})`
+        : 'the current voice session'
+    let note =
+      `[SYSTEM] The user has uploaded the file "${meta.fileName}" (${kb} KB, ${meta.mimeType}). ` +
+      `It is attached to ${landedOn} as sys_attachment ${meta.snAttachmentSysId}.`
+
+    if (meta.targetResolutionError) {
+      note += ` NOTE: the user asked to attach to ${meta.targetResolutionError} — that lookup failed, so the file was placed on the voice session as a fallback. Mention this to the user so they can retry with the correct record.`
+    }
+
+    if (meta.extractedText && meta.extractedText.length > 0) {
+      const summary = meta.extractedNote ? ` (${meta.extractedNote})` : ''
+      const trunc = meta.extractedTruncated ? '\n[… truncated — only the first portion is shown.]' : ''
+      note +=
+        `\n\nExtracted contents${summary}:\n` +
+        '```\n' + meta.extractedText + trunc + '\n```\n\n' +
+        'Use this content to answer the user\'s request. Keep your spoken reply concise — summarize what you see rather than reading it verbatim.'
+    } else {
+      note += ' Contents could not be extracted automatically — acknowledge the upload and ask the user what they would like you to do with the file.'
+    }
+
+    addLog('info', 'pipeline', 'Attachment uploaded, notifying LLM: ' + meta.fileName + (meta.extractedText ? ' (with ' + meta.extractedText.length + ' chars of text)' : ''), { tenantId: this.tenant.id })
+    this.processUserMessage(note).catch(() => {})
   }
 
   getUsageStats() {
@@ -352,9 +395,11 @@ export class VoicePipeline extends EventEmitter {
     this.stopped = true
 
     // Tear down any attachment upload link so late arrivals 410 cleanly
+    if (this.uploadPoller) { clearInterval(this.uploadPoller); this.uploadPoller = null }
     if (this.pendingUploadToken) {
-      unregisterPendingUpload(this.pendingUploadToken)
+      const tok = this.pendingUploadToken
       this.pendingUploadToken = ''
+      cancelPendingUpload(tok).catch(() => {})
     }
 
     if (this.stt) {
