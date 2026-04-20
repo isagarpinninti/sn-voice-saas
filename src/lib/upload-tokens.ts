@@ -20,6 +20,12 @@ export type UploadPayload = {
   exp: number
   /** Random nonce — the session may issue multiple tokens */
   n: string
+  /** Optional target table for the attachment — e.g. "incident". Signed into
+   *  the token so a reused/tampered link can't redirect the file. */
+  tt?: string
+  /** Optional target record number — e.g. "INC0010001". Resolved to sys_id
+   *  at upload time via SN REST. */
+  tn?: string
 }
 
 function b64url(buf: Buffer): string {
@@ -39,10 +45,14 @@ function secret(): string {
 
 export function signUploadToken(data: Omit<UploadPayload, 'exp' | 'n'>, ttlSeconds = 900): string {
   const payload: UploadPayload = {
-    ...data,
+    tenantId: data.tenantId,
+    sessionId: data.sessionId,
+    agentId: data.agentId,
     exp: Math.floor(Date.now() / 1000) + ttlSeconds,
     n: randomBytes(8).toString('hex'),
   }
+  if (data.tt) payload.tt = data.tt
+  if (data.tn) payload.tn = data.tn
   const body = b64url(Buffer.from(JSON.stringify(payload), 'utf8'))
   const sig = createHmac('sha256', secret()).update(body).digest('hex')
   return `${body}.${sig}`

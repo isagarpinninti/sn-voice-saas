@@ -90,19 +90,68 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     return NextResponse.json({ ok: false, error: 'ServiceNow URL missing on instance' }, { status: 404 })
   }
 
-  // Attach to the voice session record in the scoped app. The SaaS doesn't
-  // own that record but the SN side created it during /gateway/init. Using
-  // the session sys_id as the parent keeps the attachment scoped to this
-  // conversation and discoverable from the agent's side.
-  const attachmentTable = 'x_ztpas_ai_voice_a_conversation_session'
-  const attachUrl =
-    inst.snInstanceUrl.replace(/\/$/, '') +
-    `/api/now/attachment/file?table_name=${encodeURIComponent(attachmentTable)}` +
-    `&table_sys_id=${encodeURIComponent(sessionId)}` +
-    `&file_name=${encodeURIComponent(file.name)}`
-
+  // Resolve the attachment parent. Default = voice session record (always
+  // guaranteed to exist). If the agent passed a target in the token (tt/tn),
+  // we look up the sys_id by number via SN REST and attach there instead.
+  // Lookup failure falls back to the session and carries an error note back
+  // to the LLM via the registry meta so it can tell the user.
   const auth = Buffer.from(`${inst.snUsername}:${inst.snPassword}`).toString('base64')
   const bytes = Buffer.from(await file.arrayBuffer())
+  const snBase = inst.snInstanceUrl.replace(/\/$/, '')
+
+  let attachmentTable = 'x_ztpas_ai_voice_a_conversation_session'
+  let attachmentParentId = sessionId
+  let attachmentNumber: string | undefined
+  let targetResolutionError: string | undefined
+
+  const targetTable = v.payload.tt
+  const targetNumber = v.payload.tn
+  if (targetTable && targetNumber) {
+    // Basic sanitization — SN table names are lowercase alphanumerics + underscore.
+    const tt = targetTable.toLowerCase()
+    const safeTable = /^[a-z][a-z0-9_]{1,49}$/.test(tt) ? tt : ''
+    if (!safeTable) {
+      targetResolutionError = `${targetTable} ${targetNumber} (invalid table name)`
+      addLog('warn', 'upload', 'Invalid target_table "' + targetTable + '" — falling back to session', { tenantId })
+    } else {
+      const lookupUrl =
+        snBase +
+        `/api/now/table/${encodeURIComponent(safeTable)}` +
+        `?sysparm_query=number=${encodeURIComponent(targetNumber)}` +
+        `&sysparm_fields=sys_id,number` +
+        `&sysparm_limit=1`
+      try {
+        const lookupResp = await fetch(lookupUrl, {
+          headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' },
+        })
+        if (lookupResp.ok) {
+          const data = (await lookupResp.json().catch(() => ({}))) as any
+          const rec = Array.isArray(data?.result) ? data.result[0] : null
+          if (rec?.sys_id) {
+            attachmentTable = safeTable
+            attachmentParentId = String(rec.sys_id)
+            attachmentNumber = String(rec.number || targetNumber)
+            addLog('info', 'upload', `Target resolved: ${safeTable} ${attachmentNumber} → ${attachmentParentId}`, { tenantId })
+          } else {
+            targetResolutionError = `${safeTable} ${targetNumber} (record not found)`
+            addLog('warn', 'upload', `Target not found: ${safeTable} ${targetNumber} — falling back to session`, { tenantId })
+          }
+        } else {
+          targetResolutionError = `${safeTable} ${targetNumber} (lookup returned ${lookupResp.status})`
+          addLog('warn', 'upload', `Target lookup ${lookupResp.status} — falling back to session`, { tenantId })
+        }
+      } catch (err: any) {
+        targetResolutionError = `${safeTable} ${targetNumber} (lookup error: ${err?.message || 'unknown'})`
+        addLog('error', 'upload', 'Target lookup threw: ' + err.message, { tenantId })
+      }
+    }
+  }
+
+  const attachUrl =
+    snBase +
+    `/api/now/attachment/file?table_name=${encodeURIComponent(attachmentTable)}` +
+    `&table_sys_id=${encodeURIComponent(attachmentParentId)}` +
+    `&file_name=${encodeURIComponent(file.name)}`
 
   let snResp: Response
   try {
@@ -133,9 +182,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   const snAttachmentSysId = snData?.result?.sys_id || ''
   const downloadUrl = snData?.result?.download_link || ''
 
-  addLog('info', 'upload', `Attached ${file.name} (${file.size}B) → SN ${snAttachmentSysId}`, {
+  addLog('info', 'upload', `Attached ${file.name} (${file.size}B) → ${attachmentTable} ${attachmentNumber || attachmentParentId}`, {
     tenantId,
-    data: { agentId, sessionId, mime: file.type },
+    data: { agentId, sessionId, mime: file.type, attachmentTable },
   })
 
   await logAudit({
@@ -150,6 +199,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
       sizeBytes: file.size,
       sessionId,
       agentId,
+      attachmentTable,
+      attachmentParentId,
+      attachmentNumber,
+      targetResolutionError,
     },
   })
 
@@ -178,7 +231,18 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     extractedText: extraction.text || undefined,
     extractedNote: extraction.note,
     extractedTruncated: extraction.truncated,
+    attachedTable: attachmentTable !== 'x_ztpas_ai_voice_a_conversation_session' ? attachmentTable : undefined,
+    attachedSysId: attachmentParentId,
+    attachedNumber: attachmentNumber,
+    targetResolutionError,
   })
 
-  return NextResponse.json({ ok: true, fileName: file.name, size: file.size, snAttachmentSysId })
+  return NextResponse.json({
+    ok: true,
+    fileName: file.name,
+    size: file.size,
+    snAttachmentSysId,
+    attachedTable: attachmentTable,
+    attachedNumber: attachmentNumber,
+  })
 }

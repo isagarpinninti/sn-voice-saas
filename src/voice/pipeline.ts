@@ -111,7 +111,7 @@ export class VoicePipeline extends EventEmitter {
           function: {
             name: 'request_attachment',
             description:
-              "Ask the user to upload a file (PDF, image, Excel sheet, or PowerPoint). Returns a secure upload URL that the widget will display to the user. Use this when the user offers to share a document, when seeing a file would help you answer, or when a process requires an attachment. You'll be notified with the file name once it arrives — at that point acknowledge and continue. Only call once per request; wait for the upload before calling again.",
+              "Ask the user to upload a file (PDF, image, Excel sheet, or PowerPoint). Returns a secure upload URL that the widget will display to the user. Use this when the user offers to share a document, when seeing a file would help you answer, or when a process requires an attachment. You'll be notified with the file name (and extracted text for PDF/XLSX) once it arrives. If the user wants the file attached to a specific ServiceNow record (e.g. 'attach to INC0010001'), pass target_table and target_record_number so the file lands on that record. Otherwise it lands on the current voice session. Only call once per request; wait for the upload before calling again.",
             parameters: {
               type: 'object',
               properties: {
@@ -119,6 +119,16 @@ export class VoicePipeline extends EventEmitter {
                   type: 'string',
                   description:
                     'Short reason shown to the user. Example: "the invoice you mentioned" or "a screenshot of the error".',
+                },
+                target_table: {
+                  type: 'string',
+                  description:
+                    'ServiceNow table name to attach the file to. Examples: "incident", "sc_request", "change_request", "sc_task", "problem". Omit to attach to the voice session.',
+                },
+                target_record_number: {
+                  type: 'string',
+                  description:
+                    'Human-readable record number on that table — e.g. "INC0010001". Combined with target_table, the upload will attach to that record. Must be provided together with target_table.',
                 },
               },
               required: ['reason'],
@@ -253,10 +263,21 @@ export class VoicePipeline extends EventEmitter {
       }
     }
 
+    // Target validation — if the LLM asked for a specific record, both fields
+    // must be present. If only one is provided, drop both and fall back to the
+    // session (the LLM is more likely to re-ask correctly than to attach to
+    // the wrong place).
+    const rawTable = typeof args?.target_table === 'string' ? args.target_table.trim() : ''
+    const rawNumber = typeof args?.target_record_number === 'string' ? args.target_record_number.trim() : ''
+    const target_table = rawTable && rawNumber ? rawTable.toLowerCase() : ''
+    const target_number = rawTable && rawNumber ? rawNumber : ''
+
     const token = signUploadToken({
       tenantId: this.tenant.id,
       sessionId: this.snSessionId,
       agentId: this.selectedAgentId,
+      tt: target_table || undefined,
+      tn: target_number || undefined,
     })
     const url = `${appBase}/upload/${token}`
     this.pendingUploadToken = token
@@ -264,9 +285,21 @@ export class VoicePipeline extends EventEmitter {
     registerPendingUpload(token, (meta) => {
       this.pendingUploadToken = ''
       const kb = (meta.sizeBytes / 1024).toFixed(1)
+      // Where did the file actually end up? The upload route may have resolved
+      // a target record, or fallen back to the session if resolution failed.
+      const landedOn =
+        meta.attachedTable && meta.attachedNumber
+          ? `ServiceNow ${meta.attachedTable} ${meta.attachedNumber}`
+          : meta.attachedTable
+          ? `ServiceNow ${meta.attachedTable} (sys_id ${meta.attachedSysId})`
+          : 'the current voice session'
       let note =
         `[SYSTEM] The user has uploaded the file "${meta.fileName}" (${kb} KB, ${meta.mimeType}). ` +
-        `It is attached to the current voice session (sys_attachment ${meta.snAttachmentSysId}).`
+        `It is attached to ${landedOn} as sys_attachment ${meta.snAttachmentSysId}.`
+
+      if (meta.targetResolutionError) {
+        note += ` NOTE: the user asked to attach to ${meta.targetResolutionError} — that lookup failed, so the file was placed on the voice session as a fallback. Mention this to the user so they can retry with the correct record.`
+      }
 
       if (meta.extractedText && meta.extractedText.length > 0) {
         const summary = meta.extractedNote ? ` (${meta.extractedNote})` : ''
@@ -283,7 +316,8 @@ export class VoicePipeline extends EventEmitter {
       this.processUserMessage(note).catch(() => {})
     })
 
-    addLog('info', 'pipeline', 'Attachment requested: ' + reason, { tenantId: this.tenant.id })
+    const targetLabel = target_table && target_number ? ` (targeting ${target_table} ${target_number})` : ''
+    addLog('info', 'pipeline', 'Attachment requested: ' + reason + targetLabel, { tenantId: this.tenant.id })
     this.emit('attachment_requested', { url, reason })
 
     return {

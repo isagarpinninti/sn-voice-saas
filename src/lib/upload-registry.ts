@@ -24,6 +24,17 @@ export type UploadMeta = {
   extractedNote?: string
   /** True when text was longer than MAX_EXTRACTED_CHARS and was cut off. */
   extractedTruncated?: boolean
+  /** SN table the attachment actually landed on (e.g. "incident"). Empty when
+   *  it landed on the conversation session. */
+  attachedTable?: string
+  /** sys_id of the record the attachment landed on. */
+  attachedSysId?: string
+  /** Human-readable number of the target record (e.g. "INC0010001"), when known. */
+  attachedNumber?: string
+  /** When the caller asked for a specific record but resolution failed, this
+   *  describes what we tried to attach to — e.g. "incident INC9999999". The
+   *  file was placed on the session as a fallback. */
+  targetResolutionError?: string
 }
 
 type Entry = {
