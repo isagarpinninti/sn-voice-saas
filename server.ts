@@ -1,4 +1,5 @@
 import { createServer, IncomingMessage } from 'http'
+import https from 'https'
 import { parse } from 'url'
 import next from 'next'
 import { WebSocketServer, WebSocket, RawData } from 'ws'
@@ -17,7 +18,7 @@ const port = parseInt(process.env.PORT || '3000')
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
-    if (req.url?.startsWith('/widget.js')) {
+    if (req.url?.startsWith('/widget.js') || req.url?.startsWith('/voice-transcribe-widget.js')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
       res.setHeader('Access-Control-Allow-Origin', '*')
     }
@@ -55,47 +56,50 @@ app.prepare().then(() => {
     const token = url.query.token as string
     addLog('info', 'transcribe-ws', 'Connection. Token: ' + (token ? token.substring(0, 12) + '...' : 'NONE'))
 
+    // Register error handler immediately — before async auth — so an early error
+    // doesn't become an unhandled EventEmitter throw that crashes the process.
+    ws.on('error', (e) => addLog('error', 'transcribe-ws', 'Browser WS error: ' + e.message))
+
     let authed = false
 
     // Auth: validate token before opening Deepgram connections
     ;(async () => {
       if (!token) { ws.close(4001, 'Token required'); return }
-      try {
-        const apiToken = await db.apiToken.findUnique({
-          where: { token },
-          include: { instance: true, tenant: true },
-        })
-        if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
-        authed = true
-        addLog('info', 'transcribe-ws', 'Authed. TenantId=' + (apiToken.tenantId || apiToken.tenant?.id || '?'))
-      } catch (err: any) {
-        addLog('error', 'transcribe-ws', 'Auth error: ' + err.message)
-        ws.close(4500, 'Auth error'); return
+      // Retry once on DB connection failure — Neon free tier auto-pauses and the
+      // first connection attempt after a cold start often fails with ECONNREFUSED.
+      let apiToken: any = null
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          apiToken = await db.apiToken.findUnique({
+            where: { token },
+            include: { instance: true, tenant: true },
+          })
+          break
+        } catch (err: any) {
+          addLog('warn', 'transcribe-ws', `Auth DB attempt ${attempt} failed: ${err.message?.split('\n')[0]}`)
+          if (attempt === 2) { ws.close(4500, 'Auth error'); return }
+          await new Promise(r => setTimeout(r, 3000))
+        }
       }
+      if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
+      authed = true
+      addLog('info', 'transcribe-ws', 'Authed. TenantId=' + (apiToken.tenantId || apiToken.tenant?.id || '?'))
 
       const dgKey = process.env.DEEPGRAM_API_KEY
       if (!dgKey) { ws.close(1011, 'STT not configured'); return }
 
       const dgBase = 'wss://api.deepgram.com/v1/listen'
-      const dgParams = 'model=nova-3&language=multi&detect_language=true&smart_format=true&punctuate=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1'
+      const dgParams = 'model=nova-2&detect_language=true&punctuate=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1'
       const dgHeaders = { headers: { Authorization: `Token ${dgKey}` } }
 
-      const dgOrig  = new WebSocket(`${dgBase}?${dgParams}`, dgHeaders)
-      const dgTrans = new WebSocket(`${dgBase}?${dgParams}&translate=true`, dgHeaders)
-
-      let origReady  = false
-      let transReady = false
+      // Single connection — translation (nova-3 + multi + translate=true) is unsupported
+      const dgOrig = new WebSocket(`${dgBase}?${dgParams}`, dgHeaders)
 
       function send(data: object) {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data))
       }
 
-      function checkReady() {
-        if (origReady && transReady) send({ type: 'ready' })
-      }
-
-      dgOrig.on('open', () => { origReady = true; checkReady() })
-      dgTrans.on('open', () => { transReady = true; checkReady() })
+      dgOrig.on('open', () => { send({ type: 'ready' }) })
 
       dgOrig.on('message', (raw) => {
         try {
@@ -112,40 +116,71 @@ app.prepare().then(() => {
         } catch {}
       })
 
-      dgTrans.on('message', (raw) => {
-        try {
-          const msg = JSON.parse(raw.toString())
-          const text = msg.channel?.alternatives?.[0]?.transcript
-          if (!text) return
-          send({
-            type: 'translation',
-            text,
-            isFinal: msg.is_final || false,
-            speechFinal: msg.speech_final || false,
-          })
-        } catch {}
+      dgOrig.on('error', (e) => addLog('error', 'transcribe-ws', 'DG error: ' + e.message))
+      // Capture the raw HTTP response body when Deepgram rejects the upgrade (400/401/403)
+      ;(dgOrig as any).on('unexpected-response', (_req: any, res: any) => {
+        let body = ''
+        res.on('data', (c: any) => { body += c.toString() })
+        res.on('end', () => addLog('error', 'transcribe-ws', 'DG HTTP ' + res.statusCode + ' body: ' + body))
       })
 
-      dgOrig.on('error',  (e) => addLog('error', 'transcribe-ws', 'DG-orig error: '  + e.message))
-      dgTrans.on('error', (e) => addLog('error', 'transcribe-ws', 'DG-trans error: ' + e.message))
-      dgOrig.on('close',  () => addLog('info',  'transcribe-ws', 'DG-orig closed'))
-      dgTrans.on('close', () => addLog('info',  'transcribe-ws', 'DG-trans closed'))
+      // Deepgram closes after 10s of silence — send KeepAlive every 8s so the
+      // connection stays open while the user is reading the form before recording.
+      // Declared before the close handler so the closure captures an initialised binding.
+      let dgKeepAlive: ReturnType<typeof setInterval> | undefined
+      dgKeepAlive = setInterval(() => {
+        if (dgOrig.readyState === WebSocket.OPEN) {
+          try { dgOrig.send(JSON.stringify({ type: 'KeepAlive' })) } catch {}
+        } else {
+          clearInterval(dgKeepAlive)
+        }
+      }, 8000)
+
+      dgOrig.on('close', (code, reason) => {
+        addLog('info', 'transcribe-ws', 'DG closed code=' + code + ' reason=' + (reason?.toString() || ''))
+        clearInterval(dgKeepAlive)
+      })
 
       ws.on('message', (data: RawData, isBinary: boolean) => {
         if (!authed) return
         if (isBinary) {
-          if (dgOrig.readyState  === WebSocket.OPEN) dgOrig.send(data)
-          if (dgTrans.readyState === WebSocket.OPEN) dgTrans.send(data)
+          try {
+            if (dgOrig.readyState === WebSocket.OPEN) dgOrig.send(data)
+          } catch (e: any) {
+            addLog('error', 'transcribe-ws', 'DG send error: ' + e.message)
+          }
+        } else {
+          try {
+            const msg = JSON.parse(data.toString())
+            if (msg.type === 'flush' && dgOrig.readyState === WebSocket.OPEN) {
+              dgOrig.send(JSON.stringify({ type: 'Finalize' }))
+            } else if (msg.type === 'translate' && msg.text) {
+              const src = (msg.sourceLang || '').split('-')[0] || 'autodetect'
+              const langpair = encodeURIComponent(src + '|en')
+              const q = encodeURIComponent(String(msg.text).substring(0, 2000))
+              const url = `https://api.mymemory.translated.net/get?q=${q}&langpair=${langpair}`
+              https.get(url, (res) => {
+                let body = ''
+                res.on('data', (c) => { body += c })
+                res.on('end', () => {
+                  try {
+                    const parsed = JSON.parse(body)
+                    const translation = parsed?.responseData?.translatedText || ''
+                    if (translation) send({ type: 'translation', text: translation, isFinal: true })
+                    else send({ type: 'error', message: 'Translation returned empty' })
+                  } catch { send({ type: 'error', message: 'Translation parse error' }) }
+                })
+              }).on('error', (e) => send({ type: 'error', message: 'Translation failed: ' + e.message }))
+            }
+          } catch {}
         }
       })
 
       ws.on('close', () => {
-        addLog('info', 'transcribe-ws', 'Browser closed — shutting down DG connections')
-        try { dgOrig.close() }  catch {}
-        try { dgTrans.close() } catch {}
+        addLog('info', 'transcribe-ws', 'Browser closed — shutting down DG connection')
+        clearInterval(dgKeepAlive)
+        try { dgOrig.close() } catch {}
       })
-
-      ws.on('error', (e) => addLog('error', 'transcribe-ws', 'Browser WS error: ' + e.message))
 
       const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); else clearInterval(ping) }, 30000)
       ws.on('close', () => clearInterval(ping))
