@@ -215,7 +215,9 @@
   /* ── Translate ───────────────────────────────────────────────────────── */
   if (transBtn) {
     transBtn.addEventListener('click', function () {
-      var text = origFinals.trim();
+      var gf = window.g_form;
+      var text = (gf && typeof gf.getValue === 'function' ? gf.getValue('comments') : origFinals) || '';
+      text = text.trim();
       if (!text || !ws || ws.readyState !== 1) return;
       var targetLang = langSel ? langSel.value : 'en';
       transBtn.disabled = true;
@@ -223,6 +225,11 @@
       ws.send(JSON.stringify({ type: 'translate', text: text, sourceLang: '', targetLang: targetLang }));
     });
   }
+
+  /* ── Keep translate button in sync with live comments field ─────────── */
+  setInterval(function () {
+    if (transWrap && !transWrap.classList.contains('va-hidden')) refreshTranslateBtn();
+  }, 1000);
 
   /* ── WebSocket ───────────────────────────────────────────────────────── */
   setStatus('Connecting…', 'connecting', '');
