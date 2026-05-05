@@ -6,7 +6,7 @@
 (function(){
   var sc=document.currentScript||document.querySelector('script[data-token]')
   var TK=(window.ZeVoxConfig&&window.ZeVoxConfig.token)||window.ZEVOX_TOKEN||(sc&&sc.getAttribute('data-token'))||''
-  var GW=(window.ZeVoxConfig&&window.ZeVoxConfig.gateway)||(sc&&sc.src?new URL(sc.src).origin:'')||'https://zevox-production.up.railway.app'
+  var GW=(window.ZeVoxConfig&&window.ZeVoxConfig.gateway)||(sc&&sc.src?new URL(sc.src).origin:'')||'https://sn-voice-saas.onrender.com'
   if(!TK){console.error('[ZeVox] No token');return}
   if(window.__zv)return;window.__zv=true
 
@@ -301,7 +301,7 @@
       orbLg.style.background='#f5f5f5';orbLg.style.animation='none';orbLg.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'
     }
 
-    g('zv-br').innerHTML=C.brand?'Powered by <a href="https://zevox-production.up.railway.app" target="_blank">ZeVox</a>':''
+    g('zv-br').innerHTML=C.brand?'Powered by <a href="https://sn-voice-saas.onrender.com" target="_blank">ZeVox</a>':''
 
     // Agent name header — only shown if configured, renders with the brand gradient
     if(C.name){

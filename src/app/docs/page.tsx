@@ -168,7 +168,7 @@ npx now-sdk install --instance https://your-instance.service-now.com`}</CodeBloc
               </p>
               <KvCard
                 rows={[
-                  ['SaaS Base URL', 'https://zevox-production.up.railway.app'],
+                  ['SaaS Base URL', 'https://sn-voice-saas.onrender.com'],
                   ['Tenant API Key', 'sk_live_… (from ZeVox → Connection)'],
                 ]}
               />
@@ -380,7 +380,7 @@ ENDING THE CALL:
                 Open <strong className="text-foreground font-medium">Connection</strong> in ZeVox, copy the embed
                 snippet, and paste it before your <InlineCode>{'</body>'}</InlineCode>:
               </p>
-              <CodeBlock language="html">{`<script src="https://zevox-production.up.railway.app/widget.js"
+              <CodeBlock language="html">{`<script src="https://sn-voice-saas.onrender.com/widget.js"
         data-token="sk_live_your_token_here"></script>`}</CodeBlock>
               <p className="text-[13.5px] text-muted-foreground mt-3">
                 Customize the widget (colors, position, greeting, voice-only mode) on the{' '}

@@ -38,7 +38,7 @@ const STEPS = [
 const REQS = [
   'ServiceNow release Vancouver or later',
   '`admin` role to install the app',
-  'Outbound HTTPS to *.up.railway.app',
+  'Outbound HTTPS to *.onrender.com',
   'Node.js 18+ with the ServiceNow SDK installed (`npm i -g @servicenow/sdk`)',
 ]
 

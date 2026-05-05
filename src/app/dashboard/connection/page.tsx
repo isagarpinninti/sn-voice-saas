@@ -12,7 +12,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog'
 import { CheckCircle2, XCircle, Loader2, Copy, Check, Plus, Server, Trash2, RefreshCw, Phone, Bot, Link2, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox-production.up.railway.app'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sn-voice-saas.onrender.com'
 
 interface TestResult { step: string; status: 'pass' | 'fail'; detail: string }
 
