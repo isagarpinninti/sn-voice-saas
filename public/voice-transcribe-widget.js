@@ -198,11 +198,11 @@
     if (processor)   { try { processor.disconnect(); }  catch (_) {} processor = null; }
     if (audioCtx)    { try { audioCtx.close(); }        catch (_) {} audioCtx  = null; }
     if (mediaStream) { mediaStream.getTracks().forEach(function (t) { t.stop(); }); mediaStream = null; }
-    if (origInterim) { origFinals += (origFinals ? ' ' : '') + origInterim; origInterim = ''; }
+    origInterim = '';
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'flush' }));
     if (micBtn) { micBtn.innerHTML = IC_MIC + ' Start'; micBtn.classList.remove('recording'); micBtn.disabled = true; }
     setStatus('Processing…', '', '');
-    insertTimer = setTimeout(onTranscriptReady, 800);
+    insertTimer = setTimeout(onTranscriptReady, 1500);
   }
 
   if (micBtn) {
