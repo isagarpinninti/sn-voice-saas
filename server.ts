@@ -1,5 +1,4 @@
 import { createServer, IncomingMessage } from 'http'
-import https from 'https'
 import { parse } from 'url'
 import next from 'next'
 import { WebSocketServer, WebSocket, RawData } from 'ws'
@@ -155,23 +154,28 @@ app.prepare().then(() => {
             if (msg.type === 'flush' && dgOrig.readyState === WebSocket.OPEN) {
               dgOrig.send(JSON.stringify({ type: 'Finalize' }))
             } else if (msg.type === 'translate' && msg.text) {
-              const src = (msg.sourceLang || '').split('-')[0] || 'autodetect'
               const tgt = (msg.targetLang || 'en').split('-')[0] || 'en'
-              const langpair = encodeURIComponent(src + '|' + tgt)
-              const q = encodeURIComponent(String(msg.text).substring(0, 2000))
-              const url = `https://api.mymemory.translated.net/get?q=${q}&langpair=${langpair}`
-              https.get(url, (res) => {
-                let body = ''
-                res.on('data', (c) => { body += c })
-                res.on('end', () => {
-                  try {
-                    const parsed = JSON.parse(body)
-                    const translation = parsed?.responseData?.translatedText || ''
-                    if (translation) send({ type: 'translation', text: translation, isFinal: true })
-                    else send({ type: 'error', message: 'Translation returned empty' })
-                  } catch { send({ type: 'error', message: 'Translation parse error' }) }
-                })
-              }).on('error', (e) => send({ type: 'error', message: 'Translation failed: ' + e.message }))
+              ;(async () => {
+                try {
+                  const res = await fetch('https://libretranslate.com/translate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      q: String(msg.text).substring(0, 2000),
+                      source: 'auto',
+                      target: tgt,
+                      format: 'text',
+                      api_key: process.env.LIBRETRANSLATE_API_KEY || '',
+                    }),
+                  })
+                  const data = await res.json() as any
+                  const translation = data?.translatedText || ''
+                  if (translation) send({ type: 'translation', text: translation, isFinal: true })
+                  else send({ type: 'error', message: data?.error || 'Translation returned empty' })
+                } catch (e: any) {
+                  send({ type: 'error', message: 'Translation failed: ' + e.message })
+                }
+              })()
             }
           } catch {}
         }
