@@ -26,5 +26,4 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY --from=builder /app/prisma ./prisma
 EXPOSE 3000
-# Use custom server with WebSocket support
-CMD ["npx", "tsx", "server.ts"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npx tsx server.ts"]

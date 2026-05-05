@@ -3,8 +3,6 @@ services:
     name: sn-voice-saas
     runtime: docker
     dockerfilePath: ./Dockerfile
-    # Override the Dockerfile CMD to run DB migration before starting
-    startCommand: npx prisma db push --accept-data-loss && npx tsx server.ts
     plan: starter
     healthCheckPath: /api/auth/session
     envVars:
