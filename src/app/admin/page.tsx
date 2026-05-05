@@ -26,7 +26,11 @@ export default async function AdminPage() {
     take: 50,
   })
 
-  const planPrices: Record<string, number> = { FREE: 0, PRO: 79, ENTERPRISE: 299 }
+  // Includes legacy plans so MRR isn't understated for tenants still on old tiers.
+  const planPrices: Record<string, number> = {
+    FREE: 0, PRO: 79, PREMIUM: 199,
+    PRO_VOICE: 149, ENTERPRISE: 299, BUSINESS: 0, STARTER: 0,
+  }
   const mrr = tenants.reduce((sum, t) => sum + (planPrices[t.plan] || 0), 0)
   const monthCalls = tenants.reduce((s, t) => s + t.usageLogs.reduce((ss, l) => ss + l.calls, 0), 0)
 
@@ -61,7 +65,7 @@ export default async function AdminPage() {
       ),
       plan: (
         <Badge
-          variant={t.plan === 'ENTERPRISE' ? 'default' : t.plan === 'PRO' ? 'success' : 'secondary'}
+          variant={t.plan === 'PREMIUM' || t.plan === 'ENTERPRISE' ? 'default' : t.plan === 'PRO' || t.plan === 'PRO_VOICE' ? 'success' : 'secondary'}
         >
           {t.plan}
         </Badge>

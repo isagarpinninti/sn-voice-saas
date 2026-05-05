@@ -177,10 +177,12 @@
 #zv *{box-sizing:border-box}
 
 /* ── Launcher pill (idle state) ── */
-#zv-launcher{display:flex;align-items:center;gap:8px;background:#fff;border-radius:${C.radius==='lg'?'18px':'999px'};padding:6px 6px 6px 8px;box-shadow:0 4px 24px rgba(0,0,0,.10),0 0 0 1px rgba(0,0,0,.04);transition:transform .2s,box-shadow .2s}
-#zv-launcher:hover{transform:translateY(-1px);box-shadow:0 8px 32px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.05)}
+/* Soft emerald halo underneath gives the pill a "premium" ZeVox lift without
+   making it look like a billboard on corporate SN portals. */
+#zv-launcher{display:flex;align-items:center;gap:8px;background:#fff;border-radius:${C.radius==='lg'?'18px':'999px'};padding:6px 6px 6px 8px;box-shadow:0 1px 2px 0 rgba(16,24,40,.06),0 6px 20px -4px rgba(16,185,129,.18),0 0 0 1px rgba(16,24,40,.05);transition:transform .2s,box-shadow .2s}
+#zv-launcher:hover{transform:translateY(-1px);box-shadow:0 2px 4px 0 rgba(16,24,40,.08),0 10px 32px -6px rgba(16,185,129,.28),0 0 0 1px rgba(16,24,40,.06)}
 
-/* Single-color breathing orb (uses tenant brand color, not a multi-color spin) */
+/* Launcher orb — breathing gradient with tenant brand color */
 #zv-orb{width:36px;height:36px;border-radius:50%;cursor:pointer;border:none;outline:none;padding:0;position:relative;flex-shrink:0;background:radial-gradient(circle at 35% 30%,${C.color},${C.color} 40%,#0d1117 100%);box-shadow:0 0 0 2px ${C.color}26,0 4px 14px ${C.color}66,inset 0 -3px 6px rgba(0,0,0,.3);animation:zvBreathe 2.4s ease-in-out infinite}
 #zv-orb::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.45),rgba(255,255,255,0) 50%);pointer-events:none}
 #zv-orb img{width:36px;height:36px;object-fit:cover;border-radius:50%;position:relative;z-index:1}
@@ -189,43 +191,75 @@
   50%{box-shadow:0 0 0 4px ${C.color}33,0 6px 22px ${C.color}88,inset 0 -3px 6px rgba(0,0,0,.3)}
 }
 
-/* Start a call CTA pill — uses brand color border, dark background */
+/* Start a call CTA pill — uses brand color icon, dark background */
 #zv-start{display:flex;align-items:center;gap:8px;height:38px;padding:0 18px 0 14px;border-radius:999px;border:none;outline:none;background:#0d1117;color:#fff;font-size:13.5px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s;letter-spacing:-.005em}
 #zv-start:hover{background:#1c2128}
 #zv-start:active{transform:scale(.97)}
 #zv-start svg{width:14px;height:14px;color:${C.color}}
 
 /* ── Active card (open state) ── */
-#zv-card{display:none;width:340px;background:#fff;border-radius:20px;box-shadow:0 12px 48px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.04);padding:22px;flex-direction:column;align-items:center;gap:4px}
-#zv-card.on{display:flex}
-#zv-orb-lg{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:12px;position:relative;background:radial-gradient(circle at 35% 30%,${C.color},${C.color} 40%,#0d1117 100%);box-shadow:0 0 0 2px ${C.color}26,0 6px 24px ${C.color}80,inset 0 -4px 8px rgba(0,0,0,.3);animation:zvBreathe 2.4s ease-in-out infinite}
+/* Mesh gradient backdrop — emerald + indigo radials echo the landing-page hero.
+   Kept at ~6-8% opacity so text legibility is perfect; glass feel without drama. */
+#zv-card{display:none;width:340px;background:
+  radial-gradient(ellipse 80% 60% at 15% 0%,rgba(16,185,129,.10) 0%,transparent 55%),
+  radial-gradient(ellipse 60% 50% at 90% 20%,rgba(99,102,241,.08) 0%,transparent 55%),
+  #fff;border-radius:20px;box-shadow:0 0 0 1px rgba(16,185,129,.10),0 12px 48px -8px rgba(16,24,40,.14),0 4px 16px -4px rgba(16,24,40,.08);padding:22px;flex-direction:column;align-items:center;gap:4px;position:relative;overflow:hidden}
+#zv-card.on{display:flex;animation:zvCardEntry .45s cubic-bezier(.22,1,.36,1)}
+@keyframes zvCardEntry{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+/* Subtle grid overlay on the card — micro-texture that matches the hero */
+#zv-card::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(to right,rgba(16,24,40,.025) 1px,transparent 1px),linear-gradient(to bottom,rgba(16,24,40,.025) 1px,transparent 1px);background-size:24px 24px;mask-image:radial-gradient(ellipse 80% 60% at 50% 10%,#000 0%,transparent 70%);-webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% 10%,#000 0%,transparent 70%)}
+
+/* Agent name (optional) — the one place we use text-gradient-brand for a premium touch */
+#zv-agent{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;background:linear-gradient(110deg,#34d399 0%,#10b981 45%,#6366f1 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px;position:relative;z-index:1}
+#zv-agent.hide{display:none}
+
+/* Orb — layered radial glow: emerald core → indigo halo for the "hero in miniature" effect */
+#zv-orb-lg{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:10px;position:relative;z-index:1;background:radial-gradient(circle at 35% 30%,${C.color},${C.color} 40%,#0d1117 100%);box-shadow:0 0 0 2px ${C.color}26,0 6px 24px ${C.color}80,0 10px 40px -4px rgba(99,102,241,.26),inset 0 -4px 8px rgba(0,0,0,.3);animation:zvBreathe 2.4s ease-in-out infinite}
 #zv-orb-lg::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.4),rgba(255,255,255,0) 55%);pointer-events:none;z-index:2}
 #zv-orb-lg img{width:60px;height:60px;object-fit:cover;border-radius:50%;position:relative;z-index:1}
 #zv-ring{position:absolute;inset:-6px;border-radius:50%;border:2px solid ${C.color}55;opacity:0;transition:opacity .3s;z-index:0}
 #zv-ring.on{opacity:1;animation:zvR 2s ease-in-out infinite}
 @keyframes zvR{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.08);opacity:.95}}
-#zv-status{font-size:15px;font-weight:500;color:#1a1a1a}
-#zv-sub{font-size:12px;color:#999;margin-top:1px}
-#zv-ctrls{display:flex;align-items:center;gap:8px;margin-top:12px}
-#zv-end{display:flex;align-items:center;gap:6px;padding:8px 24px;border-radius:24px;border:1px solid #e5e5e5;background:#fff;color:#1a1a1a;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s}
-#zv-end:hover{background:#f5f5f5}
+
+/* Waveform — ZeVox signature, ties widget visual language to dashboard + hero.
+   Idle: still, low amplitude. Active (listening/speaking): bars animate.
+   Using brand color with slight opacity so it never overpowers the orb. */
+#zv-wave{display:flex;gap:3px;align-items:center;height:18px;margin-bottom:8px;opacity:.55;position:relative;z-index:1}
+#zv-wave span{display:block;width:3px;border-radius:2px;background:${C.color};transform-origin:center;transform:scaleY(.4)}
+#zv-wave.on span{animation:zvWave 1.3s ease-in-out infinite}
+#zv-wave span:nth-child(1){height:30%;animation-delay:-.2s}
+#zv-wave span:nth-child(2){height:60%;animation-delay:-.5s}
+#zv-wave span:nth-child(3){height:90%;animation-delay:-.8s}
+#zv-wave span:nth-child(4){height:100%;animation-delay:0s}
+#zv-wave span:nth-child(5){height:90%;animation-delay:-.3s}
+#zv-wave span:nth-child(6){height:60%;animation-delay:-.6s}
+#zv-wave span:nth-child(7){height:30%;animation-delay:-.9s}
+@keyframes zvWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+
+#zv-status{font-size:15px;font-weight:600;color:#0d1117;letter-spacing:-.01em;position:relative;z-index:1}
+#zv-sub{font-size:12px;color:#6b7280;margin-top:2px;position:relative;z-index:1}
+#zv-ctrls{display:flex;align-items:center;gap:8px;margin-top:14px;position:relative;z-index:1}
+#zv-end{display:flex;align-items:center;gap:6px;padding:8px 24px;border-radius:24px;border:1px solid #e5e7eb;background:#fff;color:#0d1117;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s}
+#zv-end:hover{background:#f9fafb;border-color:#d1d5db}
 #zv-end svg{width:14px;height:14px}
-#zv-mute{width:36px;height:36px;border-radius:50%;border:1px solid #e5e5e5;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
-#zv-mute:hover{background:#f5f5f5}
+#zv-mute{width:36px;height:36px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
+#zv-mute:hover{background:#f9fafb;border-color:#d1d5db}
 #zv-mute.on{background:#ef4444;border-color:#ef4444}
-#zv-mute svg{width:16px;height:16px;color:#666}
+#zv-mute svg{width:16px;height:16px;color:#6b7280}
 #zv-mute.on svg{color:#fff}
-#zv-br{font-size:11px;color:#bbb;margin-top:12px}
-#zv-br a{color:#999;text-decoration:underline}
+#zv-br{font-size:11px;color:#9ca3af;margin-top:14px;position:relative;z-index:1}
+#zv-br a{color:#6b7280;text-decoration:none;font-weight:500}
+#zv-br a:hover{color:${C.color}}
 
 /* ── Attachment request banner ── */
-#zv-attach{display:none;width:100%;margin-top:14px;padding:12px;border-radius:12px;background:${C.color}14;border:1px solid ${C.color}33;text-align:left;animation:zvFadeUp .35s cubic-bezier(.22,1,.36,1)}
+#zv-attach{display:none;width:100%;margin-top:14px;padding:12px;border-radius:12px;background:${C.color}14;border:1px solid ${C.color}33;text-align:left;position:relative;z-index:1;animation:zvFadeUp .35s cubic-bezier(.22,1,.36,1)}
 #zv-attach.on{display:block}
 #zv-attach.done{background:#10b98114;border-color:#10b98133}
-#zv-attach-title{font-size:12px;font-weight:600;color:#1a1a1a;margin-bottom:2px}
-#zv-attach-reason{font-size:11px;color:#666;margin-bottom:10px;line-height:1.4}
-#zv-attach-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px 12px;border-radius:8px;background:#1a1a1a;color:#fff;font-size:12px;font-weight:500;cursor:pointer;border:none;text-decoration:none;font-family:inherit;transition:background .15s}
-#zv-attach-btn:hover{background:#000}
+#zv-attach-title{font-size:12px;font-weight:600;color:#0d1117;margin-bottom:2px}
+#zv-attach-reason{font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.4}
+#zv-attach-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px 12px;border-radius:8px;background:#0d1117;color:#fff;font-size:12px;font-weight:500;cursor:pointer;border:none;text-decoration:none;font-family:inherit;transition:background .15s}
+#zv-attach-btn:hover{background:#1c2128}
 #zv-attach-btn svg{width:12px;height:12px}
 #zv-attach-status{font-size:11px;color:#10b981;font-weight:500;display:flex;align-items:center;gap:4px}
 @keyframes zvFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
@@ -235,7 +269,9 @@
   <button id="zv-start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Start a call</button>
 </div>
 <div id="zv-card">
+  <div id="zv-agent" class="hide"></div>
   <div id="zv-orb-lg"><div id="zv-ring"></div></div>
+  <div id="zv-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
   <div id="zv-status">Connecting...</div>
   <div id="zv-sub"></div>
   <div id="zv-ctrls">
@@ -266,6 +302,13 @@
     }
 
     g('zv-br').innerHTML=C.brand?'Powered by <a href="https://zevox-production.up.railway.app" target="_blank">ZeVox</a>':''
+
+    // Agent name header — only shown if configured, renders with the brand gradient
+    if(C.name){
+      var agentEl=g('zv-agent')
+      if(agentEl){agentEl.textContent=C.name;agentEl.className=''}
+    }
+
     // Both the orb and the start button trigger the call
     orb.onclick=startCall
     g('zv-start').onclick=startCall
@@ -298,6 +341,10 @@
   }
   function setSt(main,sub){g('zv-status').textContent=main;g('zv-sub').textContent=sub||''}
   function setRing(on){var r=g('zv-ring');if(r)r.className=on?'on':''}
+  // Waveform follows the agent's voice state — animates on listening/speaking,
+  // still during connecting/thinking. Gives the widget a continuous visual pulse
+  // that matches the dashboard .zvx-wave and the landing page hero bars.
+  function setWave(on){var w=g('zv-wave');if(w)w.className=on?'on':''}
 
   function startMic(){return navigator.mediaDevices.getUserMedia({audio:{channelCount:1,sampleRate:16000,echoCancellation:true,noiseSuppression:true}}).then(function(s){micCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});micStr=s;var src=micCtx.createMediaStreamSource(s);micP=micCtx.createScriptProcessor(4096,1,1);micP.onaudioprocess=function(e){if(ws&&ws.readyState===1&&!muted){var f=e.inputBuffer.getChannelData(0),i=new Int16Array(f.length);for(var j=0;j<f.length;j++)i[j]=Math.max(-32768,Math.min(32767,Math.round(f[j]*32767)));ws.send(i.buffer)}};src.connect(micP);micP.connect(micCtx.destination)})}
   function stopMic(){if(micP){micP.disconnect();micP=null}if(micStr){micStr.getTracks().forEach(function(t){t.stop()});micStr=null}if(micCtx){micCtx.close();micCtx=null}}
@@ -328,11 +375,11 @@
           return
         }
         try{var m=JSON.parse(ev.data)
-          if(m.type==='ready'){setSt('Listening...','Say something');setRing(true)}
+          if(m.type==='ready'){setSt('Listening...','Say something');setRing(true);setWave(true)}
           else if(m.type==='state'){
-            if(m.state==='listening'){setSt('Listening...','Talk to interrupt');setRing(true)}
-            else if(m.state==='speaking'){setSt('Speaking...','Talk to interrupt');setRing(true)}
-            else if(m.state==='processing'){setSt('Thinking...','');setRing(false)}
+            if(m.state==='listening'){setSt('Listening...','Talk to interrupt');setRing(true);setWave(true)}
+            else if(m.state==='speaking'){setSt('Speaking...','Talk to interrupt');setRing(true);setWave(true)}
+            else if(m.state==='processing'){setSt('Thinking...','');setRing(false);setWave(false)}
           }
           else if(m.type==='barge_in')clearAudio()
           else if(m.type==='navigate')openNavUrls(m.urls)
@@ -349,7 +396,7 @@
   function endCall(){
     console.log('[ZeVox] endCall (immediate)')
     try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch(e){}
-    ws=null;stopMic();clearAudio();active=false;muted=false;setRing(false)
+    ws=null;stopMic();clearAudio();active=false;muted=false;setRing(false);setWave(false)
     pendingNavUrls=[]
     g('zv-card').classList.remove('on');resetAttachmentUI()
     g('zv-launcher').style.display='flex'
@@ -372,6 +419,7 @@
     active=false  // No more user input — but DO NOT touch the audio queue
     stopMic()
     setRing(false)
+    setWave(false)
     setSt('Call ending...','')
     // 6s grace period — covers ~15 words of fallback message at typical TTS rate
     // (24kHz × 2 bytes × ~3 seconds of audio for the fallback, plus network buffer)

@@ -10,15 +10,12 @@ import { TopBar } from '@/components/dashboard/top-bar'
 import { ToastProvider } from '@/components/ui/toast'
 import { ConfirmProvider } from '@/components/ui/confirm-dialog'
 import { PLANS, PlanKey } from '@/lib/plans'
-import { isUserAdmin } from '@/lib/admin'
 import { ImpersonateBanner } from '@/components/admin/impersonate-banner'
-import { adminHref } from '@/lib/urls'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session?.user) redirect('/auth')
 
-  const isAdmin = isUserAdmin(session)
   const impersonating = (session.user as any).impersonating === true
   const realUserId = (session.user as any).realId as string | undefined
   let impersonationContext: { realEmail?: string | null; targetEmail?: string | null } | null = null
@@ -88,26 +85,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
               </a>
             </div>
 
-            {/* Admin section (only for admin emails) */}
-            {isAdmin && (
-              <div className="mb-4">
-                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest px-2.5 pt-1 pb-1.5 font-medium">
-                  Admin
-                </p>
-                <a
-                  href={adminHref('/admin')}
-                  className="flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] text-destructive/80 hover:text-destructive hover:bg-destructive/5 transition-all duration-150"
-                >
-                  <svg className="w-[16px] h-[16px] shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                  </svg>
-                  Admin Console
-                  <svg className="ml-auto w-3 h-3 text-muted-foreground/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-label="opens admin app">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              </div>
-            )}
           </nav>
 
           {/* Workspace footer (replaces user card — user moved to top bar dropdown) */}

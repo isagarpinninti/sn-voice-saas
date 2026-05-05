@@ -89,7 +89,7 @@ app.prepare().then(() => {
       if (!dgKey) { ws.close(1011, 'STT not configured'); return }
 
       const dgBase = 'wss://api.deepgram.com/v1/listen'
-      const dgParams = 'model=nova-2&detect_language=true&punctuate=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1'
+      const dgParams = 'model=nova-3&language=multi&smart_format=true&punctuate=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1'
       const dgHeaders = { headers: { Authorization: `Token ${dgKey}` } }
 
       // Single connection — translation (nova-3 + multi + translate=true) is unsupported
@@ -156,7 +156,8 @@ app.prepare().then(() => {
               dgOrig.send(JSON.stringify({ type: 'Finalize' }))
             } else if (msg.type === 'translate' && msg.text) {
               const src = (msg.sourceLang || '').split('-')[0] || 'autodetect'
-              const langpair = encodeURIComponent(src + '|en')
+              const tgt = (msg.targetLang || 'en').split('-')[0] || 'en'
+              const langpair = encodeURIComponent(src + '|' + tgt)
               const q = encodeURIComponent(String(msg.text).substring(0, 2000))
               const url = `https://api.mymemory.translated.net/get?q=${q}&langpair=${langpair}`
               https.get(url, (res) => {

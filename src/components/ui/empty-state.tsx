@@ -17,18 +17,25 @@ export function EmptyState({ icon: Icon, title, description, action, className }
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center text-center rounded-xl border border-dashed border-border bg-card/30 px-6 py-12',
+        'flex flex-col items-center justify-center text-center rounded-lg border border-dashed border-border bg-card/30 px-6 py-12',
         className
       )}
     >
-      {Icon && (
-        <div className="w-10 h-10 rounded-lg bg-muted/50 border border-border flex items-center justify-center mb-4">
+      {Icon ? (
+        <div className="w-10 h-10 rounded-lg bg-secondary/60 border border-border flex items-center justify-center mb-3.5">
           <Icon className="w-4 h-4 text-muted-foreground" />
         </div>
+      ) : (
+        // ZeVox signature — voice waveform motif for empty states without a domain icon
+        <div className="mb-3.5 text-primary/60" aria-hidden="true">
+          <div className="zvx-wave">
+            <span /><span /><span /><span /><span />
+          </div>
+        </div>
       )}
-      <h3 className="text-[14px] font-semibold text-foreground">{title}</h3>
+      <h3 className="text-[13.5px] font-semibold text-foreground tracking-[-0.005em]">{title}</h3>
       {description && (
-        <p className="text-[12px] text-muted-foreground mt-1 max-w-[420px]">{description}</p>
+        <p className="text-[12px] text-muted-foreground mt-1.5 max-w-[420px] leading-relaxed">{description}</p>
       )}
       {action && <div className="mt-5">{action}</div>}
     </div>

@@ -28,6 +28,128 @@ interface Tenant {
   snPassword: string | null
 }
 
+// Groq's llama-3.3 guided decoding rejects any tool whose JSON Schema has
+// unsupported keywords, mismatched enum/type, or missing `type` on a property
+// — it returns HTTP 400 "Failed to call a function" and the whole turn dies.
+// Tool schemas come from admin-authored SN `agent_tool_parameter` rows so we
+// can't trust them. This normalizer rebuilds each tool into a shape Groq will
+// accept and returns a list of repairs so bad SN records are visible in logs.
+const GROQ_ALLOWED_PRIM_TYPES = new Set(['string', 'number', 'boolean', 'integer', 'array', 'object'])
+const GROQ_UNSUPPORTED_KEYWORDS = ['oneOf', 'anyOf', 'allOf', 'not', '$ref', '$schema', 'definitions']
+
+function normalizeToolsForGroq(tools: any[]): { tools: any[]; repairs: string[] } {
+  const repairs: string[] = []
+  const out: any[] = []
+  if (!Array.isArray(tools)) return { tools: out, repairs }
+
+  for (const t of tools) {
+    const fn = t?.function
+    const name = fn?.name
+    if (!fn || typeof name !== 'string' || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(name)) {
+      repairs.push('dropped tool with invalid/missing name: ' + JSON.stringify(name))
+      continue
+    }
+
+    let params: any = fn.parameters
+    if (!params || typeof params !== 'object') {
+      params = { type: 'object', properties: {}, required: [] }
+      repairs.push(name + ': missing parameters — defaulted to empty object schema')
+    } else {
+      params = { ...params }
+    }
+
+    if (params.type !== 'object') {
+      repairs.push(name + ': parameters.type was ' + JSON.stringify(params.type) + " — forced to 'object'")
+      params.type = 'object'
+    }
+
+    if (!params.properties || typeof params.properties !== 'object') {
+      params.properties = {}
+      repairs.push(name + ': missing/invalid properties — defaulted to {}')
+    }
+
+    const cleanedProps: Record<string, any> = {}
+    for (const [pname, pschemaRaw] of Object.entries(params.properties)) {
+      const pschema: any = pschemaRaw && typeof pschemaRaw === 'object' ? { ...pschemaRaw } : {}
+
+      for (const kw of GROQ_UNSUPPORTED_KEYWORDS) {
+        if (kw in pschema) {
+          delete pschema[kw]
+          repairs.push(name + '.' + pname + ": stripped unsupported keyword '" + kw + "'")
+        }
+      }
+
+      if (!GROQ_ALLOWED_PRIM_TYPES.has(pschema.type)) {
+        repairs.push(name + '.' + pname + ': type was ' + JSON.stringify(pschema.type) + " — defaulted to 'string'")
+        pschema.type = 'string'
+      }
+
+      if (pschema.enum !== undefined) {
+        if (!Array.isArray(pschema.enum) || pschema.enum.length === 0) {
+          delete pschema.enum
+          repairs.push(name + '.' + pname + ': dropped invalid enum (not a non-empty array)')
+        } else {
+          const coerced: any[] = []
+          let dirty = false
+          for (const v of pschema.enum) {
+            if (pschema.type === 'string') {
+              if (typeof v === 'string') coerced.push(v)
+              else { coerced.push(String(v)); dirty = true }
+            } else if (pschema.type === 'number' || pschema.type === 'integer') {
+              const n = Number(v)
+              if (Number.isFinite(n)) coerced.push(pschema.type === 'integer' ? Math.trunc(n) : n)
+              else dirty = true
+            } else if (pschema.type === 'boolean') {
+              if (typeof v === 'boolean') coerced.push(v)
+              else { coerced.push(Boolean(v)); dirty = true }
+            } else {
+              dirty = true
+            }
+          }
+          if (coerced.length === 0) {
+            delete pschema.enum
+            repairs.push(name + '.' + pname + ": enum incompatible with type '" + pschema.type + "' — dropped enum")
+          } else if (dirty) {
+            pschema.enum = coerced
+            repairs.push(name + '.' + pname + ": coerced enum values to type '" + pschema.type + "'")
+          }
+        }
+      }
+
+      cleanedProps[pname] = pschema
+    }
+    params.properties = cleanedProps
+
+    if (!Array.isArray(params.required)) {
+      params.required = []
+    } else {
+      const valid = params.required.filter((r: any) => typeof r === 'string' && r in cleanedProps)
+      if (valid.length !== params.required.length) {
+        repairs.push(name + ': dropped required entries not present in properties')
+      }
+      params.required = valid
+    }
+
+    for (const kw of GROQ_UNSUPPORTED_KEYWORDS) {
+      if (kw in params) {
+        delete params[kw]
+        repairs.push(name + ": stripped unsupported keyword '" + kw + "' from parameters root")
+      }
+    }
+
+    out.push({
+      type: 'function',
+      function: {
+        name,
+        description: typeof fn.description === 'string' ? fn.description : '',
+        parameters: params,
+      },
+    })
+  }
+
+  return { tools: out, repairs }
+}
+
 export class VoicePipeline extends EventEmitter {
   private tenant: Tenant
   private selectedAgentId: string = ''  // Set by SN orchestrator after init
@@ -63,6 +185,10 @@ export class VoicePipeline extends EventEmitter {
   // Audio transport. 'widget' = browser mic/speaker (linear16 @ 16k in, 24k out).
   // 'phone' = Twilio Media Streams (mulaw @ 8k both directions).
   private audioFormat: 'widget' | 'phone' = 'widget'
+
+  // One-shot guard for the failed_generation schema dump — we only want to log
+  // the full tools payload once per call, not every retry.
+  private toolsSchemaDumped = false
 
   // Token of the currently-pending attachment upload. At most one in flight
   // per call — cleared when the upload resolves or the call stops.
@@ -140,6 +266,16 @@ export class VoicePipeline extends EventEmitter {
         })
       }
 
+      // Sanitize tool schemas before they ever reach Groq. Admin-authored SN
+      // tool rows frequently produce JSON Schema that Groq's guided decoder
+      // rejects with a 400 "Failed to call a function" — which tanks the whole
+      // turn. Log any repairs so the SN admin can fix the source record.
+      const { tools: normalized, repairs } = normalizeToolsForGroq(this.tools)
+      this.tools = normalized
+      if (repairs.length) {
+        addLog('warn', 'llm', 'Tool schema repairs applied: ' + repairs.join(' | '), { tenantId: this.tenant.id })
+      }
+
       this.agentConfig = config.agent || {}
       // Store LLM model from config
       this.agentConfig.llm_model = config.llm_config?.model || 'llama-3.3-70b-versatile'
@@ -150,7 +286,7 @@ export class VoicePipeline extends EventEmitter {
       // Voice Agent record so it can be customized per use case.
       let prompt = config.system_prompt
       prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
-      prompt += '\n\nTOOL DISCIPLINE: If a tool fits the user\'s request, CALL IT in this same turn. Do NOT say "let me search", "let me check", "one moment", or any other pre-tool narration — just emit the tool call. Only speak AFTER the tool returns. Never promise an action in words without actually calling the tool.'
+      prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately after — do not fake progress. The ORDER of clarifying questions, KB search, and ticket creation is driven by the agent instructions above, not by this rule.'
       this.messages.push({ role: 'system', content: prompt })
 
       // Init STT — use our SaaS Deepgram key by default, customer's key only if they provide their own
@@ -1062,6 +1198,11 @@ export class VoicePipeline extends EventEmitter {
       // the caller knows no tool ran (so silence-fallback speaks the user-facing
       // recovery message instead of letting the agent claim it searched).
       if (/Failed to call a function|failed_generation/i.test(msg)) {
+        if (!this.toolsSchemaDumped) {
+          this.toolsSchemaDumped = true
+          const dump = this.tools.map((t: any) => (t?.function?.name || '?') + ':' + JSON.stringify(t?.function?.parameters || {})).join(' || ')
+          addLog('warn', 'llm', 'failed_generation tool schemas (sanitized): ' + dump, { tenantId: this.tenant.id })
+        }
         addLog('warn', 'llm', 'failed_generation — retrying non-streaming WITH tools', { tenantId: this.tenant.id })
         try {
           const retryWithTools: any = await this.llm.chat.completions.create({ ...params, stream: false })

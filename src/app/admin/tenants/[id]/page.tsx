@@ -89,7 +89,7 @@ export default async function TenantDetailPage({ params }: Props) {
               <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-foreground truncate">
                 {tenant.company || tenant.user.name || tenant.user.email}
               </h1>
-              <Badge variant={tenant.plan === 'FREE' ? 'secondary' : tenant.plan === 'ENTERPRISE' ? 'default' : 'success'}>
+              <Badge variant={tenant.plan === 'FREE' ? 'secondary' : tenant.plan === 'PREMIUM' || tenant.plan === 'ENTERPRISE' ? 'default' : 'success'}>
                 {tenant.plan}
               </Badge>
             </div>

@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 /* ============================================================
- * ZeVox Design System
+ * ZeVox Design System — Light edition
  * Token architecture inspired by Resonance / shadcn.
- * Brand color (emerald) preserved as `primary`.
- * Light + dark modes both defined; default is dark.
+ * Brand color (emerald) preserved as the single vibrant accent.
+ * Light is default; dark palette retained for future toggle.
  * ============================================================ */
 
 @theme inline {
@@ -50,52 +50,63 @@
 
     --font-sans: var(--font-geist-sans);
     --font-mono: var(--font-geist-mono);
+
+    /* Soft elevation system — hairline + low-contrast shadow, never heavy */
+    --shadow-soft: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
+    --shadow-lift: 0 2px 4px -1px rgb(16 24 40 / 0.05), 0 4px 12px -2px rgb(16 24 40 / 0.08);
+    --shadow-focus: 0 0 0 3px rgb(16 185 129 / 0.18);
 }
 
-/* ── Light mode (defined for future use; not the default) ── */
+/* ── Light mode (DEFAULT for ZeVox) ── */
 :root {
     --radius: 0.75rem;
 
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    /* Off-white canvas, true white card — creates subtle layering without heavy shadows */
+    --background: oklch(0.985 0.002 260);          /* ~#FAFAFB — cool off-white */
+    --foreground: oklch(0.16 0 0);                 /* near-black, never pure */
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: oklch(0.16 0 0);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
+    --popover-foreground: oklch(0.16 0 0);
 
-    /* ZeVox brand: emerald-500 (#10b981) — kept as primary */
+    /* ZeVox brand: emerald-500 — the single vibrant accent across the product */
     --primary: oklch(0.696 0.17 162.48);
     --primary-foreground: oklch(0.985 0 0);
 
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    /* Monochrome secondary scale — used for buttons, chips, panels */
+    --secondary: oklch(0.968 0 0);                 /* neutral-100 */
+    --secondary-foreground: oklch(0.21 0 0);
+    --muted: oklch(0.968 0 0);
+    --muted-foreground: oklch(0.47 0 0);           /* stronger contrast than default for a11y */
+    --accent: oklch(0.968 0 0);
+    --accent-foreground: oklch(0.21 0 0);
+
     --destructive: oklch(0.577 0.245 27.325);
     --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
+
+    /* Hairline borders — subtle but visible */
+    --border: oklch(0.918 0 0);
+    --input: oklch(0.918 0 0);
     --ring: oklch(0.696 0.17 162.48);
 
-    --chart-1: oklch(0.696 0.17 162.48);
-    --chart-2: oklch(0.6 0.118 264);
+    --chart-1: oklch(0.696 0.17 162.48);           /* emerald */
+    --chart-2: oklch(0.6 0.118 264);               /* indigo */
     --chart-3: oklch(0.398 0.07 227);
-    --chart-4: oklch(0.828 0.189 84);
+    --chart-4: oklch(0.828 0.189 84);              /* amber */
     --chart-5: oklch(0.769 0.188 70);
 
-    --sidebar: oklch(0.984 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
+    /* Sidebar matches canvas for a seamless panel feel (ElevenLabs move) */
+    --sidebar: oklch(0.985 0.002 260);
+    --sidebar-foreground: oklch(0.35 0 0);
     --sidebar-primary: oklch(0.696 0.17 162.48);
     --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-accent: oklch(0.955 0 0);
+    --sidebar-accent-foreground: oklch(0.16 0 0);
+    --sidebar-border: oklch(0.918 0 0);
     --sidebar-ring: oklch(0.696 0.17 162.48);
 }
 
-/* ── Dark mode (DEFAULT for ZeVox) ── */
+/* ── Dark mode (retained for future toggle, not currently enabled) ── */
 .dark {
     --background: oklch(0.09 0 0);            /* #050505-ish */
     --foreground: oklch(0.985 0 0);
@@ -174,9 +185,9 @@ button:not(:disabled),
 }
 
 .glass {
-    background: rgba(10, 10, 12, 0.85);
+    background: rgba(255, 255, 255, 0.78);
     backdrop-filter: blur(16px) saturate(180%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid oklch(0.918 0 0);
 }
 
 .border-gradient {
@@ -303,16 +314,54 @@ button:not(:disabled),
 html { scroll-behavior: smooth; }
 
 ::selection {
-    background: rgba(16, 185, 129, 0.3);
-    color: #fff;
+    background: rgba(16, 185, 129, 0.22);
+    color: inherit;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Subtle light-mode scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-    background: oklch(0.27 0 0);
-    border-radius: 3px;
+    background: oklch(0.85 0 0);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.34 0 0);
+    background: oklch(0.72 0 0);
+    background-clip: padding-box;
+    border: 2px solid transparent;
 }
+
+/* ============================================================
+ * ZeVox touch — voice waveform motif for empty states / dividers
+ * A subtle signature that reinforces the voice-product identity.
+ * ============================================================ */
+.zvx-wave {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+    height: 24px;
+}
+.zvx-wave > span {
+    display: block;
+    width: 3px;
+    border-radius: 2px;
+    background: currentColor;
+    opacity: 0.5;
+    transform-origin: center;
+    animation: zvx-wave-bar 1.4s ease-in-out infinite;
+}
+.zvx-wave > span:nth-child(1) { height: 30%; animation-delay: -0.2s; }
+.zvx-wave > span:nth-child(2) { height: 60%; animation-delay: -0.5s; }
+.zvx-wave > span:nth-child(3) { height: 90%; animation-delay: -0.8s; }
+.zvx-wave > span:nth-child(4) { height: 60%; animation-delay: -0.3s; }
+.zvx-wave > span:nth-child(5) { height: 30%; animation-delay: -0.6s; }
+
+@keyframes zvx-wave-bar {
+    0%, 100% { transform: scaleY(0.5); }
+    50%      { transform: scaleY(1); }
+}
+
+/* Static version — for non-animated contexts like section dividers */
+.zvx-wave-static > span { animation: none; }

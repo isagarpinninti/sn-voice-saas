@@ -39,46 +39,30 @@ export const PLANS = {
     ],
     cta: 'Get started',
   },
-  PRO_VOICE: {
-    name: 'Pro Voice',
-    price: 149,
-    minutesPerMonth: 1000,
-    concurrentLimit: 10,
-    maxAgents: 10,
-    maxInstances: 5,
-    overageRate: 0.12,
-    comingSoon: true,
-    features: [
-      'Everything in Pro',
-      '1,000 minutes per month',
-      'Dedicated inbound phone number',
-      'Callers reach your agent directly — no widget',
-      'Call recording & transcripts',
-      'DTMF / touch-tone routing',
-      '10 voice agents, 5 instances',
-    ],
-    cta: 'Join waitlist',
-  },
-  ENTERPRISE: {
-    name: 'Enterprise',
-    price: 299,
-    minutesPerMonth: 3500,
+  PREMIUM: {
+    name: 'Premium',
+    price: 199,
+    minutesPerMonth: 2000,
     concurrentLimit: 25,
     maxAgents: -1,
     maxInstances: -1,
-    overageRate: 0.08,
+    overageRate: 0.10,
     features: [
-      '3,500 minutes per month',
-      'Unlimited instances',
-      'Unlimited voice agents',
+      '2,000 minutes per month',
+      'Dedicated inbound phone number',
+      'Unlimited instances and agents',
       'BYOK TTS & STT option',
-      'Dedicated account manager',
-      'SLA guarantee (99.9%)',
+      'Cross-session memory + KB search',
       'Advanced guardrails & compliance',
-      'Onboarding assistance',
+      'SLA guarantee (99.9%)',
+      'Priority support + onboarding',
     ],
     cta: 'Get started',
   },
 } as const
 
 export type PlanKey = keyof typeof PLANS
+
+// Plans that include the dedicated inbound phone number feature.
+// Includes legacy PRO_VOICE/ENTERPRISE so existing tenants keep working.
+export const PHONE_ELIGIBLE_PLANS = new Set(['PREMIUM', 'PRO_VOICE', 'ENTERPRISE'])

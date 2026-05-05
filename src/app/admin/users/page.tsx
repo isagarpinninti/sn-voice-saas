@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useToast } from '@/components/ui/toast'
@@ -122,17 +123,22 @@ export default function UsersPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full text-[10px] font-medium px-1.5 py-0.5 tracking-wide ${
-                          u.plan === 'ENTERPRISE'
-                            ? 'bg-primary/10 text-primary'
-                            : u.plan === 'PRO'
-                            ? 'bg-emerald-500/10 text-emerald-400'
-                            : 'bg-secondary text-secondary-foreground'
-                        }`}
-                      >
-                        {u.plan || '—'}
-                      </span>
+                      {u.plan ? (
+                        <Badge
+                          variant={
+                            u.plan === 'PREMIUM' || u.plan === 'ENTERPRISE'
+                              ? 'default'
+                              : u.plan === 'PRO' || u.plan === 'PRO_VOICE'
+                              ? 'success'
+                              : 'secondary'
+                          }
+                          dot
+                        >
+                          {u.plan}
+                        </Badge>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground tabular-nums">
                       {new Date(u.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

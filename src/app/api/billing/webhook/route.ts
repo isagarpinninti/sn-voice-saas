@@ -130,8 +130,11 @@ export async function POST(req: Request) {
   }
 }
 
-function productIdToPlan(productId: string): 'FREE' | 'PRO' | 'ENTERPRISE' {
+function productIdToPlan(productId: string): 'FREE' | 'PRO' | 'PREMIUM' {
+  // Match `premium` before `pro` since `premium` would also match a loose `pro` check.
+  if (productId?.includes('premium')) return 'PREMIUM'
   if (productId?.includes('pro')) return 'PRO'
-  if (productId?.includes('enterprise')) return 'ENTERPRISE'
+  // Legacy enterprise product IDs (still in flight from old subscriptions) → PREMIUM
+  if (productId?.includes('enterprise')) return 'PREMIUM'
   return 'FREE'
 }

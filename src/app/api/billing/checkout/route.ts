@@ -43,8 +43,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'Downgraded to Free plan' })
   }
 
-  // Validate plan
-  const validPlans = ['PRO', 'ENTERPRISE'] as const
+  // Validate plan — only the active sellable tiers
+  const validPlans = ['PRO', 'PREMIUM'] as const
   if (!validPlans.includes(plan as any)) {
     return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
   }

@@ -104,7 +104,7 @@ export default function TenantsPage() {
                       </p>
                       <div className="flex items-center gap-3 mt-1">
                         <Badge
-                          variant={t.plan === 'ENTERPRISE' ? 'default' : t.plan === 'PRO' ? 'success' : 'secondary'}
+                          variant={t.plan === 'PREMIUM' || t.plan === 'ENTERPRISE' ? 'default' : t.plan === 'PRO' || t.plan === 'PRO_VOICE' ? 'success' : 'secondary'}
                         >
                           {t.plan}
                         </Badge>

@@ -34,7 +34,14 @@ export async function POST(req: NextRequest) {
   const tenantId = typeof body.tenantId === 'string' ? body.tenantId.trim() : ''
   const agentId = typeof body.agentId === 'string' && body.agentId ? body.agentId.trim() : null
   const instanceId = typeof body.instanceId === 'string' && body.instanceId ? body.instanceId.trim() : null
-  const twilioSid = typeof body.twilioSid === 'string' && body.twilioSid ? body.twilioSid.trim() : null
+  // Accept `providerExternalId` (preferred) and `twilioSid` (legacy) from clients.
+  const providerExternalIdRaw =
+    (typeof body.providerExternalId === 'string' && body.providerExternalId) ||
+    (typeof body.twilioSid === 'string' && body.twilioSid) ||
+    ''
+  const providerExternalId = providerExternalIdRaw ? providerExternalIdRaw.trim() : null
+  const rawProvider = typeof body.provider === 'string' ? body.provider.trim().toUpperCase() : 'TWILIO'
+  const provider = rawProvider === 'TELNYX' || rawProvider === 'FREESWITCH' ? rawProvider : 'TWILIO'
   const friendly = typeof body.friendly === 'string' && body.friendly ? body.friendly.trim() : null
 
   if (!E164_RE.test(e164)) {
@@ -50,9 +57,9 @@ export async function POST(req: NextRequest) {
   })
   if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
 
-  if (tenant.plan !== 'PRO_VOICE' && tenant.plan !== 'ENTERPRISE') {
+  if (tenant.plan !== 'PREMIUM' && tenant.plan !== 'PRO_VOICE' && tenant.plan !== 'ENTERPRISE') {
     return NextResponse.json(
-      { error: `Tenant is on ${tenant.plan}. Phone numbers require PRO_VOICE or ENTERPRISE.` },
+      { error: `Tenant is on ${tenant.plan}. Phone numbers require the Premium plan.` },
       { status: 400 },
     )
   }
@@ -70,7 +77,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const created = await db.phoneNumber.create({
-      data: { e164, friendly, twilioSid, tenantId, agentId, instanceId: boundInstanceId, active: true },
+      data: { e164, friendly, provider, providerExternalId, tenantId, agentId, instanceId: boundInstanceId, active: true },
       include: { tenant: { select: { company: true, user: { select: { email: true } } } }, agent: true, instance: true },
     })
 
@@ -81,7 +88,7 @@ export async function POST(req: NextRequest) {
       action: 'phone.number.created',
       targetType: 'PhoneNumber',
       targetId: created.id,
-      metadata: { e164, agentId, instanceId: boundInstanceId, twilioSid },
+      metadata: { e164, agentId, instanceId: boundInstanceId, provider, providerExternalId },
     })
 
     return NextResponse.json({ phoneNumber: created })

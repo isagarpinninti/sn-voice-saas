@@ -10,7 +10,7 @@ import { Plan } from '@prisma/client'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
-const VALID_PLANS = new Set<Plan>(['FREE', 'STARTER', 'PRO', 'PRO_VOICE', 'BUSINESS', 'ENTERPRISE'])
+const VALID_PLANS = new Set<Plan>(['FREE', 'PRO', 'PREMIUM', 'STARTER', 'PRO_VOICE', 'BUSINESS', 'ENTERPRISE'])
 
 export async function GET(_req: Request, ctx: RouteContext) {
   const session = await auth()

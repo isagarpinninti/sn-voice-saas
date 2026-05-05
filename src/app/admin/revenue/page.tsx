@@ -14,9 +14,11 @@ import { DollarSign, Users, TrendingUp, TrendingDown, Percent, Sparkles } from '
 
 const PLAN_COLOR: Record<string, string> = {
   FREE: 'bg-muted-foreground/40',
-  STARTER: 'bg-amber-400/70',
   PRO: 'bg-primary',
-  PRO_VOICE: 'bg-indigo-400',
+  PREMIUM: 'bg-indigo-400',
+  // Legacy plans kept for tenants who haven't migrated yet
+  STARTER: 'bg-amber-400/70',
+  PRO_VOICE: 'bg-indigo-400/60',
   BUSINESS: 'bg-violet-400',
   ENTERPRISE: 'bg-emerald-300',
 }

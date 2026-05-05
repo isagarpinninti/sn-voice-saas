@@ -82,6 +82,7 @@ model Tenant {
   agents            Agent[]
   usageLogs         UsageLog[]
   phoneNumbers      PhoneNumber[]
+  allowedCallers    AllowedCaller[]
   attachmentUploads AttachmentUpload[]
 
   company           String?
@@ -97,6 +98,7 @@ enum Plan {
   PRO_VOICE
   BUSINESS
   ENTERPRISE
+  PREMIUM
 }
 
 // =====================================================
@@ -242,14 +244,18 @@ model FeatureFlag {
 }
 
 // =====================================================
-// Phone Numbers (Twilio-provisioned DIDs bound to a tenant/agent)
+// Phone Numbers (provisioned DIDs bound to a tenant/agent)
+// Provider-neutral: `provider` selects Twilio / Telnyx / FreeSWITCH; the
+// `providerExternalId` holds that provider's opaque ID (Twilio PN sid,
+// Telnyx phone_number id, etc.) for future provisioning automation.
 // =====================================================
 
 model PhoneNumber {
-  id         String    @id @default(cuid())
-  e164       String    @unique // e.g. +14155550123
-  friendly   String?
-  twilioSid  String?   @unique // Twilio PN sid, for provisioning automation
+  id                 String    @id @default(cuid())
+  e164               String    @unique // e.g. +14155550123
+  friendly           String?
+  provider           String    @default("TWILIO") // TWILIO | TELNYX | FREESWITCH
+  providerExternalId String?   @unique @map("twilioSid") // DB column kept as twilioSid for zero-migration rename
 
   tenantId   String
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -265,6 +271,33 @@ model PhoneNumber {
 
   @@index([tenantId])
   @@index([agentId])
+}
+
+// =====================================================
+// Allowed Callers (per-tenant phone number allowlist)
+// Empty list = open access (allow everyone). Non-empty list = strict allowlist;
+// only listed callers connect, others hear a polite hangup. Optional fields
+// (name/email/employeeId/snUserSysId) are passed to the voice pipeline so the
+// agent can greet by name and SN tools can impersonate the right user.
+// =====================================================
+
+model AllowedCaller {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  phoneE164    String   // e.g. +14155550123 — match key
+  name         String?
+  email        String?
+  employeeId   String?
+  snUserSysId  String?  // 32-char ServiceNow sys_user sys_id for tool impersonation
+  active       Boolean  @default(true)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, phoneE164])
+  @@index([tenantId, active])
 }
 
 // =====================================================
@@ -328,7 +361,10 @@ model Waitlist {
 
 // =====================================================
 // Plan Definitions (DB-backed replacement for hardcoded PLANS)
-// Keyed by the Plan enum value (FREE / PRO / ENTERPRISE).
+// Keyed by the Plan enum value (FREE / PRO / PREMIUM).
+// Legacy keys (STARTER / PRO_VOICE / BUSINESS / ENTERPRISE) remain in the
+// Plan enum for existing tenants but are not surfaced in pricing UI; their
+// PlanDefinition rows are marked active=false.
 // =====================================================
 
 model PlanDefinition {

@@ -2,7 +2,7 @@
 
 /**
  * Minimal toast system — no portal lib, no shadcn dependency.
- * Renders a fixed-position stack in the bottom-right that auto-dismisses.
+ * Renders a fixed-position stack in the top-right that auto-dismisses.
  */
 import { createContext, useCallback, useContext, useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -44,21 +44,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+      <div className="fixed top-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
         <AnimatePresence>
           {toasts.map(t => (
             <motion.div
               key={t.id}
-              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              initial={{ opacity: 0, y: -16, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className={`pointer-events-auto min-w-[240px] max-w-[360px] rounded-xl border px-4 py-3 text-[13px] shadow-lg backdrop-blur ${
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className={`pointer-events-auto min-w-[260px] max-w-[380px] rounded-lg border px-4 py-3 text-[13px] font-medium shadow-2xl backdrop-blur-xl ${
                 t.variant === 'success'
-                  ? 'border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-300'
+                  ? 'border-emerald-400/40 bg-emerald-500 text-white shadow-emerald-500/20'
                   : t.variant === 'error'
-                  ? 'border-destructive/30 bg-destructive/[0.08] text-destructive'
-                  : 'border-border bg-card/95 text-foreground'
+                  ? 'border-red-400/40 bg-red-500 text-white shadow-red-500/20'
+                  : 'border-zinc-700/60 bg-zinc-900/95 text-zinc-50 shadow-black/30'
               }`}
             >
               <div className="flex items-start gap-2.5">

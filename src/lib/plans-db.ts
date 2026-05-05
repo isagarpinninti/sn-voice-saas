@@ -23,7 +23,7 @@ const TTL_MS = 60_000
 
 function fromHardcoded(): Record<string, PlanRecord> {
   const out: Record<string, PlanRecord> = {}
-  const order: Record<string, number> = { FREE: 10, PRO: 20, ENTERPRISE: 30 }
+  const order: Record<string, number> = { FREE: 10, PRO: 20, PREMIUM: 30 }
   for (const [key, p] of Object.entries(PLANS)) {
     out[key] = {
       key,

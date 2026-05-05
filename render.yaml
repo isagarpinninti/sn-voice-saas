@@ -1,0 +1,92 @@
+services:
+  - type: web
+    name: sn-voice-saas
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Override the Dockerfile CMD to run DB migration before starting
+    startCommand: npx prisma db push --accept-data-loss && npx tsx server.ts
+    plan: starter
+    healthCheckPath: /api/auth/session
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Injected automatically from the managed Postgres below
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sn-voice-saas-db
+          property: connectionString
+
+      # NextAuth — generated once, stored in Render secrets
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      # Replace with your actual Render URL after first deploy
+      - key: NEXTAUTH_URL
+        value: https://sn-voice-saas.onrender.com
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://sn-voice-saas.onrender.com
+      - key: NEXT_PUBLIC_APP_NAME
+        value: ZeVox
+
+      # Google OAuth (create at console.cloud.google.com)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # GitHub OAuth (optional — leave blank to disable)
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+
+      # Deepgram — handles STT (Nova-3) and TTS (Aura)
+      - key: DEEPGRAM_API_KEY
+        sync: false
+
+      # Admin access (comma-separated email addresses)
+      - key: ADMIN_EMAILS
+        sync: false
+
+      # RevenueCat billing (optional — leave blank to disable)
+      - key: REVENUECAT_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_REVENUECAT_API_KEY
+        sync: false
+      - key: REVENUECAT_WEBHOOK_SECRET
+        sync: false
+      - key: REVENUECAT_PROJECT_ID
+        sync: false
+
+      # Telephony — set to "twilio" or "telnyx" (or leave blank to disable)
+      - key: TELEPHONY_PROVIDER
+        sync: false
+
+      # Twilio (required if TELEPHONY_PROVIDER=twilio)
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_SIGNATURE_VALIDATION
+        sync: false
+
+      # Telnyx (required if TELEPHONY_PROVIDER=telnyx)
+      - key: TELNYX_API_KEY
+        sync: false
+      - key: TELNYX_PUBLIC_KEY
+        sync: false
+      - key: TELNYX_TEXML_APP_ID
+        sync: false
+
+      # Optional: Slack/webhook URL for admin alerts
+      - key: ALERT_WEBHOOK_URL
+        sync: false
+
+      # Auto-generated secret for admin impersonation
+      - key: IMPERSONATION_SECRET
+        generateValue: true
+
+databases:
+  - name: sn-voice-saas-db
+    databaseName: sn_voice_saas
+    plan: free

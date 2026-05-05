@@ -9,7 +9,6 @@ import { AdminSidebarNav } from '@/components/admin/admin-sidebar-nav'
 import { TopBar } from '@/components/dashboard/top-bar'
 import { ToastProvider } from '@/components/ui/toast'
 import { ConfirmProvider } from '@/components/ui/confirm-dialog'
-import { appHref } from '@/lib/urls'
 import { CommandPalette } from '@/components/admin/command-palette'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -43,25 +42,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           {/* Navigation */}
           <nav className="flex-1 px-3 overflow-y-auto pt-1">
             <AdminSidebarNav items={ADMIN_NAV} />
-
-            {/* Back to dashboard */}
-            <div className="mb-4">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest px-2.5 pt-1 pb-1.5 font-medium">
-                Back
-              </p>
-              <a
-                href={appHref('/dashboard')}
-                className="flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/60 transition-all duration-150"
-              >
-                <svg className="w-[16px] h-[16px] shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                </svg>
-                User Dashboard
-                <svg className="ml-auto w-3 h-3 text-muted-foreground/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-label="opens user app">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-            </div>
           </nav>
 
           <div className="px-3 py-3 border-t border-sidebar-border">

@@ -1,13 +1,13 @@
 # Twilio Phone Call Setup
 
-End-to-end guide to turn the **Pro Voice** tier on for a tenant. Currently MVP (v1-a): one phone number → one agent per tenant, no DTMF menus, inbound only.
+End-to-end guide to turn the **Premium** tier on for a tenant. Currently MVP (v1-a): one phone number → one agent per tenant, no DTMF menus, inbound only.
 
 ## How it works
 
 ```
 Caller dials +1-XXX-XXX-XXXX
   → Twilio POSTs to https://zevox-production.up.railway.app/api/phone/incoming
-  → That webhook looks up the number, checks the tenant is on PRO_VOICE,
+  → That webhook looks up the number, checks the tenant is on PREMIUM (or legacy PRO_VOICE/ENTERPRISE),
     and returns TwiML: <Connect><Stream url="wss://.../phone?phoneId=..."/>
   → Twilio opens a Media Streams WebSocket to our server
   → Our /phone handler bridges mulaw@8kHz audio into VoicePipeline
@@ -25,8 +25,8 @@ Caller dials +1-XXX-XXX-XXXX
 *(Not the admin service — phone webhooks hit the user deploy.)*
 
 ```
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=<paste from Twilio console → Account Dashboard>
+TWILIO_ACCOUNT_SID=ACf4911df3d75d7bfb7cd8a89823266ffb
+TWILIO_AUTH_TOKEN=db37881eb45d6936ceee45a49fd6f382
 TWILIO_SIGNATURE_VALIDATION=true
 ```
 
@@ -62,7 +62,7 @@ TWILIO_SIGNATURE_VALIDATION=true
    - **Twilio PN SID:** optional, from Twilio console (starts with `PN`)
 3. **Add phone number**
 
-The backend checks the tenant is on `PRO_VOICE` or `ENTERPRISE` — otherwise the row won't save.
+The backend checks the tenant is on `PREMIUM` (or legacy `PRO_VOICE` / `ENTERPRISE`) — otherwise the row won't save.
 
 ## Testing
 
@@ -80,7 +80,7 @@ The backend checks the tenant is on `PRO_VOICE` or `ENTERPRISE` — otherwise th
 | Symptom | Likely cause |
 |---|---|
 | Call rings forever, no answer | Twilio webhook URL wrong, or webhook returning 4xx/5xx. Check Twilio console → Phone Numbers → your number → Request inspector. |
-| Agent hangs up immediately | Tenant isn't on `PRO_VOICE`/`ENTERPRISE`. Check the audit log — you'll see `phone.call.rejected` with the reason. |
+| Agent hangs up immediately | Tenant isn't on `PREMIUM` (or legacy `PRO_VOICE`/`ENTERPRISE`). Check the audit log — you'll see `phone.call.rejected` with the reason. |
 | "Service unavailable" recorded voice | `TWILIO_AUTH_TOKEN` missing but `TWILIO_SIGNATURE_VALIDATION=true`. Set the token. |
 | "Your ServiceNow instance is not configured" | The bound instance has no `snInstanceUrl`. Fix under `/dashboard/connection`. |
 | Audio drops out or is garbled | Usually Deepgram STT having trouble with mulaw@8kHz. Check `/admin/logs` for `stt` errors. |
@@ -93,7 +93,7 @@ At current Twilio retail:
 - Inbound minutes: ~$0.013/minute
 - Plus our pipeline costs (Deepgram STT+TTS + LLM)
 
-Pro Voice plan = $149/mo includes 1,000 min. At 1,000 min of inbound calls, Twilio cost alone = ~$14. Margin above that + STT/TTS/LLM costs is what funds the tier.
+Premium plan = $199/mo includes 2,000 min. At 2,000 min of inbound calls, Twilio cost alone = ~$27. Margin above that + STT/TTS/LLM costs is what funds the tier.
 
 ## What's NOT in this MVP (v1-a)
 

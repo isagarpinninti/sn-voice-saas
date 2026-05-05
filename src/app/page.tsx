@@ -3,7 +3,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { WaitlistForm } from '@/components/landing/waitlist-form'
 import { HeroWaveform } from '@/components/landing/hero-visual'
 import {
   Mic, Zap, Brain, ShieldCheck, Activity, Layers,
@@ -23,7 +22,7 @@ const STEPS = [
   { n: '01', t: 'Connect ServiceNow', d: 'Enter your instance URL and service account credentials. One-time setup.' },
   { n: '02', t: 'Configure your agent', d: 'Write the personality, add tools, set guardrails — all from your ServiceNow workspace.' },
   { n: '03', t: 'Add your LLM key', d: 'Paste your Groq (free) or OpenAI key in the ServiceNow LLM config. You control the model and cost.' },
-  { n: '04', t: 'Embed or call', d: 'Drop the widget into any page — or, on Pro Voice, point a real phone number at your agent.' },
+  { n: '04', t: 'Embed or call', d: 'Drop the widget into any page — or, on Premium, point a real phone number at your agent.' },
 ]
 
 const STATS = [
@@ -45,8 +44,8 @@ const FAQ = [
     a: 'The widget is a browser-based mic: users click to talk. Phone calls let anyone dial a real number — no device pairing, no website visit, no app. Great for support lines, IT helpdesks, and after-hours intake.',
   },
   {
-    q: 'When will phone calls be available?',
-    a: 'Pro Voice is rolling out to waitlist signups in phases. Join the list and we\'ll email you the moment your slot opens.',
+    q: 'Which plan includes phone calls?',
+    a: 'Phone calls are a Premium feature. Premium gets a dedicated inbound number plus everything in Pro. Free and Pro are widget-only.',
   },
   {
     q: 'Do I bring my own LLM key?',
@@ -58,7 +57,7 @@ const FAQ = [
   },
   {
     q: 'What happens when I hit my monthly minutes?',
-    a: 'Pro and Pro Voice have per-minute overage. Enterprise plans get volume pricing. You\'re never cut off mid-call.',
+    a: 'Pro and Premium have per-minute overage so you\'re never cut off mid-call. Need a custom volume plan? Talk to sales.',
   },
 ]
 
@@ -113,7 +112,7 @@ export default function LandingPage() {
               className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-card/40 text-[11px] text-muted-foreground hover:border-primary/40 hover:bg-card/80 transition-all mb-7 group"
             >
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground font-bold tracking-wider uppercase">New</span>
-              Inbound phone calls on Pro Voice
+              Inbound phone calls on Premium
               <ArrowRight className="w-3 h-3 text-muted-foreground/70 group-hover:translate-x-0.5 group-hover:text-foreground transition-all" />
             </a>
 
@@ -142,7 +141,7 @@ export default function LandingPage() {
                 className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-md text-[13.5px] text-foreground border border-border hover:border-primary/40 hover:bg-accent/30 transition-colors"
               >
                 <Phone className="w-3.5 h-3.5 text-primary" />
-                Get phone-call access
+                See phone calls on Premium
               </a>
             </div>
 
@@ -214,7 +213,7 @@ export default function LandingPage() {
           <div>
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-indigo-400/25 bg-indigo-400/[0.06] text-[10px] text-indigo-300 tracking-[0.18em] uppercase mb-6 font-medium">
               <Phone className="w-3 h-3" />
-              Coming to Pro Voice
+              Included with Premium
             </div>
 
             <h2 className="text-[clamp(1.75rem,3.5vw,2.5rem)] font-semibold tracking-[-0.035em] leading-[1.1] mb-5">
@@ -224,7 +223,7 @@ export default function LandingPage() {
             </h2>
 
             <p className="text-[15px] text-muted-foreground leading-relaxed mb-9 max-w-[500px]">
-              Skip the widget. Pro Voice customers get a dedicated inbound phone number that rings straight to your ServiceNow agent —
+              Skip the widget. Premium customers get a dedicated inbound phone number that rings straight to your ServiceNow agent —
               the same agent, tools, and memory as the widget.
             </p>
 
@@ -243,10 +242,16 @@ export default function LandingPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-muted-foreground/70 uppercase tracking-widest mb-3 font-medium">Get early access</p>
-              <WaitlistForm />
+              <p className="text-[11px] text-muted-foreground/70 uppercase tracking-widest mb-3 font-medium">Ready when you are</p>
+              <a
+                href="/auth"
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-md bg-foreground text-background text-[13.5px] font-medium hover:bg-foreground/90 transition-colors"
+              >
+                Start with Premium
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
               <p className="text-[11px] text-muted-foreground/60 mt-3">
-                No spam. We&apos;ll email you when your slot opens.
+                Includes a dedicated inbound number, 2,000 minutes, and unlimited agents.
               </p>
             </div>
           </div>
@@ -337,11 +342,10 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid md:grid-cols-3 gap-3 max-w-[960px] mx-auto">
             <PricingCard plan={PLANS.FREE} />
             <PricingCard plan={PLANS.PRO} highlighted />
-            <PricingCard plan={PLANS.PRO_VOICE} accent="violet" />
-            <PricingCard plan={PLANS.ENTERPRISE} />
+            <PricingCard plan={PLANS.PREMIUM} accent="violet" />
           </div>
 
           <div className="mt-10 text-center">
@@ -403,7 +407,7 @@ export default function LandingPage() {
               className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-md text-[13.5px] text-foreground border border-border hover:border-primary/40 hover:bg-accent/30 transition-colors"
             >
               <Phone className="w-3.5 h-3.5 text-primary" />
-              Waitlist for phone calls
+              Phone calls on Premium
             </a>
           </div>
         </div>
@@ -443,7 +447,6 @@ function PricingCard({
   highlighted?: boolean
   accent?: 'violet'
 }) {
-  const isComingSoon = 'comingSoon' in plan && plan.comingSoon === true
   const isPopular = 'popular' in plan && plan.popular === true
 
   return (
@@ -454,13 +457,9 @@ function PricingCard({
         accent === 'violet' && 'border-indigo-400/30 bg-indigo-400/[0.04]',
       )}
     >
-      {(isPopular || isComingSoon) && (
+      {isPopular && (
         <div className="absolute -top-2.5 left-4">
-          <Badge variant={isComingSoon ? 'outline' : 'default'} className={cn(
-            isComingSoon && 'border-indigo-400/40 bg-background text-indigo-300',
-          )}>
-            {isComingSoon ? 'Coming soon' : 'Most popular'}
-          </Badge>
+          <Badge variant="default">Most popular</Badge>
         </div>
       )}
       <CardContent className="p-6 flex flex-col h-full">
@@ -486,27 +485,15 @@ function PricingCard({
           ))}
         </ul>
 
-        {isComingSoon ? (
-          <a
-            href="#phone"
-            className={cn(
-              buttonVariants({ variant: 'outline', size: 'sm' }),
-              'w-full border-indigo-400/40 hover:bg-indigo-400/10 hover:border-indigo-400/60',
-            )}
-          >
-            {plan.cta}
-          </a>
-        ) : (
-          <a
-            href="/auth"
-            className={cn(
-              buttonVariants({ variant: highlighted ? 'default' : 'outline', size: 'sm' }),
-              'w-full',
-            )}
-          >
-            {plan.cta}
-          </a>
-        )}
+        <a
+          href="/auth"
+          className={cn(
+            buttonVariants({ variant: highlighted ? 'default' : 'outline', size: 'sm' }),
+            'w-full',
+          )}
+        >
+          {plan.cta}
+        </a>
       </CardContent>
     </Card>
   )

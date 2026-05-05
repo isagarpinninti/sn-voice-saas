@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# private downloadable assets (binary files served via /downloads API)
+/private-downloads/

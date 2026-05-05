@@ -87,6 +87,17 @@ export async function GET() {
     Promise.resolve(envCheck('Razorpay', 'billing', 'RAZORPAY_KEY_ID', false)),
     Promise.resolve(envCheck('NextAuth secret', 'auth', 'NEXTAUTH_SECRET')),
     Promise.resolve(envCheck('Google OAuth', 'auth', 'GOOGLE_CLIENT_ID', false)),
+    Promise.resolve(
+      (() => {
+        const selected = (process.env.TELEPHONY_PROVIDER || 'twilio').trim().toLowerCase()
+        return {
+          name: 'Active telephony provider',
+          category: 'telephony' as const,
+          status: 'ok' as const,
+          detail: selected + ' (auto-detected from webhook headers; env default = ' + selected + ')',
+        }
+      })(),
+    ),
     Promise.resolve(envCheck('Twilio account', 'telephony', 'TWILIO_ACCOUNT_SID', false)),
     Promise.resolve(envCheck('Twilio auth token', 'telephony', 'TWILIO_AUTH_TOKEN', false)),
     Promise.resolve(
@@ -94,6 +105,7 @@ export async function GET() {
         ? { name: 'Twilio signature validation', category: 'telephony' as const, status: 'ok' as const, detail: 'Enforced' }
         : { name: 'Twilio signature validation', category: 'telephony' as const, status: 'warn' as const, detail: 'Disabled (set TWILIO_SIGNATURE_VALIDATION=true in production)' },
     ),
+    Promise.resolve(envCheck('Telnyx public key', 'telephony', 'TELNYX_PUBLIC_KEY', false)),
   ])
 
   const overall: Check['status'] = checks.some((c) => c.status === 'error')

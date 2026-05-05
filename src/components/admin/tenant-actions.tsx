@@ -7,7 +7,10 @@ import { useToast } from '@/components/ui/toast'
 import { useConfirm } from '@/components/ui/confirm-dialog'
 import { UserRoundCog, ShieldOff, Save } from 'lucide-react'
 
-const PLAN_OPTIONS = ['FREE', 'STARTER', 'PRO', 'PRO_VOICE', 'BUSINESS', 'ENTERPRISE'] as const
+// Active sellable plans first, legacy enum values after the divider so admins
+// can still see/migrate tenants on old tiers.
+const PLAN_OPTIONS = ['FREE', 'PRO', 'PREMIUM', 'STARTER', 'PRO_VOICE', 'BUSINESS', 'ENTERPRISE'] as const
+const LEGACY_PLANS = new Set(['STARTER', 'PRO_VOICE', 'BUSINESS', 'ENTERPRISE'])
 
 type Props = {
   tenantId: string
@@ -111,7 +114,7 @@ export function TenantActions({ tenantId, userId, currentPlan, currentMinutes }:
         >
           {PLAN_OPTIONS.map((p) => (
             <option key={p} value={p}>
-              {p}
+              {p}{LEGACY_PLANS.has(p) ? ' (legacy)' : ''}
             </option>
           ))}
         </select>

@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { PLANS, PlanKey } from '@/lib/plans'
+import { PHONE_ELIGIBLE_PLANS } from '@/lib/plans'
+import { getPlan } from '@/lib/plans-db'
 import { Card, CardContent } from '@/components/ui/card'
 import { PageHeader } from '@/components/ui/page-header'
 import { StatCard } from '@/components/ui/stat-card'
@@ -60,7 +61,11 @@ export default async function DashboardOverview() {
     redirect('/dashboard/onboarding')
   }
 
-  const plan = PLANS[tenant.plan as PlanKey] || PLANS.FREE
+  const planRecord = await getPlan(tenant.plan)
+  const plan = {
+    name: planRecord?.name ?? tenant.plan,
+    price: planRecord?.price ?? 0,
+  }
   const isFree = tenant.plan === 'FREE'
 
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -107,7 +112,7 @@ export default async function DashboardOverview() {
     { key: 'minutes', label: 'Minutes', align: 'right' },
   ]
 
-  const showPhoneTeaser = tenant.plan !== 'PRO_VOICE' && tenant.plan !== 'ENTERPRISE'
+  const showPhoneTeaser = !PHONE_ELIGIBLE_PLANS.has(tenant.plan)
 
   return (
     <div className="animate-fade-up">
@@ -116,7 +121,7 @@ export default async function DashboardOverview() {
         description={`Welcome back${session.user.name ? `, ${session.user.name.split(' ')[0]}` : ''}. Here's how your voice agent is doing.`}
       />
 
-      {/* Phone calls teaser (non-PRO_VOICE tenants) */}
+      {/* Phone calls teaser (tenants without phone-eligible plan) */}
       {showPhoneTeaser && (
         <div className="relative mb-10 overflow-hidden rounded-xl border border-indigo-400/20 bg-card/40">
           <div
@@ -133,22 +138,22 @@ export default async function DashboardOverview() {
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
-                  <p className="text-[13px] font-semibold text-foreground">Phone calls are coming to Pro Voice</p>
+                  <p className="text-[13px] font-semibold text-foreground">Phone calls are included with Premium</p>
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-indigo-400/30 bg-indigo-400/[0.08] text-indigo-300 tracking-wider uppercase font-semibold">
-                    Early access
+                    Premium
                   </span>
                 </div>
                 <p className="text-[12px] text-muted-foreground">
-                  Dedicated inbound number, same agent as the widget. Join the waitlist to get your slot when it ships.
+                  Dedicated inbound number, same agent as the widget. Upgrade to Premium to provision your number.
                 </p>
               </div>
             </div>
             <Link
-              href="/#phone"
+              href="/dashboard/billing"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-foreground text-background text-[12px] font-medium hover:bg-foreground/90 transition-colors shrink-0"
             >
               <Sparkles className="w-3 h-3" />
-              Join waitlist
+              Upgrade to Premium
               <ArrowRight className="w-3 h-3" />
             </Link>
           </div>

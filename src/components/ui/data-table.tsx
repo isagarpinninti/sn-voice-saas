@@ -2,8 +2,8 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Minimal styled table primitive. Vercel-flavored: tight rows, subtle borders,
- * monospace numbers, no zebra striping.
+ * Minimal styled table primitive. Linear/Vercel-flavored: tight rows, hairline
+ * borders, monospace numbers, no zebra striping.
  *
  * Usage:
  *   <DataTable
@@ -30,6 +30,10 @@ type DataTableProps<T> = {
   rows: T[]
   emptyState?: React.ReactNode
   className?: string
+  /** Click handler invoked with the row when a row is clicked. Adds cursor + hover affordance. */
+  onRowClick?: (row: T) => void
+  /** Sticky header that stays pinned while the body scrolls. */
+  stickyHeader?: boolean
 }
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -37,20 +41,22 @@ export function DataTable<T extends Record<string, unknown>>({
   rows,
   emptyState,
   className,
+  onRowClick,
+  stickyHeader,
 }: DataTableProps<T>) {
   if (rows.length === 0 && emptyState) return <>{emptyState}</>
 
   return (
-    <div className={cn('w-full overflow-x-auto rounded-xl border border-border bg-card', className)}>
+    <div className={cn('w-full overflow-x-auto rounded-lg border border-border bg-card', className)}>
       <table className="w-full text-[12px]">
-        <thead>
+        <thead className={cn(stickyHeader && 'sticky top-0 z-10 bg-card')}>
           <tr className="border-b border-border">
             {columns.map((col) => (
               <th
                 key={col.key}
                 style={col.width ? { width: col.width } : undefined}
                 className={cn(
-                  'px-4 py-2.5 text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80',
+                  'px-4 py-2 text-[10px] uppercase tracking-[0.14em] font-semibold text-muted-foreground/80',
                   col.align === 'right' && 'text-right',
                   col.align === 'center' && 'text-center',
                   col.align !== 'right' && col.align !== 'center' && 'text-left',
@@ -66,7 +72,11 @@ export function DataTable<T extends Record<string, unknown>>({
           {rows.map((row, i) => (
             <tr
               key={i}
-              className="border-b border-border last:border-b-0 transition-colors hover:bg-muted/20"
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={cn(
+                'border-b border-border last:border-b-0 transition-colors hover:bg-muted/30',
+                onRowClick && 'cursor-pointer',
+              )}
             >
               {columns.map((col) => (
                 <td

@@ -30,9 +30,10 @@ export default async function SubscriptionsPage() {
     count: number
     tenants: typeof tenants
   }
-  // Only the plans defined in PLANS render — STARTER/BUSINESS exist in the enum
-  // but aren't in the PLANS catalog yet, so we skip them.
-  const planOrder: PlanKey[] = ['ENTERPRISE', 'PRO', 'FREE']
+  // Only the plans defined in PLANS render — legacy enum values (STARTER /
+  // PRO_VOICE / BUSINESS / ENTERPRISE) are skipped here. Tenants still on
+  // those plans show up in /admin/tenants where admins can migrate them.
+  const planOrder: PlanKey[] = ['PREMIUM', 'PRO', 'FREE']
   const groups: Group[] = planOrder
     .filter((p) => PLANS[p])
     .map((p) => {

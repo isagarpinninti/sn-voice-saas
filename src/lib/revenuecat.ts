@@ -2,13 +2,13 @@ import { Purchases } from '@revenuecat/purchases-js'
 
 export const RC_PRODUCTS = {
   PRO: 'zevox_pro_monthly',
-  ENTERPRISE: 'zevox_enterprise_monthly',
+  PREMIUM: 'zevox_premium_monthly',
 } as const
 
 export const PLAN_LIMITS = {
   FREE: { minutes: 50, concurrent: 1, agents: 1 },
   PRO: { minutes: 500, concurrent: 5, agents: 5 },
-  ENTERPRISE: { minutes: 3500, concurrent: 25, agents: -1 },
+  PREMIUM: { minutes: 2000, concurrent: 25, agents: -1 },
 } as const
 
 export function initRevenueCat(userId: string) {
