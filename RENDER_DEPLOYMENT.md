@@ -72,19 +72,19 @@ Variables marked `sync: false` in `render.yaml` are placeholders — you must se
 
 ## Step 4 — Get your Render URL and update env vars
 
-1. In the web service → **Settings** → **Custom Domains**, copy the auto-generated URL (e.g., `https://sn-voice-saas.onrender.com`)
+1. In the web service → **Settings** → **Custom Domains**, copy the auto-generated URL (e.g., `https://zevox.onrender.com`)
 2. Update these two env vars to match:
-   - `NEXTAUTH_URL` = `https://sn-voice-saas.onrender.com`
-   - `NEXT_PUBLIC_APP_URL` = `https://sn-voice-saas.onrender.com`
+   - `NEXTAUTH_URL` = `https://zevox.onrender.com`
+   - `NEXT_PUBLIC_APP_URL` = `https://zevox.onrender.com`
 3. **Update Google OAuth callback URL** in GCP Console:
-   - Add `https://sn-voice-saas.onrender.com/api/auth/callback/google` to Authorized redirect URIs
+   - Add `https://zevox.onrender.com/api/auth/callback/google` to Authorized redirect URIs
 4. Click **Save Changes** — Render triggers a redeploy
 
 ---
 
 ## Step 5 — Verify
 
-1. Open `https://sn-voice-saas.onrender.com` — you should see the landing page
+1. Open `https://zevox.onrender.com` — you should see the landing page
 2. Click **Sign in** → log in with Google
 3. You should land on `/dashboard`
 4. Test the WebSocket: `wss://sn-voice-saas.onrender.com/voice?token=<your-api-token>`

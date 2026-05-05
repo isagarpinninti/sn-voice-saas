@@ -13,7 +13,7 @@ import { useToast } from '@/components/ui/toast'
 import { VOICES, findVoice } from '@/lib/voices'
 import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2 } from 'lucide-react'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://sn-voice-saas.onrender.com'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
 
 interface AgentConfig {
   id: string

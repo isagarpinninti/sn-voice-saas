@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sn-voice-saas
+    name: zevox
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: starter
@@ -12,7 +12,7 @@ services:
       # Injected automatically from the managed Postgres below
       - key: DATABASE_URL
         fromDatabase:
-          name: sn-voice-saas-db
+          name: zevox-db
           property: connectionString
 
       # NextAuth — generated once, stored in Render secrets
@@ -20,9 +20,9 @@ services:
         generateValue: true
       # Replace with your actual Render URL after first deploy
       - key: NEXTAUTH_URL
-        value: https://sn-voice-saas.onrender.com
+        value: https://zevox.onrender.com
       - key: NEXT_PUBLIC_APP_URL
-        value: https://sn-voice-saas.onrender.com
+        value: https://zevox.onrender.com
       - key: NEXT_PUBLIC_APP_NAME
         value: ZeVox
 
@@ -85,6 +85,6 @@ services:
         generateValue: true
 
 databases:
-  - name: sn-voice-saas-db
+  - name: zevox-db
     databaseName: sn_voice_saas
     plan: free
