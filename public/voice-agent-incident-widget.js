@@ -258,7 +258,15 @@
   + '.vai-callshow{display:none!important}'
   + '.vai-incall .vai-callshow{display:flex!important}'
   + '.vai-incall #vai-startprompt{display:none!important}'
-  + '#vai-chat:empty::after{content:"Voice agent is ready — click Start Voice Session to begin.";display:block;text-align:center;color:#9ca3af;font-size:13px;margin-top:70px;font-style:italic}';
+  + '#vai-chat:empty::after{content:"Voice agent is ready — click Start Voice Session to begin.";display:block;text-align:center;color:#9ca3af;font-size:13px;margin-top:70px;font-style:italic}'
+  + '.vai-confirm-wrap{margin-top:7px;display:flex;gap:6px;align-items:center}'
+  + '.vai-confirm-lbl{font-size:11px;color:#6b7280;margin-right:2px}'
+  + '.vai-cfbtn{padding:4px 13px;border-radius:6px;border:1px solid;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}'
+  + '.vai-cfbtn.yes{background:#dcfce7;border-color:#86efac;color:#166534}'
+  + '.vai-cfbtn.yes:hover:not(:disabled){background:#bbf7d0}'
+  + '.vai-cfbtn.no{background:#fee2e2;border-color:#fca5a5;color:#dc2626}'
+  + '.vai-cfbtn.no:hover:not(:disabled){background:#fecaca}'
+  + '.vai-cfbtn:disabled{opacity:.4;cursor:default}';
 
   /* ── SVG icons ───────────────────────────────────────────────────────── */
   var I = {
@@ -446,6 +454,41 @@
     return id;
   }
 
+  function addConfirmPrompt(confirmId, field, valueLabel, reason) {
+    var chat = g('vai-chat');
+    if (!chat) return;
+    var div = document.createElement('div');
+    div.className = 'vai-msg agent';
+    var ico = '<div class="vai-ico">' + I.agent + '</div>';
+    var reasonHtml = reason ? '<div class="vai-bubble" style="margin-bottom:5px">' + esc(reason) + '</div>' : '';
+    var promptText = 'Update <strong>' + esc(fl(field)) + '</strong> to <strong>' + esc(valueLabel) + '</strong>?';
+    div.innerHTML = ico + '<div>'
+      + reasonHtml
+      + '<div class="vai-bubble">' + promptText + '</div>'
+      + '<div class="vai-confirm-wrap">'
+      +   '<span class="vai-confirm-lbl">Say "yes" or "no", or:</span>'
+      +   '<button class="vai-cfbtn yes" type="button">Confirm</button>'
+      +   '<button class="vai-cfbtn no" type="button">Cancel</button>'
+      + '</div></div>';
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+
+    var btnYes = div.querySelector('.vai-cfbtn.yes');
+    var btnNo  = div.querySelector('.vai-cfbtn.no');
+    function disableBtns() {
+      if (btnYes) btnYes.disabled = true;
+      if (btnNo)  btnNo.disabled  = true;
+    }
+    if (btnYes) btnYes.addEventListener('click', function () {
+      disableBtns();
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'field_confirm', confirmId: confirmId, confirmed: true }));
+    });
+    if (btnNo)  btnNo.addEventListener('click', function () {
+      disableBtns();
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'field_confirm', confirmId: confirmId, confirmed: false }));
+    });
+  }
+
   function setInterim(t) { var el = g('vai-interim'); if (el) el.textContent = t ? '… ' + t : ''; }
 
   /* ── Translation ─────────────────────────────────────────────────────── */
@@ -621,7 +664,7 @@
     await initAudio();
 
     try {
-      var wsUrl = wsBase + '/voice?token=' + encodeURIComponent(TK);
+      var wsUrl = wsBase + '/incident-agent?token=' + encodeURIComponent(TK);
       var uid = getSnUserId();
       if (uid) wsUrl += '&user=' + encodeURIComponent(uid);
 
@@ -677,6 +720,9 @@
               label: 'Set ' + fl(m.field) + ' → ' + (m.valueLabel || m.value)
             });
           }
+        } else if (m.type === 'field_update_pending') {
+          // Agent wants to update a field — show Confirm/Cancel inline in chat
+          addConfirmPrompt(m.confirmId, m.field, m.valueLabel, m.reason);
         } else if (m.type === 'suggestion') {
           // Emitted by server-side built-in tools suggest_resolution / suggest_reply
           var st = m.sugType === 'resolution' ? 'resolution' : 'reply';
