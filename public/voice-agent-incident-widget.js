@@ -24,9 +24,26 @@
   var wsBase = GW.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
 
   /* ── g_form helpers ──────────────────────────────────────────────────── */
+  // Resolve g_form across frame boundaries.
+  // UI Actions run inside the form frame; the widget JS is injected into top.
+  // Priority: pre-captured snapshot from UI Action → top.g_form → parent.g_form → window.g_form
+  function resolveGForm() {
+    try { if (top.g_form && typeof top.g_form.getValue === 'function') return top.g_form; } catch (e) {}
+    try { if (parent.g_form && typeof parent.g_form.getValue === 'function') return parent.g_form; } catch (e) {}
+    try { if (window.g_form && typeof window.g_form.getValue === 'function') return window.g_form; } catch (e) {}
+    return null;
+  }
+
   function readIncidentContext() {
-    var gf = window.g_form;
-    if (!gf || typeof gf.getValue !== 'function') return {};
+    // UI Action pre-captures g_form data before injecting the script (most reliable)
+    try {
+      var pre = top.VA_INCIDENT_CONTEXT;
+      if (pre && typeof pre === 'object' && pre.number) return pre;
+    } catch (e) {}
+
+    var gf = resolveGForm();
+    if (!gf) return {};
+
     var fields = [
       'number', 'short_description', 'description', 'state', 'priority', 'urgency',
       'category', 'subcategory', 'assignment_group', 'assigned_to', 'caller_id',
@@ -37,17 +54,15 @@
     fields.forEach(function (f) {
       try { var v = gf.getValue(f); if (v) ctx[f] = String(v); } catch (e) {}
     });
-    // Display value for state dropdown
-    try {
-      var sel = document.querySelector('[name="incident.state"], select[id*="state"]');
-      if (sel && sel.selectedIndex >= 0) ctx.state_display = sel.options[sel.selectedIndex].text;
-    } catch (e) {}
     return ctx;
   }
 
   function applyFormUpdate(field, value) {
-    var gf = window.g_form;
-    if (!gf || typeof gf.setValue !== 'function') return false;
+    // Try pre-captured g_form reference first, then resolve across frames
+    var gf = null;
+    try { if (top.VA_GFORM && typeof top.VA_GFORM.setValue === 'function') gf = top.VA_GFORM; } catch (e) {}
+    if (!gf) gf = resolveGForm();
+    if (!gf) return false;
     try { gf.setValue(field, value); return true; } catch (e) { return false; }
   }
 
