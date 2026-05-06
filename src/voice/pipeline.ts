@@ -203,9 +203,14 @@ export class VoicePipeline extends EventEmitter {
     this.audioFormat = opts.audioFormat || 'widget'
   }
 
-  async start(agentId?: string, endUserSnId?: string, originPortal?: string) {
+  // Incident context passed from the voice-agent-incident-widget.
+  // Stored so it can be injected into the system prompt and referenced by built-in tools.
+  private incidentContext: Record<string, string> = {}
+
+  async start(agentId?: string, endUserSnId?: string, originPortal?: string, incidentContext?: Record<string, string>) {
     this.originPortal = (originPortal || '').toString().toLowerCase()
-    console.log(`[Pipeline] Starting. Instance: ${this.tenant.snInstanceUrl}` + (agentId ? `, Agent: ${agentId}` : ', orchestrator mode') + (endUserSnId ? `, EndUser: ${endUserSnId}` : '') + (this.originPortal ? `, Portal: ${this.originPortal}` : ''))
+    this.incidentContext = incidentContext && typeof incidentContext === 'object' ? incidentContext : {}
+    console.log(`[Pipeline] Starting. Instance: ${this.tenant.snInstanceUrl}` + (agentId ? `, Agent: ${agentId}` : ', orchestrator mode') + (endUserSnId ? `, EndUser: ${endUserSnId}` : '') + (this.originPortal ? `, Portal: ${this.originPortal}` : '') + (this.incidentContext.number ? `, Incident: ${this.incidentContext.number}` : ''))
 
     if (!this.tenant.snInstanceUrl || !this.tenant.snUsername) {
       const msg = 'ServiceNow not connected. Go to ZeVox Dashboard → Connection and enter your instance details.'
@@ -264,6 +269,57 @@ export class VoicePipeline extends EventEmitter {
             },
           },
         })
+
+        // Incident form built-ins — only active when incident context was supplied.
+        // These tools never call ServiceNow; they emit widget events so the user can
+        // confirm changes client-side via g_form.setValue without a server round-trip.
+        if (this.incidentContext && this.incidentContext.number) {
+          this.tools.push({
+            type: 'function',
+            function: {
+              name: 'suggest_form_update',
+              description: 'Update or propose an update to a field on the currently open incident form. Set apply_now=true when the user has explicitly commanded the change (e.g. "update state to In Progress", "set priority to high") — the widget applies it immediately. Set apply_now=false (default) when you are proactively suggesting a change without an explicit user command — it appears as a one-click confirmation button. Use for fields: state, priority, urgency, assignment_group, assigned_to, category, subcategory.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  field: { type: 'string', description: 'ServiceNow field name, e.g. "state", "priority", "assignment_group".' },
+                  value: { type: 'string', description: 'The new value to set on the field (e.g. "2" for state In Progress).' },
+                  value_label: { type: 'string', description: 'Human-readable label for the value, e.g. "In Progress" for state=2.' },
+                  apply_now: { type: 'boolean', description: 'Set true when the user explicitly commanded this change. Set false when proactively suggesting.' },
+                },
+                required: ['field', 'value', 'value_label'],
+              },
+            },
+          })
+          this.tools.push({
+            type: 'function',
+            function: {
+              name: 'suggest_resolution_note',
+              description: 'Propose resolution notes text to fill into the incident close_notes field. The suggestion appears as a clickable button in the widget for the user to confirm.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  text: { type: 'string', description: 'The resolution note text to suggest.' },
+                },
+                required: ['text'],
+              },
+            },
+          })
+          this.tools.push({
+            type: 'function',
+            function: {
+              name: 'suggest_reply',
+              description: 'Propose a reply message to the caller that will be placed in the incident comments field. Use when the user asks how to respond to the caller or wants a reply suggestion.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  text: { type: 'string', description: 'The reply text to suggest.' },
+                },
+                required: ['text'],
+              },
+            },
+          })
+        }
       }
 
       // Sanitize tool schemas before they ever reach Groq. Admin-authored SN
@@ -287,6 +343,27 @@ export class VoicePipeline extends EventEmitter {
       let prompt = config.system_prompt
       prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
       prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately after — do not fake progress. The ORDER of clarifying questions, KB search, and ticket creation is driven by the agent instructions above, not by this rule.'
+
+      // Inject incident context when the widget is opened from an incident form
+      if (this.incidentContext && Object.keys(this.incidentContext).length > 0) {
+        const ic = this.incidentContext
+        const lines: string[] = []
+        const labelMap: Record<string, string> = {
+          number: 'Incident Number', short_description: 'Short Description', description: 'Description',
+          state: 'State', priority: 'Priority', urgency: 'Urgency', category: 'Category',
+          subcategory: 'Subcategory', assignment_group: 'Assignment Group', assigned_to: 'Assigned To',
+          caller_id: 'Caller', comments: 'Comments', work_notes: 'Work Notes',
+          close_notes: 'Resolution Notes', impact: 'Impact', opened_at: 'Opened At', opened_by: 'Opened By',
+        }
+        for (const [k, v] of Object.entries(ic)) {
+          if (v && labelMap[k]) lines.push(`  ${labelMap[k]}: ${v}`)
+        }
+        if (lines.length) {
+          prompt += '\n\nINCIDENT CONTEXT: The user has opened this voice session from an incident form. Current incident details:\n' + lines.join('\n')
+          prompt += '\n\nYou can use suggest_form_update to propose field changes, suggest_resolution_note to propose resolution text, and suggest_reply to propose a caller reply. These appear as one-click buttons in the widget for the user to confirm before applying.'
+        }
+      }
+
       this.messages.push({ role: 'system', content: prompt })
 
       // Init STT — use our SaaS Deepgram key by default, customer's key only if they provide their own
@@ -477,6 +554,57 @@ export class VoicePipeline extends EventEmitter {
           `I've sent you a secure upload link for ${reason}. Please open the link shown in the widget and upload your file — it expires in 15 minutes. I'll continue as soon as it arrives.`,
         url,
       },
+    }
+  }
+
+  private handleSuggestFormUpdate(args: any) {
+    const field = String(args?.field || '').trim()
+    const value = String(args?.value || '').trim()
+    const valueLabel = String(args?.value_label || value).trim()
+    const applyNow = args?.apply_now === true
+    if (!field || !value) {
+      return { success: false, tool_name: 'suggest_form_update', tool_sys_id: 'builtin:suggest_form_update', output: {}, error: 'field and value are required' }
+    }
+    addLog('info', 'pipeline', `Form update ${applyNow ? '(direct)' : '(suggestion)'}: ${field} → ${valueLabel}`, { tenantId: this.tenant.id })
+    this.emit('form_update', { field, value, valueLabel, applyNow })
+    const msg = applyNow
+      ? `I've updated ${field} to "${valueLabel}" on the incident form.`
+      : `I've added a suggestion to update ${field} to "${valueLabel}". The user will see a button to apply it.`
+    return {
+      success: true,
+      tool_name: 'suggest_form_update',
+      tool_sys_id: 'builtin:suggest_form_update',
+      output: { message: msg },
+    }
+  }
+
+  private handleSuggestResolution(args: any) {
+    const text = String(args?.text || '').trim()
+    if (!text) {
+      return { success: false, tool_name: 'suggest_resolution_note', tool_sys_id: 'builtin:suggest_resolution_note', output: {}, error: 'text is required' }
+    }
+    addLog('info', 'pipeline', 'Resolution note suggestion: ' + text.substring(0, 80), { tenantId: this.tenant.id })
+    this.emit('suggestion', { sugType: 'resolution', text })
+    return {
+      success: true,
+      tool_name: 'suggest_resolution_note',
+      tool_sys_id: 'builtin:suggest_resolution_note',
+      output: { message: 'Resolution note suggestion added. The user can click it to populate the close_notes field.' },
+    }
+  }
+
+  private handleSuggestReply(args: any) {
+    const text = String(args?.text || '').trim()
+    if (!text) {
+      return { success: false, tool_name: 'suggest_reply', tool_sys_id: 'builtin:suggest_reply', output: {}, error: 'text is required' }
+    }
+    addLog('info', 'pipeline', 'Reply suggestion: ' + text.substring(0, 80), { tenantId: this.tenant.id })
+    this.emit('suggestion', { sugType: 'reply', text })
+    return {
+      success: true,
+      tool_name: 'suggest_reply',
+      tool_sys_id: 'builtin:suggest_reply',
+      output: { message: 'Reply suggestion added. The user can click it to place it in the comments field.' },
     }
   }
 
@@ -855,6 +983,12 @@ export class VoicePipeline extends EventEmitter {
           let toolResult: any
           if (tc.name === 'request_attachment' && this.audioFormat === 'widget') {
             toolResult = this.handleRequestAttachment(tc.arguments)
+          } else if (tc.name === 'suggest_form_update' && this.audioFormat === 'widget') {
+            toolResult = this.handleSuggestFormUpdate(tc.arguments)
+          } else if (tc.name === 'suggest_resolution_note' && this.audioFormat === 'widget') {
+            toolResult = this.handleSuggestResolution(tc.arguments)
+          } else if (tc.name === 'suggest_reply' && this.audioFormat === 'widget') {
+            toolResult = this.handleSuggestReply(tc.arguments)
           } else {
             // Execute tool (no extra filler — the initial ack covers the wait)
             toolResult = await this.snFetch('POST', '/gateway/tool', {

@@ -18,7 +18,7 @@ const port = parseInt(process.env.PORT || '3000')
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
-    if (req.url?.startsWith('/widget.js') || req.url?.startsWith('/voice-transcribe-widget.js')) {
+    if (req.url?.startsWith('/widget.js') || req.url?.startsWith('/voice-transcribe-widget.js') || req.url?.startsWith('/voice-agent-incident-widget.js')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
       res.setHeader('Access-Control-Allow-Origin', '*')
     }
@@ -248,7 +248,9 @@ app.prepare().then(() => {
       try { msg = JSON.parse(str) } catch { return }
       if (msg.type === 'start') {
         addLog('info', 'pipeline', 'STARTING (orchestrator will pick agent)...', { tenantId: tenantRef.id })
-        pipeline.start(undefined, endUserSnId || undefined, msg.originPortal)
+        const incidentCtx = (msg.incidentContext && typeof msg.incidentContext === 'object') ? msg.incidentContext : undefined
+        if (incidentCtx?.number) addLog('info', 'pipeline', 'Incident context: ' + incidentCtx.number, { tenantId: tenantRef.id })
+        pipeline.start(undefined, endUserSnId || undefined, msg.originPortal, incidentCtx)
           .then(() => addLog('info', 'pipeline', 'Started OK', { tenantId: tenantRef.id }))
           .catch((e: any) => {
             addLog('error', 'pipeline', 'FAIL: ' + e.message, { tenantId: tenantRef.id, data: { stack: e.stack?.substring(0, 500) } })
@@ -333,6 +335,8 @@ app.prepare().then(() => {
       pipeline.on('ended', () => { addLog('info', 'pipeline', 'ENDED', { tenantId: tenantRef.id }); send(ws, { type: 'ended' }) })
       pipeline.on('navigate', (d: any) => { addLog('info', 'pipeline', 'NAV ' + (d.urls?.length || 0) + ' url(s)', { tenantId: tenantRef.id }); send(ws, { type: 'navigate', urls: d.urls }) })
       pipeline.on('attachment_requested', (d: any) => { addLog('info', 'pipeline', 'Attachment requested: ' + d.reason, { tenantId: tenantRef.id }); send(ws, { type: 'attachment_requested', url: d.url, reason: d.reason }) })
+      pipeline.on('form_update', (d: any) => { addLog('info', 'pipeline', 'Form update ' + (d.applyNow ? '(direct)' : '(suggestion)') + ': ' + d.field + ' → ' + d.valueLabel, { tenantId: tenantRef.id }); send(ws, { type: 'form_update', field: d.field, value: d.value, valueLabel: d.valueLabel, applyNow: d.applyNow }) })
+      pipeline.on('suggestion', (d: any) => { addLog('info', 'pipeline', 'Suggestion (' + d.sugType + '): ' + String(d.text).substring(0, 60), { tenantId: tenantRef.id }); send(ws, { type: 'suggestion', sugType: d.sugType, text: d.text }) })
 
       authed = true
       addLog('info', 'ws', 'Replaying ' + buffer.length + ' buffered msg(s)', { tenantId: tenantRef.id })
