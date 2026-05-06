@@ -1,14 +1,13 @@
 /**
- * IncidentPipeline — dedicated voice agent for incident form resolution.
- * Completely separate from the portal VoicePipeline / SN agent orchestrator.
- * Uses env-configured LLM (GROQ_API_KEY) + shared Deepgram key for STT/TTS.
- *
- * All form field updates require explicit user confirmation (voice or button).
+ * IncidentPipeline — dedicated voice co-agent for incident resolution.
+ * Fetches SLAs, attachments, related records, and journal entries from SN
+ * at startup so the agent can give proactive, context-aware suggestions.
  */
 import { EventEmitter } from 'events'
 import { addLog } from '../lib/log-store'
 
 type IncidentCtx = Record<string, string>
+type SnCreds = { url: string; username: string; password: string }
 
 const STATE_LABELS: Record<string, string> = {
   '1': 'New', '2': 'In Progress', '3': 'On Hold',
@@ -16,6 +15,9 @@ const STATE_LABELS: Record<string, string> = {
 }
 const PRIORITY_LABELS: Record<string, string> = {
   '1': '1 - Critical', '2': '2 - High', '3': '3 - Moderate', '4': '4 - Low',
+}
+const URGENCY_LABELS: Record<string, string> = {
+  '1': '1 - High', '2': '2 - Medium', '3': '3 - Low',
 }
 const FIELD_LABELS: Record<string, string> = {
   number: 'Incident Number', short_description: 'Short Description',
@@ -33,7 +35,7 @@ const INCIDENT_TOOLS = [
     function: {
       name: 'update_incident_field',
       description:
-        'Request permission to update a field on the incident form. Always verbally explain what you want to update and why BEFORE calling this tool. The user will see a Confirm / Cancel prompt in the widget and can also say yes or no. Fields: state, priority, urgency, assignment_group, assigned_to, category, subcategory.',
+        'Request permission to update a field on the incident form. Always verbally explain what you want to update and why BEFORE calling this tool. The user will see a Confirm / Cancel prompt and can also say yes or no. Updatable fields: state, priority, urgency, assignment_group, assigned_to, category, subcategory, close_notes, work_notes.',
       parameters: {
         type: 'object',
         properties: {
@@ -51,7 +53,7 @@ const INCIDENT_TOOLS = [
     function: {
       name: 'suggest_resolution_note',
       description:
-        'Generate resolution notes text to fill in the close_notes field. Call when the user asks for resolution notes, a closing summary, or how to document the fix.',
+        'Generate resolution notes text for the close_notes field. Call when the user asks for resolution notes, a closing summary, or how to document the fix.',
       parameters: {
         type: 'object',
         properties: {
@@ -66,7 +68,7 @@ const INCIDENT_TOOLS = [
     function: {
       name: 'suggest_reply_to_caller',
       description:
-        'Draft a customer-facing message to post in the incident comments field for the caller to see. Call when the user wants to respond to the caller or add a status update for the end user.',
+        'Draft a customer-facing message to post in the incident comments for the caller to see.',
       parameters: {
         type: 'object',
         properties: {
@@ -76,10 +78,41 @@ const INCIDENT_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'search_similar_incidents',
+      description:
+        'Search ServiceNow for recently resolved incidents with similar symptoms to find proven resolution steps. Use when the agent needs resolution ideas or when the user asks for similar cases.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Keywords from the symptom, error message, or category.' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_knowledge_base',
+      description:
+        'Search ServiceNow knowledge base for published articles with resolution steps or known-error workarounds.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search terms for relevant KB articles.' },
+        },
+        required: ['query'],
+      },
+    },
+  },
 ]
 
 export class IncidentPipeline extends EventEmitter {
   private ctx: IncidentCtx
+  private snCreds: SnCreds | null = null
   private messages: any[] = []
   private stt: any = null
   private ttsWs: any = null
@@ -96,48 +129,42 @@ export class IncidentPipeline extends EventEmitter {
   private ttsResolve: (() => void) | null = null
   private messageQueue: string[] = []
 
+  // Enriched context fetched from SN at startup
+  private slaInfo: any[] = []
+  private attachmentInfo: { name: string; sizeKb: number; content?: string }[] = []
+  private relatedInfo: Record<string, string> = {}
+
   // Pending field-update confirmation (one at a time)
   private pendingConfirm: {
     confirmId: string; field: string; value: string; valueLabel: string
   } | null = null
 
-  constructor(ctx: IncidentCtx) {
+  constructor(ctx: IncidentCtx, snCreds?: SnCreds) {
     super()
     this.ctx = ctx || {}
+    this.snCreds = snCreds || null
   }
 
   /* ── Public entry point ─────────────────────────────────────────────── */
   async start() {
     try {
-      // STT — always use shared Deepgram key
       const dgKey = process.env.DEEPGRAM_API_KEY
       if (!dgKey) throw new Error('DEEPGRAM_API_KEY not configured')
 
       const { DeepgramClient } = require('@deepgram/sdk')
       const dgClient = new DeepgramClient(dgKey)
-      addLog('info', 'incident-stt', 'Connecting Deepgram STT…', {})
       this.stt = await dgClient.listen.v1.connect({
-        model: 'nova-3',
-        language: 'multi',
-        smart_format: true,
-        punctuate: true,
-        interim_results: true,
-        utterance_end_ms: 1500,
-        endpointing: 800,
-        encoding: 'linear16',
-        sample_rate: 16000,
-        channels: 1,
+        model: 'nova-3', language: 'multi', smart_format: true, punctuate: true,
+        interim_results: true, utterance_end_ms: 1500, endpointing: 800,
+        encoding: 'linear16', sample_rate: 16000, channels: 1,
       })
       this.setupSTT()
       if (typeof this.stt.connect === 'function') await this.stt.connect()
 
-      // TTS
       this.ttsKey = dgKey
       this.ttsVoice = process.env.INCIDENT_TTS_VOICE || 'aura-asteria-en'
       await this.connectTtsWs()
-      addLog('info', 'incident-tts', 'TTS ready: ' + this.ttsVoice, {})
 
-      // LLM — Groq preferred, OpenAI fallback
       const llmKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY
       if (!llmKey) throw new Error('No LLM key — set GROQ_API_KEY or OPENAI_API_KEY')
       const useGroq = !!process.env.GROQ_API_KEY
@@ -147,19 +174,43 @@ export class IncidentPipeline extends EventEmitter {
         baseURL: useGroq ? (process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1') : undefined,
       })
       this.model = process.env.INCIDENT_LLM_MODEL || (useGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini')
-      addLog('info', 'incident-llm', 'LLM ready: ' + this.model, {})
 
-      // System prompt with full incident context
-      this.messages.push({ role: 'system', content: this.buildSystemPrompt() })
+      // Fetch enriched context: SLAs, attachments, related records, journal entries
+      let enrichedContext = ''
+      if (this.snCreds?.url && this.ctx.sys_id) {
+        this.emit('state', 'loading')
+        addLog('info', 'incident-pipeline', 'Fetching enriched SN context…', {})
+        try {
+          enrichedContext = await Promise.race([
+            this.fetchEnrichedData(),
+            new Promise<string>(r => setTimeout(() => r(''), 10000)),
+          ])
+        } catch (e: any) {
+          addLog('warn', 'incident-pipeline', 'Enriched fetch partial/failed: ' + e.message, {})
+        }
+      }
 
-      // Greeting — summarise the incident immediately
-      const inc = this.ctx
-      const greet = inc.number
-        ? `I've loaded ${inc.number}${inc.short_description ? ', "' + inc.short_description + '"' : ''}. What would you like help with?`
-        : 'Incident agent ready. What would you like help with?'
+      // Push enriched data to widget for UI rendering
+      if (this.slaInfo.length || this.attachmentInfo.length) {
+        this.emit('context_enriched', {
+          slas: this.slaInfo.map(s => ({
+            name:       s['sla.name'] || 'SLA',
+            stage:      s.stage || '',
+            percentage: s.percentage ? Math.round(parseFloat(s.percentage)) : 0,
+            timeLeft:   s.time_left || '',
+            breached:   s.has_breached === 'true',
+          })),
+          attachments: this.attachmentInfo.map(a => ({ name: a.name, sizeKb: a.sizeKb })),
+          related: this.relatedInfo,
+        })
+      }
 
+      this.messages.push({ role: 'system', content: this.buildSystemPrompt(enrichedContext) })
+
+      const greet = this.buildGreeting()
       this.isAgentSpeaking = true
       this.emit('state', 'speaking')
+      this.emit('agent_message', greet)
       await this.speakAndStream(greet)
       this.isAgentSpeaking = false
       this.emit('state', 'listening')
@@ -179,7 +230,6 @@ export class IncidentPipeline extends EventEmitter {
     } catch {}
   }
 
-  /* Called by the server when the widget sends {type:'field_confirm'} */
   handleFieldConfirm(confirmId: string, confirmed: boolean) {
     if (!this.pendingConfirm || this.pendingConfirm.confirmId !== confirmId) return
     const { field, value, valueLabel } = this.pendingConfirm
@@ -201,33 +251,200 @@ export class IncidentPipeline extends EventEmitter {
     this.emit('ended')
   }
 
+  /* ── Enriched context fetch ─────────────────────────────────────────── */
+  private async fetchEnrichedData(): Promise<string> {
+    const { url, username, password } = this.snCreds!
+    const auth  = 'Basic ' + Buffer.from(username + ':' + password).toString('base64')
+    const sysId = this.ctx.sys_id
+    const parts: string[] = []
+
+    const [slaR, attR, incR, jrnR] = await Promise.allSettled([
+      this.snGet(`${url}/api/now/table/task_sla?sysparm_query=task=${sysId}&sysparm_fields=sla.name,stage,has_breached,percentage,time_left,breach_time&sysparm_limit=5`, auth),
+      this.snGet(`${url}/api/now/attachment?sysparm_query=table_name=incident^table_sys_id=${sysId}&sysparm_fields=sys_id,file_name,size_bytes,content_type&sysparm_limit=10`, auth),
+      this.snGet(`${url}/api/now/table/incident/${sysId}?sysparm_fields=cmdb_ci,cmdb_ci.name,cmdb_ci.short_description,business_service,business_service.name,problem_id,problem_id.short_description,rfc,rfc.short_description,parent_incident,parent_incident.number,caused_by,caused_by.short_description`, auth),
+      this.snGet(`${url}/api/now/table/sys_journal_field?sysparm_query=element_id=${sysId}^ORDERBYDESCsys_created_on&sysparm_fields=element,value,sys_created_by,sys_created_on&sysparm_limit=15`, auth),
+    ])
+
+    // SLAs
+    if (slaR.status === 'fulfilled' && slaR.value?.result?.length) {
+      this.slaInfo = slaR.value.result
+      const lines = this.slaInfo.map((s: any) => {
+        const breached = s.has_breached === 'true' ? ' *** BREACHED ***' : ''
+        const pct  = s.percentage ? Math.round(parseFloat(s.percentage)) + '% elapsed' : ''
+        const left = s.time_left ? 'time left: ' + s.time_left : ''
+        return `  - ${s['sla.name'] || 'SLA'}: stage=${s.stage || '?'}, ${[pct, left, breached].filter(Boolean).join(', ')}`
+      })
+      parts.push('SLAs:\n' + lines.join('\n'))
+    }
+
+    // Attachments (download text files up to 200 KB)
+    if (attR.status === 'fulfilled' && attR.value?.result?.length) {
+      const atts = attR.value.result
+      const attLines: string[] = []
+      const downloads: Promise<void>[] = []
+
+      for (const att of atts) {
+        const sizeKb = Math.round(parseInt(att.size_bytes || '0') / 1024)
+        const ct     = (att.content_type || '').toLowerCase()
+        const isText = ct.startsWith('text/') || ct.includes('json') || ct.includes('xml') ||
+                       ct.includes('log') || /\.(txt|log|xml|json|csv|md|yaml|yml)$/i.test(att.file_name || '')
+        const info: { name: string; sizeKb: number; content?: string } = { name: att.file_name || 'file', sizeKb }
+        this.attachmentInfo.push(info)
+        const idx = attLines.length
+        attLines.push(`  - ${att.file_name} (${sizeKb} KB)`)
+
+        if (isText && sizeKb < 200 && att.sys_id) {
+          downloads.push(
+            this.snGetText(`${url}/api/now/attachment/${att.sys_id}/file`, auth)
+              .then(text => {
+                if (text) {
+                  info.content = text.substring(0, 1500)
+                  attLines[idx] += `:\n    ${info.content.replace(/\n/g, '\n    ')}`
+                }
+              }).catch(() => {})
+          )
+        }
+      }
+
+      await Promise.allSettled(downloads)
+      parts.push(`Attachments (${atts.length}):\n` + attLines.join('\n'))
+    }
+
+    // Related records: CI, business service, problem, change
+    if (incR.status === 'fulfilled' && incR.value?.result) {
+      const rec     = incR.value.result
+      const related: string[] = []
+      const ci      = rec['cmdb_ci.name']
+      const ciDesc  = rec['cmdb_ci.short_description']
+      const svc     = rec['business_service.name']
+      const prob    = rec['problem_id.short_description']
+      const rfc     = rec['rfc.short_description']
+      const parent  = rec['parent_incident.number']
+      const caused  = rec['caused_by.short_description']
+
+      if (ci)     { this.relatedInfo.ci = ci;        related.push(`  CI: ${ci}${ciDesc ? ' — ' + ciDesc : ''}`) }
+      if (svc)    { this.relatedInfo.service = svc;   related.push(`  Business Service: ${svc}`) }
+      if (prob)   { this.relatedInfo.problem = prob;  related.push(`  Linked Problem: ${prob}`) }
+      if (rfc)                                         related.push(`  Change Request: ${rfc}`)
+      if (parent)                                      related.push(`  Parent Incident: ${parent}`)
+      if (caused)                                      related.push(`  Caused By: ${caused}`)
+
+      if (related.length) parts.push('Related Records:\n' + related.join('\n'))
+    }
+
+    // Journal entries (work notes + comments)
+    if (jrnR.status === 'fulfilled' && jrnR.value?.result?.length) {
+      const entries = jrnR.value.result
+      const lines   = entries.map((e: any) =>
+        `  [${e.element || 'note'} by ${e.sys_created_by || '?'} at ${(e.sys_created_on || '').substring(0, 16)}]: ${(e.value || '').substring(0, 300)}`
+      )
+      parts.push('Recent Activity (work notes / comments):\n' + lines.join('\n'))
+    }
+
+    return parts.join('\n\n')
+  }
+
+  /* ── SN HTTP helpers ────────────────────────────────────────────────── */
+  private snGet(url: string, auth: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const lib = require(url.startsWith('https') ? 'https' : 'http')
+      const req = lib.get(url, { headers: { Authorization: auth, Accept: 'application/json' } }, (res: any) => {
+        let body = ''
+        res.on('data', (c: any) => { body += c })
+        res.on('end', () => { try { resolve(JSON.parse(body)) } catch { resolve(null) } })
+      })
+      req.on('error', reject)
+      req.setTimeout(8000, () => { req.destroy(); reject(new Error('SN timeout')) })
+    })
+  }
+
+  private snGetText(url: string, auth: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const lib = require(url.startsWith('https') ? 'https' : 'http')
+      const req = lib.get(url, { headers: { Authorization: auth } }, (res: any) => {
+        let body = ''
+        res.on('data', (c: any) => { body += c })
+        res.on('end', () => resolve(body))
+      })
+      req.on('error', reject)
+      req.setTimeout(8000, () => { req.destroy(); reject(new Error('SN timeout')) })
+    })
+  }
+
+  /* ── Proactive greeting ─────────────────────────────────────────────── */
+  private buildGreeting(): string {
+    const inc   = this.ctx
+    const parts: string[] = []
+
+    let opening = `I've loaded ${inc.number || 'this incident'}`
+    if (inc.short_description) opening += ` — "${inc.short_description}"`
+    const priority = PRIORITY_LABELS[inc.priority] || ''
+    const state    = STATE_LABELS[inc.state] || ''
+    if (priority || state) opening += `. ${[priority, state].filter(Boolean).join(', ')}.`
+    parts.push(opening)
+
+    // SLA highlights
+    if (this.slaInfo.length) {
+      const breached = this.slaInfo.filter((s: any) => s.has_breached === 'true')
+      const active   = this.slaInfo.filter((s: any) => s.has_breached !== 'true' && s.time_left)
+      if (breached.length) {
+        parts.push(`Warning — the ${breached.map((s: any) => s['sla.name'] || 'SLA').join(' and ')} ${breached.length > 1 ? 'have' : 'has'} already breached.`)
+      } else if (active.length) {
+        const s: any = active[0]
+        const pct    = s.percentage ? Math.round(parseFloat(s.percentage)) : 0
+        parts.push(`The ${s['sla.name'] || 'SLA'} is ${pct}% elapsed with ${s.time_left} remaining.`)
+      }
+    }
+
+    // Attachments
+    if (this.attachmentInfo.length) {
+      const readable = this.attachmentInfo.filter(a => a.content)
+      if (readable.length) {
+        parts.push(`I've read ${readable.length} text attachment${readable.length > 1 ? 's' : ''}: ${readable.map(a => a.name).join(', ')}.`)
+      } else {
+        const names = this.attachmentInfo.slice(0, 3).map(a => a.name).join(', ')
+        parts.push(`There ${this.attachmentInfo.length === 1 ? 'is' : 'are'} ${this.attachmentInfo.length} attachment${this.attachmentInfo.length > 1 ? 's' : ''}: ${names}.`)
+      }
+    }
+
+    // Related CI / service
+    if (this.relatedInfo.ci)      parts.push(`The affected CI is ${this.relatedInfo.ci}.`)
+    else if (this.relatedInfo.service) parts.push(`Business service: ${this.relatedInfo.service}.`)
+
+    parts.push('What would you like to tackle first?')
+    return parts.join(' ')
+  }
+
   /* ── System prompt ──────────────────────────────────────────────────── */
-  private buildSystemPrompt(): string {
+  private buildSystemPrompt(enrichedContext: string): string {
     const lines: string[] = []
     for (const [k, v] of Object.entries(this.ctx)) {
       if (!v || k === 'sys_id' || k === 'state_display') continue
       let val = String(v)
       if (k === 'state')    val = STATE_LABELS[val]    || val
       if (k === 'priority') val = PRIORITY_LABELS[val] || val
+      if (k === 'urgency')  val = URGENCY_LABELS[val]  || val
       lines.push(`  ${FIELD_LABELS[k] || k}: ${val}`)
     }
 
-    return `You are a dedicated Incident Resolution Assistant embedded in a ServiceNow incident form. You are speaking with the ASSIGNED AGENT who is working to resolve this ticket — not the end user / caller.
+    return `You are a dedicated Incident Resolution Co-Agent embedded in ServiceNow. You are assisting the ASSIGNED AGENT working to resolve this ticket — not the end user / caller. Act as a knowledgeable co-worker who has already read all the details.
 
 CURRENT INCIDENT:
-${lines.length ? lines.join('\n') : '  (No details captured — ask the agent what they need help with)'}
+${lines.length ? lines.join('\n') : '  (No form data captured)'}
+${enrichedContext ? '\n' + enrichedContext : ''}
 
-YOUR RESPONSIBILITIES:
-1. Analyse the incident description and caller comments to understand the root cause
-2. Suggest practical resolution steps specific to this incident
-3. Draft replies / updates to send to the caller (suggest_reply_to_caller)
-4. Generate resolution notes when the issue is fixed (suggest_resolution_note)
-5. Propose field changes when appropriate (update_incident_field) — ALWAYS explain why first and wait for confirmation
-6. Provide a clear incident summary when asked
+YOUR ROLE:
+1. You have reviewed all incident details, SLAs, attachments, and recent activity — reference them proactively
+2. Identify root cause from error logs, comments, and description
+3. Suggest specific, actionable resolution steps based on actual content
+4. Warn immediately about SLA breaches or time pressure
+5. Search for similar resolved incidents or KB articles when helpful
+6. Draft work notes (suggest_resolution_note) and caller updates (suggest_reply_to_caller)
+7. Propose field updates with explicit confirmation (update_incident_field)
 
-CONFIRMATION RULE: You MUST verbally explain any field change you want to make BEFORE calling update_incident_field. The user will then see a Confirm / Cancel button and can also say yes or no. Never apply changes silently.
+CONFIRMATION RULE: Always verbally explain any field change BEFORE calling update_incident_field. Never apply changes silently.
 
-VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no formatting. Speak naturally.`
+VOICE RULES: Keep replies to 2–4 sentences. No markdown, no bullet points, no JSON. Speak naturally. Paraphrase log content — don't recite raw lines.`
   }
 
   /* ── User message processing ────────────────────────────────────────── */
@@ -237,7 +454,7 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
 
     this.isBargingIn = false
 
-    // Voice-driven confirmation when awaiting a field update confirmation
+    // Voice confirmation when awaiting field update
     if (this.pendingConfirm && !message.startsWith('[SYSTEM]')) {
       const lower = message.toLowerCase().replace(/[.,!?]/g, '')
       const yes = /\b(yes|yeah|yep|confirm|sure|ok|okay|go ahead|do it|absolutely|please)\b/.test(lower)
@@ -250,30 +467,25 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
         this.emit('user_message', message)
         if (yes) {
           this.emit('form_update', { field: pc.field, value: pc.value, valueLabel: pc.valueLabel, applyNow: true })
-          const resp = `Done, I've updated ${FIELD_LABELS[pc.field] || pc.field} to "${pc.valueLabel}".`
+          const resp = `Done — I've updated ${FIELD_LABELS[pc.field] || pc.field} to "${pc.valueLabel}".`
           this.emit('agent_message', resp)
           await this.speakAndStream(resp)
           this.messages.push({ role: 'assistant', content: resp })
         } else {
-          const resp = "Okay, I've cancelled that update. What else can I help you with?"
+          const resp = "Okay, I've cancelled that update. What else can I help with?"
           this.emit('agent_message', resp)
           await this.speakAndStream(resp)
           this.messages.push({ role: 'assistant', content: resp })
         }
         this.processing = false
         this.emit('state', 'listening')
-        // Drain queue
-        if (!this.stopped && this.messageQueue.length > 0) {
-          this.processUserMessage(this.messageQueue.shift()!)
-        }
+        if (!this.stopped && this.messageQueue.length > 0) this.processUserMessage(this.messageQueue.shift()!)
         return
       }
     }
 
     this.processing = true
-    if (!message.startsWith('[SYSTEM]')) {
-      this.emit('user_message', message)
-    }
+    if (!message.startsWith('[SYSTEM]')) this.emit('user_message', message)
     this.messages.push({ role: 'user', content: message })
     this.isAgentSpeaking = true
     this.emit('state', 'processing')
@@ -281,48 +493,33 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
     try {
       const result = await this.callLLM()
 
-      // Handle tool calls
       for (const tc of (result.toolCalls || [])) {
         if (tc.name === 'update_incident_field') {
           const confirmId = 'cf_' + Date.now()
           const { field = '', value = '', value_label: valueLabel = value, reason = '' } = tc.arguments || {}
           this.pendingConfirm = { confirmId, field, value, valueLabel }
-          addLog('info', 'incident-pipeline', `Field update pending: ${field} → ${valueLabel}`, {})
           this.emit('field_update_pending', { confirmId, field, value, valueLabel, reason })
-          this.messages.push({
-            role: 'assistant', content: result.text || null,
-            tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.arguments) } }],
-          })
-          this.messages.push({
-            role: 'tool', tool_call_id: tc.id,
-            content: JSON.stringify({ message: `Waiting for user to confirm updating ${field} to "${valueLabel}".` }),
-          })
+          this.pushToolMsg(tc, result.text, `Waiting for user to confirm updating ${field} to "${valueLabel}".`)
 
         } else if (tc.name === 'suggest_resolution_note') {
-          const text = tc.arguments?.text || ''
-          addLog('info', 'incident-pipeline', 'Resolution suggestion: ' + text.substring(0, 60), {})
-          this.emit('suggestion', { sugType: 'resolution', text })
-          this.messages.push({
-            role: 'assistant', content: result.text || null,
-            tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.arguments) } }],
-          })
-          this.messages.push({
-            role: 'tool', tool_call_id: tc.id,
-            content: JSON.stringify({ message: 'Resolution note suggestion shown in the widget.' }),
-          })
+          this.emit('suggestion', { sugType: 'resolution', text: tc.arguments?.text || '' })
+          this.pushToolMsg(tc, result.text, 'Resolution note shown in widget.')
 
         } else if (tc.name === 'suggest_reply_to_caller') {
-          const text = tc.arguments?.text || ''
-          addLog('info', 'incident-pipeline', 'Reply suggestion: ' + text.substring(0, 60), {})
-          this.emit('suggestion', { sugType: 'reply', text })
-          this.messages.push({
-            role: 'assistant', content: result.text || null,
-            tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.arguments) } }],
-          })
-          this.messages.push({
-            role: 'tool', tool_call_id: tc.id,
-            content: JSON.stringify({ message: 'Reply suggestion shown in the widget.' }),
-          })
+          this.emit('suggestion', { sugType: 'reply', text: tc.arguments?.text || '' })
+          this.pushToolMsg(tc, result.text, 'Reply suggestion shown in widget.')
+
+        } else if (tc.name === 'search_similar_incidents') {
+          const searchResult = await this.searchSimilarIncidents(tc.arguments?.query || '')
+          this.pushToolMsg(tc, result.text, searchResult)
+          const followUp = await this.callLLM(true)
+          if (followUp.text) this.messages.push({ role: 'assistant', content: followUp.text })
+
+        } else if (tc.name === 'search_knowledge_base') {
+          const kbResult = await this.searchKnowledgeBase(tc.arguments?.query || '')
+          this.pushToolMsg(tc, result.text, kbResult)
+          const followUp = await this.callLLM(true)
+          if (followUp.text) this.messages.push({ role: 'assistant', content: followUp.text })
         }
       }
 
@@ -342,31 +539,77 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
       this.emit('state', 'listening')
     } finally {
       this.processing = false
-      if (!this.stopped && this.messageQueue.length > 0) {
-        this.processUserMessage(this.messageQueue.shift()!)
-      }
+      if (!this.stopped && this.messageQueue.length > 0) this.processUserMessage(this.messageQueue.shift()!)
+    }
+  }
+
+  private pushToolMsg(tc: any, assistantText: string | null, toolContent: string) {
+    this.messages.push({
+      role: 'assistant', content: assistantText || null,
+      tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.arguments) } }],
+    })
+    this.messages.push({ role: 'tool', tool_call_id: tc.id, content: toolContent })
+  }
+
+  /* ── SN search helpers ──────────────────────────────────────────────── */
+  private async searchSimilarIncidents(query: string): Promise<string> {
+    if (!this.snCreds?.url) return 'ServiceNow not configured for search.'
+    try {
+      const auth = 'Basic ' + Buffer.from(this.snCreds.username + ':' + this.snCreds.password).toString('base64')
+      const enc  = encodeURIComponent(query)
+      const data = await this.snGet(
+        `${this.snCreds.url}/api/now/table/incident?sysparm_query=state=6^short_descriptionLIKE${enc}^ORDERBYDESCsys_updated_on&sysparm_fields=number,short_description,close_notes,close_code&sysparm_limit=3`,
+        auth
+      )
+      const results = data?.result || []
+      if (!results.length) return 'No similar resolved incidents found.'
+      return results.map((r: any) =>
+        `${r.number}: "${r.short_description}" — Resolution: ${(r.close_notes || 'not documented').substring(0, 300)}`
+      ).join('\n\n')
+    } catch (e: any) {
+      return 'Search failed: ' + e.message
+    }
+  }
+
+  private async searchKnowledgeBase(query: string): Promise<string> {
+    if (!this.snCreds?.url) return 'ServiceNow not configured for search.'
+    try {
+      const auth = 'Basic ' + Buffer.from(this.snCreds.username + ':' + this.snCreds.password).toString('base64')
+      const enc  = encodeURIComponent(query)
+      const data = await this.snGet(
+        `${this.snCreds.url}/api/now/table/kb_knowledge?sysparm_query=workflow_state=published^short_descriptionLIKE${enc}^ORDERBYDESCsys_updated_on&sysparm_fields=number,short_description,text&sysparm_limit=3`,
+        auth
+      )
+      const results = data?.result || []
+      if (!results.length) return 'No published KB articles found.'
+      return results.map((r: any) =>
+        `${r.number}: "${r.short_description}" — ${(r.text || '').replace(/<[^>]+>/g, '').substring(0, 400)}`
+      ).join('\n\n')
+    } catch (e: any) {
+      return 'KB search failed: ' + e.message
     }
   }
 
   /* ── LLM streaming ──────────────────────────────────────────────────── */
-  private async callLLM(): Promise<{ text: string; toolCalls: any[] }> {
-    // Keep system prompt + last 12 turns to avoid context blowup
+  private async callLLM(noTools = false): Promise<{ text: string; toolCalls: any[] }> {
     const system  = this.messages.filter(m => m.role === 'system')
-    const history = this.messages.filter(m => m.role !== 'system').slice(-12)
+    const history = this.messages.filter(m => m.role !== 'system').slice(-14)
 
     const params: any = {
       model: this.model,
       messages: [...system, ...history],
-      temperature: 0.5,
-      max_tokens: 500,
+      temperature: 0.4,
+      max_tokens: 600,
       stream: true,
-      tools: INCIDENT_TOOLS,
-      tool_choice: 'auto',
-      parallel_tool_calls: false,
+    }
+    if (!noTools) {
+      params.tools = INCIDENT_TOOLS
+      params.tool_choice = 'auto'
+      params.parallel_tool_calls = false
     }
 
     let fullText = ''
-    let sentBuf = ''
+    let sentBuf  = ''
     const tcDeltas: any[] = []
     let speaking = false
     let toolCallStarted = false
@@ -378,16 +621,14 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
         const delta = chunk.choices?.[0]?.delta
         if (!delta) continue
 
-        // Once tool-call deltas arrive, stop collecting text — the model sometimes
-        // leaks its tool arguments as text content in the same streaming response.
         if (delta.tool_calls?.length) {
           toolCallStarted = true
-          sentBuf = '' // discard any buffered text that arrived alongside tool calls
+          sentBuf = ''
           for (const tc of delta.tool_calls) {
             if (tc.index !== undefined) {
               if (!tcDeltas[tc.index]) tcDeltas[tc.index] = { id: '', name: '', arguments: '' }
-              if (tc.id)               tcDeltas[tc.index].id        = tc.id
-              if (tc.function?.name)   tcDeltas[tc.index].name      = tc.function.name
+              if (tc.id)               tcDeltas[tc.index].id   = tc.id
+              if (tc.function?.name)   tcDeltas[tc.index].name = tc.function.name
               if (tc.function?.arguments) tcDeltas[tc.index].arguments += tc.function.arguments
             }
           }
@@ -417,15 +658,14 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
     }
 
     const toolCalls = tcDeltas.filter(t => t?.name).map(t => ({
-      id: t.id,
-      name: t.name,
+      id: t.id, name: t.name,
       arguments: (() => { try { return JSON.parse(t.arguments) } catch { return {} } })(),
     }))
 
     return { text: fullText, toolCalls }
   }
 
-  /* ── STT ─────────────────────────────────────────────────────────────── */
+  /* ── STT ────────────────────────────────────────────────────────────── */
   private setupSTT() {
     this.stt.on('message', (data: any) => {
       const msg = typeof data === 'string' ? JSON.parse(data) : data
@@ -456,7 +696,7 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
     this.stt.on('close', () => addLog('info', 'incident-stt', 'Closed', {}))
   }
 
-  /* ── TTS ─────────────────────────────────────────────────────────────── */
+  /* ── TTS ────────────────────────────────────────────────────────────── */
   private async connectTtsWs(): Promise<void> {
     const WS = require('ws')
     return new Promise((resolve, reject) => {
@@ -507,7 +747,7 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
       .replace(/`[^`]+`/g, '')
       .replace(/[*_#]+/g, '')
       .replace(/https?:\/\/[^\s]+/g, '')
-      .replace(/\{[^{}]*\}/g, '')   // strip JSON objects leaked by the model into content
+      .replace(/\{[^{}]*\}/g, '')
       .replace(/\s+/g, ' ')
       .trim()
   }

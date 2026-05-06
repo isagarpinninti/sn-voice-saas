@@ -182,6 +182,19 @@
   + '.vai-p4{background:#f0fdf4;color:#15803d}'
   + '#vai-refresh{display:flex;align-items:center;gap:4px;font-size:11px;color:#6b7280;cursor:pointer;border:none;background:none;padding:4px 0;margin-top:8px;font-family:inherit;transition:color .15s}'
   + '#vai-refresh:hover{color:#10b981}'
+  + '#vai-sla-panel,#vai-att-panel{margin-top:10px;display:none}'
+  + '#vai-sla-panel h3,#vai-att-panel h3{font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin:0 0 7px}'
+  + '.vai-sla-row{display:flex;align-items:center;gap:5px;margin-bottom:5px;font-size:11px}'
+  + '.vai-sla-name{flex:1;color:#374151;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  + '.vai-sla-bar-wrap{width:54px;height:5px;background:#e5e7eb;border-radius:3px;flex-shrink:0}'
+  + '.vai-sla-bar{height:100%;border-radius:3px}'
+  + '.vai-sla-bar.ok{background:#10b981}.vai-sla-bar.warn{background:#f59e0b}.vai-sla-bar.crit{background:#ef4444}'
+  + '.vai-sla-left{font-size:10px;color:#6b7280;white-space:nowrap;flex-shrink:0}'
+  + '.vai-sla-breach{font-size:9px;font-weight:700;color:#fff;background:#ef4444;border-radius:3px;padding:1px 5px;flex-shrink:0}'
+  + '.vai-att-row{display:flex;align-items:center;gap:5px;margin-bottom:4px;font-size:11px}'
+  + '.vai-att-icon{font-size:12px;flex-shrink:0}'
+  + '.vai-att-name{flex:1;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  + '.vai-att-size{font-size:10px;color:#9ca3af;flex-shrink:0}'
 
   + '#vai-conv{flex:1;display:flex;flex-direction:column;overflow:hidden}'
   + '#vai-chat{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px}'
@@ -336,6 +349,8 @@
       +     '<div id="vai-details">'
       +       '<h3>Incident Details</h3>'
       +       '<div id="vai-details-list"></div>'
+      +       '<div id="vai-sla-panel"></div>'
+      +       '<div id="vai-att-panel"></div>'
       +       '<button id="vai-refresh" type="button">' + I.ref + ' Refresh</button>'
       +     '</div>'
       +     '<div id="vai-conv">'
@@ -401,6 +416,60 @@
       html += '<div class="vai-f"><div class="vai-fl">' + fl(f) + '</div>' + rendered + '</div>';
     });
     list.innerHTML = html || '<div style="font-size:12px;color:#9ca3af;line-height:1.5">No incident data found.<br>Ensure g_form is available.</div>';
+  }
+
+  /* ── Enriched context (SLAs + attachments from server) ──────────────── */
+  function renderEnrichedContext(data) {
+    // SLA panel
+    var slaEl = g('vai-sla-panel');
+    if (slaEl && data.slas && data.slas.length) {
+      var slaHtml = '<h3>SLAs</h3>';
+      data.slas.forEach(function (s) {
+        var pct  = Math.min(100, Math.max(0, s.percentage || 0));
+        var cls  = s.breached ? 'crit' : pct >= 80 ? 'crit' : pct >= 60 ? 'warn' : 'ok';
+        var left = s.timeLeft ? s.timeLeft + ' left' : (s.stage || '');
+        slaHtml += '<div class="vai-sla-row">'
+          + '<span class="vai-sla-name" title="' + esc(s.name) + '">' + esc(s.name) + '</span>'
+          + '<div class="vai-sla-bar-wrap"><div class="vai-sla-bar ' + cls + '" style="width:' + pct + '%"></div></div>'
+          + '<span class="vai-sla-left">' + esc(left) + '</span>'
+          + (s.breached ? '<span class="vai-sla-breach">BREACHED</span>' : '')
+          + '</div>';
+      });
+      slaEl.innerHTML = slaHtml;
+      slaEl.style.display = '';
+    }
+
+    // Attachments panel
+    var attEl = g('vai-att-panel');
+    if (attEl && data.attachments && data.attachments.length) {
+      var attHtml = '<h3>Attachments</h3>';
+      data.attachments.forEach(function (a) {
+        var ext  = (a.name || '').split('.').pop().toLowerCase();
+        var icon = ['jpg','jpeg','png','gif','svg'].indexOf(ext) >= 0 ? '🖼' :
+                   ['pdf'].indexOf(ext) >= 0 ? '📄' :
+                   ['log','txt','csv','md'].indexOf(ext) >= 0 ? '📋' : '📎';
+        attHtml += '<div class="vai-att-row">'
+          + '<span class="vai-att-icon">' + icon + '</span>'
+          + '<span class="vai-att-name" title="' + esc(a.name) + '">' + esc(a.name) + '</span>'
+          + '<span class="vai-att-size">' + (a.sizeKb || 0) + 'KB</span>'
+          + '</div>';
+      });
+      attEl.innerHTML = attHtml;
+      attEl.style.display = '';
+    }
+
+    // Related CI / service in header area
+    if (data.related && data.related.ci) {
+      var stateEl = g('vai-hdr-state');
+      if (stateEl && !stateEl.dataset.ci) {
+        stateEl.dataset.ci = '1';
+        var ciSpan = document.createElement('span');
+        ciSpan.className = 'vai-hdr-badge vai-hdr-inc';
+        ciSpan.style.marginLeft = '4px';
+        ciSpan.textContent = data.related.ci;
+        stateEl.parentNode.insertBefore(ciSpan, stateEl);
+      }
+    }
   }
 
   /* ── Modal open/close ────────────────────────────────────────────────── */
@@ -691,9 +760,12 @@
           var trbtn = g('vai-trbtn');
           if (trbtn) { trbtn.disabled = false; trbtn.innerHTML = I.glob + ' Translate'; }
         } else if (m.type === 'state') {
-          if (m.state === 'listening')   { setSt('Listening…', 'ok');  setWave(true);  }
-          else if (m.state === 'speaking')   { setSt('Speaking…', 'ok');   setWave(true);  }
-          else if (m.state === 'processing') { setSt('Thinking…', '');     setWave(false); }
+          if      (m.state === 'listening')   { setSt('Listening…', 'ok');  setWave(true);  }
+          else if (m.state === 'speaking')    { setSt('Speaking…', 'ok');   setWave(true);  }
+          else if (m.state === 'processing')  { setSt('Thinking…', '');     setWave(false); }
+          else if (m.state === 'loading')     { setSt('Loading incident details…', ''); setWave(false); }
+        } else if (m.type === 'context_enriched') {
+          renderEnrichedContext(m);
         } else if (m.type === 'transcript') {
           if (m.isFinal) setInterim(''); else setInterim(m.text || '');
         } else if (m.type === 'user_message') {

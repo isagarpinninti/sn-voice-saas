@@ -515,6 +515,7 @@ app.prepare().then(() => {
     let authed = false
     let pipeline: IncidentPipeline | null = null
     let tenantRef: any = null
+    let instanceRef: any = null
 
     ws.on('message', (data: RawData, isBinary: boolean) => {
       if (!authed) { buffer.push({ data, isBinary }); return }
@@ -541,7 +542,12 @@ app.prepare().then(() => {
         const incidentCtx: Record<string, string> = (msg.incidentContext && typeof msg.incidentContext === 'object') ? msg.incidentContext : {}
         addLog('info', 'incident-ws', 'START incident=' + (incidentCtx.number || 'unknown'), { tenantId: tenantRef?.id })
 
-        pipeline = new IncidentPipeline(incidentCtx)
+        const snCreds = instanceRef?.snInstanceUrl ? {
+          url: instanceRef.snInstanceUrl,
+          username: instanceRef.snUsername || '',
+          password: instanceRef.snPassword || '',
+        } : undefined
+        pipeline = new IncidentPipeline(incidentCtx, snCreds)
         pipeline.on('ready',   (d: any)  => { addLog('info', 'incident-pipeline', 'READY', { tenantId: tenantRef?.id }); send(ws, { type: 'ready', ...d }) })
         pipeline.on('state',   (s: string) => send(ws, { type: 'state', state: s }))
         pipeline.on('transcript', (d: any) => send(ws, { type: 'transcript', ...d }))
@@ -549,6 +555,10 @@ app.prepare().then(() => {
         pipeline.on('agent_message', (t: string) => { addLog('info', 'incident-pipeline', 'AGENT: ' + t.substring(0, 80), { tenantId: tenantRef?.id }); send(ws, { type: 'agent_message', text: t }) })
         pipeline.on('audio', (b: Buffer) => { if (ws.readyState === WebSocket.OPEN) ws.send(b) })
         pipeline.on('barge_in', () => send(ws, { type: 'barge_in' }))
+        pipeline.on('context_enriched', (d: any) => {
+          addLog('info', 'incident-pipeline', `Context enriched: ${d.slas?.length || 0} SLAs, ${d.attachments?.length || 0} attachments`, { tenantId: tenantRef?.id })
+          send(ws, { type: 'context_enriched', slas: d.slas, attachments: d.attachments, related: d.related })
+        })
         pipeline.on('field_update_pending', (d: any) => {
           addLog('info', 'incident-pipeline', 'Confirm pending: ' + d.field + ' → ' + d.valueLabel, { tenantId: tenantRef?.id })
           send(ws, { type: 'field_update_pending', confirmId: d.confirmId, field: d.field, value: d.value, valueLabel: d.valueLabel, reason: d.reason })
@@ -601,15 +611,20 @@ app.prepare().then(() => {
       if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
 
       if (apiToken.instance?.tenant) {
-        tenantRef = apiToken.instance.tenant
+        tenantRef   = apiToken.instance.tenant
+        instanceRef = apiToken.instance
       } else if (apiToken.tenant) {
-        tenantRef = apiToken.tenant
+        tenantRef   = apiToken.tenant
+        instanceRef = await db.instance.findFirst({
+          where: { tenantId: tenantRef.id, active: true },
+          orderBy: { createdAt: 'asc' },
+        })
       } else {
         ws.close(4003, 'Invalid token'); return
       }
 
       db.apiToken.update({ where: { id: apiToken.id }, data: { lastUsed: new Date() } }).catch(() => {})
-      addLog('info', 'incident-ws', 'Authed. TenantId=' + tenantRef.id, { tenantId: tenantRef.id })
+      addLog('info', 'incident-ws', `Authed. TenantId=${tenantRef.id} Instance=${instanceRef?.id || 'none'}`, { tenantId: tenantRef.id })
       authed = true
 
       for (const b of buffer) processIncidentMsg(b.data, b.isBinary)
