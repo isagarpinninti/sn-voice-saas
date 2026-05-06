@@ -369,6 +369,7 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
     let sentBuf = ''
     const tcDeltas: any[] = []
     let speaking = false
+    let toolCallStarted = false
 
     try {
       const stream = await this.llm.chat.completions.create(params)
@@ -377,7 +378,22 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
         const delta = chunk.choices?.[0]?.delta
         if (!delta) continue
 
-        if (delta.content) {
+        // Once tool-call deltas arrive, stop collecting text — the model sometimes
+        // leaks its tool arguments as text content in the same streaming response.
+        if (delta.tool_calls?.length) {
+          toolCallStarted = true
+          sentBuf = '' // discard any buffered text that arrived alongside tool calls
+          for (const tc of delta.tool_calls) {
+            if (tc.index !== undefined) {
+              if (!tcDeltas[tc.index]) tcDeltas[tc.index] = { id: '', name: '', arguments: '' }
+              if (tc.id)               tcDeltas[tc.index].id        = tc.id
+              if (tc.function?.name)   tcDeltas[tc.index].name      = tc.function.name
+              if (tc.function?.arguments) tcDeltas[tc.index].arguments += tc.function.arguments
+            }
+          }
+        }
+
+        if (delta.content && !toolCallStarted) {
           fullText += delta.content
           sentBuf  += delta.content
           if (/[.!?]\s*$/.test(sentBuf) || sentBuf.length > 200) {
@@ -389,20 +405,9 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
             }
           }
         }
-
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            if (tc.index !== undefined) {
-              if (!tcDeltas[tc.index]) tcDeltas[tc.index] = { id: '', name: '', arguments: '' }
-              if (tc.id)               tcDeltas[tc.index].id        = tc.id
-              if (tc.function?.name)   tcDeltas[tc.index].name      = tc.function.name
-              if (tc.function?.arguments) tcDeltas[tc.index].arguments += tc.function.arguments
-            }
-          }
-        }
       }
 
-      if (sentBuf.trim() && !this.isBargingIn) {
+      if (sentBuf.trim() && !this.isBargingIn && !toolCallStarted) {
         const s = this.sanitize(sentBuf.trim())
         if (s) { if (!speaking) this.emit('state', 'speaking'); this.emit('agent_message', s); await this.speakAndStream(s) }
       }
@@ -502,6 +507,7 @@ VOICE RULES: Keep replies to 1–3 sentences. No markdown, no bullet points, no 
       .replace(/`[^`]+`/g, '')
       .replace(/[*_#]+/g, '')
       .replace(/https?:\/\/[^\s]+/g, '')
+      .replace(/\{[^{}]*\}/g, '')   // strip JSON objects leaked by the model into content
       .replace(/\s+/g, ' ')
       .trim()
   }
