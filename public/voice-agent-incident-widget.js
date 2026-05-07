@@ -16,9 +16,10 @@
     (sc && sc.src ? (function (u) { try { return new URL(u).origin; } catch (e) { return ''; } })(sc.src) : '') || ''
   ).replace(/\/+$/, '');
 
-  if (!TK) { console.warn('[AI Voice Agent] No token — set window.VA_TOKEN'); return; }
   if (window.__vaIncident) return;
   window.__vaIncident = true;
+
+  if (!TK) console.warn('[AI Voice Agent] No VA_TOKEN set — voice connection will fail until token is provided');
 
   var wsBase = GW.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
 
@@ -644,6 +645,9 @@
   /* ── Call lifecycle ──────────────────────────────────────────────────── */
   async function startCall() {
     if (active) return;
+    // Re-read token at call time in case it was set after script load
+    if (!TK) { TK = window.VA_TOKEN || ''; }
+    if (!TK) { setSt('No API token — contact admin', 'err'); return; }
     active = true; muted = false; pttActive = false;
     messages = []; suggestions = [];
     var chat = g('vai-chat'); if (chat) chat.innerHTML = '';
@@ -743,4 +747,8 @@
   /* ── Global API ──────────────────────────────────────────────────────── */
   window.openVoiceAgentModal  = function (opts) { openModal(); if (opts && opts.autoStart && !active) startCall(); };
   window.closeVoiceAgentModal = closeModal;
+  // Called by the ServiceNow onLoad Client Script after injection
+  window.initVAI = function (token) {
+    if (token) { TK = token; window.VA_TOKEN = token; }
+  };
 })();
