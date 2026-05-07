@@ -433,6 +433,13 @@ CURRENT INCIDENT:
 ${lines.length ? lines.join('\n') : '  (No form data captured)'}
 ${enrichedContext ? '\n' + enrichedContext : ''}
 
+FIELD VALUE REFERENCE — always use these exact raw values in update_incident_field, never the label:
+  State:    1=New  2=In Progress  3=On Hold  6=Resolved  7=Closed  8=Canceled
+  Priority: 1=Critical  2=High  3=Moderate  4=Low
+  Urgency:  1=High  2=Medium  3=Low
+  Impact:   1=High  2=Medium  3=Low
+Example: to mark Resolved → field="state", value="6", value_label="Resolved"
+
 YOUR ROLE:
 1. You have reviewed all incident details, SLAs, attachments, and recent activity — reference them proactively
 2. Identify root cause from error logs, comments, and description
