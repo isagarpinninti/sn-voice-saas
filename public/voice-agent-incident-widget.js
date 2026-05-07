@@ -128,10 +128,10 @@
   +'#vai-backdrop.vai-open{display:block;animation:vaiFade .2s ease}'
   +'@keyframes vaiFade{from{opacity:0}to{opacity:1}}'
   /* modal */
-  +'#vai-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:860px;max-width:calc(100vw - 20px);height:580px;max-height:calc(100vh - 20px);background:#fff;z-index:10000;border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.22),0 0 0 1px rgba(109,40,217,.08);display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}'
-  +'#vai-modal.vai-open{animation:vaiSlide .28s cubic-bezier(.22,1,.36,1)}'
+  +'#vai-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:860px;max-width:calc(100vw - 20px);height:580px;max-height:calc(100vh - 20px);background:#fff;z-index:10000;border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.22),0 0 0 1px rgba(109,40,217,.08);display:none;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}'
+  +'#vai-modal.vai-open{display:flex;animation:vaiSlide .28s cubic-bezier(.22,1,.36,1)}'
   +'@keyframes vaiSlide{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}'
-  +'#vai-modal.pinned{transform:none}'
+  +'#vai-modal.vai-open.pinned{transform:none}'
   +'#vai-modal *{box-sizing:border-box}'
   /* header — draggable */
   +'#vai-hdr{background:linear-gradient(135deg,#3b0764 0%,#5b21b6 55%,#7c3aed 100%);color:#fff;padding:0 14px;height:58px;display:flex;align-items:center;gap:10px;flex-shrink:0;cursor:grab;user-select:none}'
@@ -306,7 +306,7 @@
 
     // Backdrop
     var bd = document.createElement('div'); bd.id = 'vai-backdrop'; document.body.appendChild(bd);
-    bd.addEventListener('click', closeModal);
+    bd.addEventListener('click', function(e){ e.stopPropagation(); closeModal(); }, true);
 
     // Modal
     var modal = document.createElement('div'); modal.id = 'vai-modal';
@@ -354,8 +354,8 @@
       +'</div>';
     document.body.appendChild(modal);
 
-    // Wire events
-    g('vai-close').addEventListener('click', closeModal);
+    // Wire events — use capture:true for close/backdrop so SN handlers can't block them
+    g('vai-close').addEventListener('click', function(e){ e.stopPropagation(); closeModal(); }, true);
     g('vai-startbtn').addEventListener('click', startCall);
     g('vai-endbtn').addEventListener('click', endCall);
     g('vai-mutebtn').addEventListener('click', toggleMute);
