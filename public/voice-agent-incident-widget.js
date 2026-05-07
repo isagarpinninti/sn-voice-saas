@@ -105,7 +105,7 @@
 
   /* ── Runtime state ───────────────────────────────────────────────────── */
   var ws = null, micCtx = null, micStr = null, micP = null;
-  var active = false, muted = false, pttActive = false;
+  var active = false, muted = false, pttActive = false, agentSpeaking = false;
   var messages = [], suggestions = [], pendingTranslateMsgId = null, msgCounter = 0;
   var drag = { on: false, ox: 0, oy: 0, pinned: false };
 
@@ -614,7 +614,7 @@
         var src = micCtx.createMediaStreamSource(s);
         micP = micCtx.createScriptProcessor(4096, 1, 1);
         micP.onaudioprocess = function (e) {
-          if (!ws || ws.readyState !== 1 || muted) return;
+          if (!ws || ws.readyState !== 1 || muted || agentSpeaking) return;
           var f = e.inputBuffer.getChannelData(0), i16 = new Int16Array(f.length);
           for (var j = 0; j < f.length; j++) i16[j] = Math.max(-32768, Math.min(32767, Math.round(f[j]*32767)));
           ws.send(i16.buffer);
@@ -676,10 +676,10 @@
           var tb = g('vai-trbtn'); if (tb) { tb.disabled=false; tb.innerHTML=I.glob+' Translate'; }
 
         } else if (m.type === 'state') {
-          if      (m.state==='listening')  { setSt('Listening…','ok');  setWave(true);  }
-          else if (m.state==='speaking')   { setSt('Speaking…','ok');   setWave(true);  }
-          else if (m.state==='processing') { setSt('Thinking…','');     setWave(false); }
-          else if (m.state==='loading')    { setSt('Loading details…',''); setWave(false); }
+          if      (m.state==='listening')  { agentSpeaking=false; setSt('Listening…','ok');      setWave(true);  }
+          else if (m.state==='speaking')   { agentSpeaking=true;  setSt('Speaking…','ok');      setWave(true);  }
+          else if (m.state==='processing') { agentSpeaking=true;  setSt('Thinking…','');        setWave(false); }
+          else if (m.state==='loading')    { agentSpeaking=true;  setSt('Loading details…',''); setWave(false); }
 
         } else if (m.type === 'context_enriched') {
           renderEnrichedContext(m);
@@ -726,7 +726,7 @@
 
   function endCall() {
     try { if (ws && ws.readyState===1) { ws.send(JSON.stringify({type:'stop'})); ws.close(); } } catch(e){}
-    ws=null; stopMic(); clearAudio(); active=false; muted=false; pttActive=false;
+    ws=null; stopMic(); clearAudio(); active=false; muted=false; pttActive=false; agentSpeaking=false;
     setWave(false); setCallingMode(false); setInterim('');
     var mb=g('vai-micbtn'); if(mb) mb.classList.remove('rec');
   }

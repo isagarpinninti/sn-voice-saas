@@ -30,6 +30,29 @@ interface Config {
   toolSearchKb: boolean
 }
 
+const DEFAULT_SYSTEM_PROMPT = `You are a dedicated Incident Resolution Co-Agent embedded in ServiceNow. You are assisting the ASSIGNED AGENT working to resolve this ticket — not the end user / caller. Act as a knowledgeable co-worker who has already read all the details.
+
+CURRENT INCIDENT:
+{{incident_fields}}
+{{enriched_context}}
+
+{{field_value_reference}}
+
+YOUR ROLE:
+1. You have reviewed all incident details, SLAs, attachments, and recent activity — reference them proactively
+2. Identify root cause from error logs, comments, and description
+3. Suggest specific, actionable resolution steps based on actual content
+4. Warn immediately about SLA breaches or time pressure
+5. Search for similar resolved incidents or KB articles when helpful
+6. Draft work notes (suggest_resolution_note) and caller updates (suggest_reply_to_caller)
+7. Propose field updates with explicit confirmation (update_incident_field)
+
+CONFIRMATION RULE: Always verbally explain any field change BEFORE calling update_incident_field. Never apply changes silently.
+
+VOICE RULES: Keep replies to 2–4 sentences. No markdown, no bullet points, no JSON. Speak naturally. Paraphrase log content — don't recite raw lines.`
+
+const DEFAULT_GREETING_TEMPLATE = `I've loaded {{number}} — "{{short_description}}". {{priority}}, {{state}}. {{sla_summary}} {{attachment_summary}} What would you like to tackle first?`
+
 const DEFAULTS: Config = {
   llmModel: 'llama-3.3-70b-versatile',
   llmTemperature: 0.4,
@@ -336,11 +359,20 @@ export default function IncidentAgentPage() {
         {/* ── System Prompt ── */}
         <Section
           title="System Prompt"
-          description="The core instructions given to the LLM at the start of every session. Leave blank to use the built-in default."
+          description="The core instructions given to the LLM at the start of every session."
           actions={
-            <button type="button" onClick={() => set('systemPrompt', null)} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <RotateCcw className="w-3 h-3" /> Reset to default
-            </button>
+            <div className="flex items-center gap-2">
+              {cfg.systemPrompt !== null && (
+                <button type="button" onClick={() => set('systemPrompt', null)} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+                  <RotateCcw className="w-3 h-3" /> Reset to default
+                </button>
+              )}
+              {cfg.systemPrompt === null && (
+                <button type="button" onClick={() => set('systemPrompt', DEFAULT_SYSTEM_PROMPT)} className="text-[11px] text-primary hover:text-primary/80 flex items-center gap-1 font-medium">
+                  Load default to edit
+                </button>
+              )}
+            </div>
           }
         >
           <Card><CardContent className="p-5 space-y-3">
@@ -350,30 +382,39 @@ export default function IncidentAgentPage() {
                 Use <code className="text-[10px] bg-muted px-1 rounded">{'{{incident_fields}}'}</code> to insert the current incident data,{' '}
                 <code className="text-[10px] bg-muted px-1 rounded">{'{{enriched_context}}'}</code> for SLAs / attachments / journal entries,
                 and <code className="text-[10px] bg-muted px-1 rounded">{'{{field_value_reference}}'}</code> for the state/priority value table.
-                The field value reference is always appended automatically — no need to include it unless you want to control placement.
+                The field value reference is always appended automatically.
               </p>
             </div>
             <textarea
-              rows={14}
-              value={cfg.systemPrompt ?? ''}
-              onChange={e => set('systemPrompt', e.target.value || null)}
-              placeholder={`Leave blank to use the built-in default prompt.\n\nExample custom prompt:\nYou are an expert IT support co-agent...\n\nCURRENT INCIDENT:\n{{incident_fields}}\n{{enriched_context}}\n\nYOUR ROLE:\n...`}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-[12px] font-mono shadow-sm resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              rows={18}
+              value={cfg.systemPrompt ?? DEFAULT_SYSTEM_PROMPT}
+              onChange={e => set('systemPrompt', e.target.value === DEFAULT_SYSTEM_PROMPT ? null : (e.target.value || null))}
+              className={`w-full rounded-md border border-input bg-background px-3 py-2 text-[12px] font-mono shadow-sm resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${cfg.systemPrompt === null ? 'text-muted-foreground' : ''}`}
             />
-            {!cfg.systemPrompt && (
-              <p className="text-[11px] text-emerald-600">Using built-in default prompt.</p>
-            )}
+            {cfg.systemPrompt === null
+              ? <p className="text-[11px] text-emerald-600">Using built-in default — click &quot;Load default to edit&quot; to customise it.</p>
+              : <p className="text-[11px] text-amber-600">Custom prompt active — click &quot;Reset to default&quot; to revert.</p>
+            }
           </CardContent></Card>
         </Section>
 
         {/* ── Greeting Template ── */}
         <Section
           title="Greeting Message"
-          description="What the agent says when it first connects. Leave blank to use the auto-generated greeting based on incident data."
+          description="What the agent says when it first connects."
           actions={
-            <button type="button" onClick={() => set('greetingTemplate', null)} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <RotateCcw className="w-3 h-3" /> Reset to default
-            </button>
+            <div className="flex items-center gap-2">
+              {cfg.greetingTemplate !== null && (
+                <button type="button" onClick={() => set('greetingTemplate', null)} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+                  <RotateCcw className="w-3 h-3" /> Reset to default
+                </button>
+              )}
+              {cfg.greetingTemplate === null && (
+                <button type="button" onClick={() => set('greetingTemplate', DEFAULT_GREETING_TEMPLATE)} className="text-[11px] text-primary hover:text-primary/80 flex items-center gap-1 font-medium">
+                  Load default to edit
+                </button>
+              )}
+            </div>
           }
         >
           <Card><CardContent className="p-5 space-y-3">
@@ -390,15 +431,15 @@ export default function IncidentAgentPage() {
               </p>
             </div>
             <textarea
-              rows={5}
-              value={cfg.greetingTemplate ?? ''}
-              onChange={e => set('greetingTemplate', e.target.value || null)}
-              placeholder={`Leave blank for auto-generated greeting.\n\nExample: I've loaded {{number}} — "{{short_description}}". Priority: {{priority}}, State: {{state}}. {{sla_summary}} How can I help you resolve this?`}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-[12px] font-mono shadow-sm resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              rows={4}
+              value={cfg.greetingTemplate ?? DEFAULT_GREETING_TEMPLATE}
+              onChange={e => set('greetingTemplate', e.target.value === DEFAULT_GREETING_TEMPLATE ? null : (e.target.value || null))}
+              className={`w-full rounded-md border border-input bg-background px-3 py-2 text-[12px] font-mono shadow-sm resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${cfg.greetingTemplate === null ? 'text-muted-foreground' : ''}`}
             />
-            {!cfg.greetingTemplate && (
-              <p className="text-[11px] text-emerald-600">Using auto-generated greeting (reads SLAs, attachments, and incident fields dynamically).</p>
-            )}
+            {cfg.greetingTemplate === null
+              ? <p className="text-[11px] text-emerald-600">Using built-in default — click &quot;Load default to edit&quot; to customise it.</p>
+              : <p className="text-[11px] text-amber-600">Custom greeting active — click &quot;Reset to default&quot; to revert.</p>
+            }
           </CardContent></Card>
         </Section>
 
