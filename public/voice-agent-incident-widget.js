@@ -588,11 +588,10 @@
   function applySuggestion(idx) {
     var s = suggestions[idx]; if (!s || s.applied) return;
     var tf = s.type==='form_update' ? s.field : s.type==='resolution' ? 'close_notes' : 'comments';
-    var ok = applyFormUpdate(tf, s.value);
-    if (ok) {
-      s.applied = true; renderSuggestions(); renderDetails();
-      addMessage('agent', s.type==='form_update' ? 'Updated '+fl(s.field)+' on the form.' : s.type==='resolution' ? 'Resolution notes added.' : 'Reply added to Comments.');
-    }
+    if (!ws || ws.readyState !== 1) return;
+    s.applied = true; renderSuggestions();
+    ws.send(JSON.stringify({ type: 'apply_suggestion', field: tf, value: s.value }));
+    addMessage('agent', s.type==='form_update' ? 'Saving '+fl(s.field)+'…' : s.type==='resolution' ? 'Saving resolution notes…' : 'Saving reply to caller…');
   }
 
   /* ── Status helpers ──────────────────────────────────────────────────── */
@@ -696,12 +695,11 @@
           addConfirmPrompt(m.confirmId, m.field, m.valueLabel, m.reason);
         } else if (m.type === 'form_update') {
           if (m.applyNow) {
-            var ok = applyFormUpdate(m.field, m.value);
-            if (ok) {
-              renderDetails();
-              addToast('✓ ' + fl(m.field) + ' → "' + (m.valueLabel||m.value) + '" — saving…');
-              addMessage('agent', 'Done — updated ' + fl(m.field) + ' to "' + (m.valueLabel||m.value) + '" and saved the record.');
-            }
+            // Server already persisted to SN via REST — visual-only update in browser form
+            var gfv = resolveGForm(); if (gfv) { try { gfv.setValue(m.field, m.value); } catch(e){} }
+            renderDetails();
+            var snOk = m.snUpdated !== false;
+            addToast((snOk ? '✓ ' : '⚠ ') + fl(m.field) + ' → "' + (m.valueLabel||m.value) + (snOk ? '" — saved to ServiceNow.' : '" — could not reach ServiceNow.'));
           } else {
             addSuggestion({ type:'form_update', field:m.field, value:m.value, label:'Set '+fl(m.field)+' → '+(m.valueLabel||m.value) });
           }

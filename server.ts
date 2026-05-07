@@ -589,6 +589,10 @@ app.prepare().then(() => {
         if (pipeline && msg.confirmId !== undefined) {
           pipeline.handleFieldConfirm(String(msg.confirmId), !!msg.confirmed)
         }
+      } else if (msg.type === 'apply_suggestion') {
+        if (pipeline && msg.field) {
+          pipeline.applyManualUpdate(String(msg.field), String(msg.value ?? '')).catch(() => {})
+        }
       }
     }
 

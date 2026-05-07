@@ -257,11 +257,68 @@ export class IncidentPipeline extends EventEmitter {
     const { field, value, valueLabel } = this.pendingConfirm
     this.pendingConfirm = null
     if (confirmed) {
-      this.emit('form_update', { field, value, valueLabel, applyNow: true })
+      this.applyToServiceNow(field, value).then(snOk => {
+        this.emit('form_update', { field, value, valueLabel, applyNow: true, snUpdated: snOk })
+      }).catch(() => {
+        this.emit('form_update', { field, value, valueLabel, applyNow: true, snUpdated: false })
+      })
       this.processUserMessage(`[SYSTEM] User confirmed updating ${field} to "${valueLabel}".`).catch(() => {})
     } else {
       this.processUserMessage('[SYSTEM] User declined the field update.').catch(() => {})
     }
+  }
+
+  async applyManualUpdate(field: string, value: string): Promise<void> {
+    const snOk = await this.applyToServiceNow(field, value).catch(() => false)
+    this.emit('form_update', { field, value, valueLabel: value, applyNow: true, snUpdated: snOk })
+  }
+
+  private async applyToServiceNow(field: string, value: string): Promise<boolean> {
+    if (!this.snCreds?.url || !this.ctx.sys_id) return false
+    try {
+      const { url, username, password } = this.snCreds
+      const auth = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64')
+      const result = await this.snPatch(
+        `${url}/api/now/table/incident/${this.ctx.sys_id}`,
+        auth,
+        { [field]: value }
+      )
+      const ok = !!result?.result
+      addLog(ok ? 'info' : 'warn', 'incident-pipeline', `SN PATCH ${ok ? 'OK' : 'failed'}: ${field}`, {})
+      return ok
+    } catch (e: any) {
+      addLog('warn', 'incident-pipeline', 'SN PATCH error: ' + e.message, {})
+      return false
+    }
+  }
+
+  private snPatch(url: string, auth: string, body: Record<string, string>): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const lib = require(url.startsWith('https') ? 'https' : 'http')
+      const data = JSON.stringify(body)
+      const parsed = new URL(url)
+      const opts = {
+        hostname: parsed.hostname,
+        port: parsed.port || undefined,
+        path: parsed.pathname + parsed.search,
+        method: 'PATCH',
+        headers: {
+          Authorization: auth,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'Content-Length': Buffer.byteLength(data),
+        },
+      }
+      const req = lib.request(opts, (res: any) => {
+        let body = ''
+        res.on('data', (c: any) => { body += c })
+        res.on('end', () => { try { resolve(JSON.parse(body)) } catch { resolve(null) } })
+      })
+      req.on('error', reject)
+      req.setTimeout(8000, () => { req.destroy(); reject(new Error('SN PATCH timeout')) })
+      req.write(data)
+      req.end()
+    })
   }
 
   async stop() {
@@ -531,7 +588,11 @@ VOICE RULES: Keep replies to 2–4 sentences. No markdown, no bullet points, no 
         this.messages.push({ role: 'user', content: message })
         this.emit('user_message', message)
         if (yes) {
-          this.emit('form_update', { field: pc.field, value: pc.value, valueLabel: pc.valueLabel, applyNow: true })
+          this.applyToServiceNow(pc.field, pc.value).then(snOk => {
+            this.emit('form_update', { field: pc.field, value: pc.value, valueLabel: pc.valueLabel, applyNow: true, snUpdated: snOk })
+          }).catch(() => {
+            this.emit('form_update', { field: pc.field, value: pc.value, valueLabel: pc.valueLabel, applyNow: true, snUpdated: false })
+          })
           const resp = `Done — I've updated ${FIELD_LABELS[pc.field] || pc.field} to "${pc.valueLabel}".`
           this.emit('agent_message', resp)
           await this.speakAndStream(resp)
