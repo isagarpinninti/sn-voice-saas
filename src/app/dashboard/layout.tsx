@@ -11,6 +11,7 @@ import { ToastProvider } from '@/components/ui/toast'
 import { ConfirmProvider } from '@/components/ui/confirm-dialog'
 import { PLANS, PlanKey } from '@/lib/plans'
 import { ImpersonateBanner } from '@/components/admin/impersonate-banner'
+import { isUserAdmin } from '@/lib/admin'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -37,6 +38,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const workspaceName = tenant?.company || session.user.name?.split(' ')[0] || 'ZeVox'
   const planLabel = tenant ? PLANS[tenant.plan as PlanKey]?.name || 'Free' : 'Free'
+  const adminUser = isUserAdmin(session)
 
   return (
     <ToastProvider>
@@ -110,6 +112,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             workspaceName={workspaceName}
             userEmail={session.user.email}
             userImage={session.user.image}
+            isAdmin={adminUser}
           />
           <main className="flex-1">
             <div className="max-w-[1100px] mx-auto px-8 py-8">{children}</div>

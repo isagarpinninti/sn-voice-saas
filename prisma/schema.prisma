@@ -84,6 +84,7 @@ model Tenant {
   phoneNumbers      PhoneNumber[]
   allowedCallers    AllowedCaller[]
   attachmentUploads AttachmentUpload[]
+  incidentAgentConfig IncidentAgentConfig?
 
   company           String?
 
@@ -341,6 +342,48 @@ model AttachmentUpload {
 
   @@index([token])
   @@index([tenantId, status])
+}
+
+// =====================================================
+// Incident Agent Configuration (per-tenant, all configurable fields)
+// =====================================================
+
+model IncidentAgentConfig {
+  id        String @id @default(cuid())
+  tenantId  String @unique
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // LLM
+  llmModel       String @default("llama-3.3-70b-versatile")
+  llmTemperature Float  @default(0.4)
+  llmMaxTokens   Int    @default(600)
+
+  // STT
+  sttModel    String @default("nova-3")
+  sttLanguage String @default("multi")
+
+  // TTS
+  ttsVoice String @default("aura-asteria-en")
+
+  // Agent identity
+  agentName     String @default("AI Voice Agent")
+  agentSubtitle String @default("Incident Co-Agent • Powered by AI")
+
+  // Prompts — null means "use built-in default"
+  // Supports placeholders: {{incident_fields}}, {{enriched_context}}
+  systemPrompt     String? @db.Text
+  // Supports: {{number}}, {{short_description}}, {{priority}}, {{state}}, {{sla_summary}}, {{attachment_summary}}
+  greetingTemplate String? @db.Text
+
+  // Tools
+  toolUpdateField       Boolean @default(true)
+  toolSuggestResolution Boolean @default(true)
+  toolSuggestReply      Boolean @default(true)
+  toolSearchIncidents   Boolean @default(true)
+  toolSearchKb          Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // =====================================================

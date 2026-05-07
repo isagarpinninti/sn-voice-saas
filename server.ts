@@ -516,6 +516,7 @@ app.prepare().then(() => {
     let pipeline: IncidentPipeline | null = null
     let tenantRef: any = null
     let instanceRef: any = null
+    let incidentAgentCfg: any = null
 
     ws.on('message', (data: RawData, isBinary: boolean) => {
       if (!authed) { buffer.push({ data, isBinary }); return }
@@ -547,7 +548,7 @@ app.prepare().then(() => {
           username: instanceRef.snUsername || '',
           password: instanceRef.snPassword || '',
         } : undefined
-        pipeline = new IncidentPipeline(incidentCtx, snCreds)
+        pipeline = new IncidentPipeline(incidentCtx, snCreds, incidentAgentCfg || {})
         pipeline.on('ready',   (d: any)  => { addLog('info', 'incident-pipeline', 'READY', { tenantId: tenantRef?.id }); send(ws, { type: 'ready', ...d }) })
         pipeline.on('state',   (s: string) => send(ws, { type: 'state', state: s }))
         pipeline.on('transcript', (d: any) => send(ws, { type: 'transcript', ...d }))
@@ -622,6 +623,11 @@ app.prepare().then(() => {
       } else {
         ws.close(4003, 'Invalid token'); return
       }
+
+      // Load per-tenant incident agent config (falls back to pipeline defaults if not set)
+      incidentAgentCfg = await db.incidentAgentConfig.findUnique({
+        where: { tenantId: tenantRef.id },
+      }).catch(() => null)
 
       db.apiToken.update({ where: { id: apiToken.id }, data: { lastUsed: new Date() } }).catch(() => {})
       addLog('info', 'incident-ws', `Authed. TenantId=${tenantRef.id} Instance=${instanceRef?.id || 'none'}`, { tenantId: tenantRef.id })

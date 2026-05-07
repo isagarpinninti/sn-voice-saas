@@ -9,6 +9,24 @@ import { addLog } from '../lib/log-store'
 type IncidentCtx = Record<string, string>
 type SnCreds = { url: string; username: string; password: string }
 
+export interface IncidentAgentCfg {
+  llmModel?:             string
+  llmTemperature?:       number
+  llmMaxTokens?:         number
+  sttModel?:             string
+  sttLanguage?:          string
+  ttsVoice?:             string
+  agentName?:            string
+  agentSubtitle?:        string
+  systemPrompt?:         string | null
+  greetingTemplate?:     string | null
+  toolUpdateField?:      boolean
+  toolSuggestResolution?: boolean
+  toolSuggestReply?:     boolean
+  toolSearchIncidents?:  boolean
+  toolSearchKb?:         boolean
+}
+
 const STATE_LABELS: Record<string, string> = {
   '1': 'New', '2': 'In Progress', '3': 'On Hold',
   '6': 'Resolved', '7': 'Closed', '8': 'Canceled',
@@ -113,6 +131,7 @@ const INCIDENT_TOOLS = [
 export class IncidentPipeline extends EventEmitter {
   private ctx: IncidentCtx
   private snCreds: SnCreds | null = null
+  private cfg: IncidentAgentCfg
   private messages: any[] = []
   private stt: any = null
   private ttsWs: any = null
@@ -139,10 +158,11 @@ export class IncidentPipeline extends EventEmitter {
     confirmId: string; field: string; value: string; valueLabel: string
   } | null = null
 
-  constructor(ctx: IncidentCtx, snCreds?: SnCreds) {
+  constructor(ctx: IncidentCtx, snCreds?: SnCreds, cfg?: IncidentAgentCfg) {
     super()
     this.ctx = ctx || {}
     this.snCreds = snCreds || null
+    this.cfg = cfg || {}
   }
 
   /* ── Public entry point ─────────────────────────────────────────────── */
@@ -154,7 +174,9 @@ export class IncidentPipeline extends EventEmitter {
       const { DeepgramClient } = require('@deepgram/sdk')
       const dgClient = new DeepgramClient(dgKey)
       this.stt = await dgClient.listen.v1.connect({
-        model: 'nova-3', language: 'multi', smart_format: true, punctuate: true,
+        model:    this.cfg.sttModel    || 'nova-3',
+        language: this.cfg.sttLanguage || 'multi',
+        smart_format: true, punctuate: true,
         interim_results: true, utterance_end_ms: 1500, endpointing: 800,
         encoding: 'linear16', sample_rate: 16000, channels: 1,
       })
@@ -162,7 +184,7 @@ export class IncidentPipeline extends EventEmitter {
       if (typeof this.stt.connect === 'function') await this.stt.connect()
 
       this.ttsKey = dgKey
-      this.ttsVoice = process.env.INCIDENT_TTS_VOICE || 'aura-asteria-en'
+      this.ttsVoice = this.cfg.ttsVoice || process.env.INCIDENT_TTS_VOICE || 'aura-asteria-en'
       await this.connectTtsWs()
 
       const llmKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY
@@ -173,7 +195,7 @@ export class IncidentPipeline extends EventEmitter {
         apiKey: llmKey,
         baseURL: useGroq ? (process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1') : undefined,
       })
-      this.model = process.env.INCIDENT_LLM_MODEL || (useGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini')
+      this.model = this.cfg.llmModel || process.env.INCIDENT_LLM_MODEL || (useGroq ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini')
 
       // Fetch enriched context: SLAs, attachments, related records, journal entries
       let enrichedContext = ''
@@ -372,10 +394,45 @@ export class IncidentPipeline extends EventEmitter {
   }
 
   /* ── Proactive greeting ─────────────────────────────────────────────── */
-  private buildGreeting(): string {
-    const inc   = this.ctx
-    const parts: string[] = []
+  private buildSlaSummary(): string {
+    if (!this.slaInfo.length) return ''
+    const breached = this.slaInfo.filter((s: any) => s.has_breached === 'true')
+    const active   = this.slaInfo.filter((s: any) => s.has_breached !== 'true' && s.time_left)
+    if (breached.length)
+      return `Warning — the ${breached.map((s: any) => s['sla.name'] || 'SLA').join(' and ')} ${breached.length > 1 ? 'have' : 'has'} already breached.`
+    if (active.length) {
+      const s: any = active[0]
+      const pct    = s.percentage ? Math.round(parseFloat(s.percentage)) : 0
+      return `The ${s['sla.name'] || 'SLA'} is ${pct}% elapsed with ${s.time_left} remaining.`
+    }
+    return ''
+  }
 
+  private buildAttachmentSummary(): string {
+    if (!this.attachmentInfo.length) return ''
+    const readable = this.attachmentInfo.filter(a => a.content)
+    if (readable.length)
+      return `I've read ${readable.length} text attachment${readable.length > 1 ? 's' : ''}: ${readable.map(a => a.name).join(', ')}.`
+    const names = this.attachmentInfo.slice(0, 3).map(a => a.name).join(', ')
+    return `There ${this.attachmentInfo.length === 1 ? 'is' : 'are'} ${this.attachmentInfo.length} attachment${this.attachmentInfo.length > 1 ? 's' : ''}: ${names}.`
+  }
+
+  private buildGreeting(): string {
+    const inc = this.ctx
+
+    // Custom greeting template — substitute placeholders
+    if (this.cfg.greetingTemplate) {
+      return this.cfg.greetingTemplate
+        .replace('{{number}}',              inc.number || 'this incident')
+        .replace('{{short_description}}',   inc.short_description || '')
+        .replace('{{priority}}',            PRIORITY_LABELS[inc.priority] || inc.priority || '')
+        .replace('{{state}}',               STATE_LABELS[inc.state] || inc.state || '')
+        .replace('{{sla_summary}}',         this.buildSlaSummary())
+        .replace('{{attachment_summary}}',  this.buildAttachmentSummary())
+    }
+
+    // Built-in default greeting
+    const parts: string[] = []
     let opening = `I've loaded ${inc.number || 'this incident'}`
     if (inc.short_description) opening += ` — "${inc.short_description}"`
     const priority = PRIORITY_LABELS[inc.priority] || ''
@@ -383,32 +440,13 @@ export class IncidentPipeline extends EventEmitter {
     if (priority || state) opening += `. ${[priority, state].filter(Boolean).join(', ')}.`
     parts.push(opening)
 
-    // SLA highlights
-    if (this.slaInfo.length) {
-      const breached = this.slaInfo.filter((s: any) => s.has_breached === 'true')
-      const active   = this.slaInfo.filter((s: any) => s.has_breached !== 'true' && s.time_left)
-      if (breached.length) {
-        parts.push(`Warning — the ${breached.map((s: any) => s['sla.name'] || 'SLA').join(' and ')} ${breached.length > 1 ? 'have' : 'has'} already breached.`)
-      } else if (active.length) {
-        const s: any = active[0]
-        const pct    = s.percentage ? Math.round(parseFloat(s.percentage)) : 0
-        parts.push(`The ${s['sla.name'] || 'SLA'} is ${pct}% elapsed with ${s.time_left} remaining.`)
-      }
-    }
+    const slaSummary = this.buildSlaSummary()
+    if (slaSummary) parts.push(slaSummary)
 
-    // Attachments
-    if (this.attachmentInfo.length) {
-      const readable = this.attachmentInfo.filter(a => a.content)
-      if (readable.length) {
-        parts.push(`I've read ${readable.length} text attachment${readable.length > 1 ? 's' : ''}: ${readable.map(a => a.name).join(', ')}.`)
-      } else {
-        const names = this.attachmentInfo.slice(0, 3).map(a => a.name).join(', ')
-        parts.push(`There ${this.attachmentInfo.length === 1 ? 'is' : 'are'} ${this.attachmentInfo.length} attachment${this.attachmentInfo.length > 1 ? 's' : ''}: ${names}.`)
-      }
-    }
+    const attSummary = this.buildAttachmentSummary()
+    if (attSummary) parts.push(attSummary)
 
-    // Related CI / service
-    if (this.relatedInfo.ci)      parts.push(`The affected CI is ${this.relatedInfo.ci}.`)
+    if (this.relatedInfo.ci)           parts.push(`The affected CI is ${this.relatedInfo.ci}.`)
     else if (this.relatedInfo.service) parts.push(`Business service: ${this.relatedInfo.service}.`)
 
     parts.push('What would you like to tackle first?')
@@ -416,7 +454,7 @@ export class IncidentPipeline extends EventEmitter {
   }
 
   /* ── System prompt ──────────────────────────────────────────────────── */
-  private buildSystemPrompt(enrichedContext: string): string {
+  private buildIncidentFieldsBlock(): string {
     const lines: string[] = []
     for (const [k, v] of Object.entries(this.ctx)) {
       if (!v || k === 'sys_id' || k === 'state_display') continue
@@ -426,19 +464,39 @@ export class IncidentPipeline extends EventEmitter {
       if (k === 'urgency')  val = URGENCY_LABELS[val]  || val
       lines.push(`  ${FIELD_LABELS[k] || k}: ${val}`)
     }
+    return lines.length ? lines.join('\n') : '  (No form data captured)'
+  }
 
-    return `You are a dedicated Incident Resolution Co-Agent embedded in ServiceNow. You are assisting the ASSIGNED AGENT working to resolve this ticket — not the end user / caller. Act as a knowledgeable co-worker who has already read all the details.
-
-CURRENT INCIDENT:
-${lines.length ? lines.join('\n') : '  (No form data captured)'}
-${enrichedContext ? '\n' + enrichedContext : ''}
-
-FIELD VALUE REFERENCE — always use these exact raw values in update_incident_field, never the label:
+  private static readonly FIELD_VALUE_REFERENCE = `FIELD VALUE REFERENCE — always use these exact raw values in update_incident_field, never the label:
   State:    1=New  2=In Progress  3=On Hold  6=Resolved  7=Closed  8=Canceled
   Priority: 1=Critical  2=High  3=Moderate  4=Low
   Urgency:  1=High  2=Medium  3=Low
   Impact:   1=High  2=Medium  3=Low
-Example: to mark Resolved → field="state", value="6", value_label="Resolved"
+Example: to mark Resolved → field="state", value="6", value_label="Resolved"`
+
+  private buildSystemPrompt(enrichedContext: string): string {
+    const incidentFields = this.buildIncidentFieldsBlock()
+
+    // Use custom template if configured — substitute placeholders
+    if (this.cfg.systemPrompt) {
+      return this.cfg.systemPrompt
+        .replace('{{incident_fields}}',    incidentFields)
+        .replace('{{enriched_context}}',   enrichedContext || '')
+        .replace('{{field_value_reference}}', IncidentPipeline.FIELD_VALUE_REFERENCE)
+        // Always append field reference if placeholder not present (safety net)
+        + (this.cfg.systemPrompt.includes('{{field_value_reference}}')
+            ? ''
+            : '\n\n' + IncidentPipeline.FIELD_VALUE_REFERENCE)
+    }
+
+    // Built-in default prompt
+    return `You are a dedicated Incident Resolution Co-Agent embedded in ServiceNow. You are assisting the ASSIGNED AGENT working to resolve this ticket — not the end user / caller. Act as a knowledgeable co-worker who has already read all the details.
+
+CURRENT INCIDENT:
+${incidentFields}
+${enrichedContext ? '\n' + enrichedContext : ''}
+
+${IncidentPipeline.FIELD_VALUE_REFERENCE}
 
 YOUR ROLE:
 1. You have reviewed all incident details, SLAs, attachments, and recent activity — reference them proactively
@@ -597,6 +655,21 @@ VOICE RULES: Keep replies to 2–4 sentences. No markdown, no bullet points, no 
     }
   }
 
+  /* ── Active tools filter ────────────────────────────────────────────── */
+  private buildActiveTools() {
+    const nameMap: Record<string, keyof IncidentAgentCfg> = {
+      update_incident_field:  'toolUpdateField',
+      suggest_resolution_note:'toolSuggestResolution',
+      suggest_reply_to_caller:'toolSuggestReply',
+      search_similar_incidents:'toolSearchIncidents',
+      search_knowledge_base:  'toolSearchKb',
+    }
+    return INCIDENT_TOOLS.filter(t => {
+      const key = nameMap[t.function.name]
+      return key ? (this.cfg[key] !== false) : true
+    })
+  }
+
   /* ── LLM streaming ──────────────────────────────────────────────────── */
   private async callLLM(noTools = false): Promise<{ text: string; toolCalls: any[] }> {
     const system  = this.messages.filter(m => m.role === 'system')
@@ -605,12 +678,12 @@ VOICE RULES: Keep replies to 2–4 sentences. No markdown, no bullet points, no 
     const params: any = {
       model: this.model,
       messages: [...system, ...history],
-      temperature: 0.4,
-      max_tokens: 600,
+      temperature: this.cfg.llmTemperature ?? 0.4,
+      max_tokens:  this.cfg.llmMaxTokens  ?? 600,
       stream: true,
     }
     if (!noTools) {
-      params.tools = INCIDENT_TOOLS
+      params.tools = this.buildActiveTools()
       params.tool_choice = 'auto'
       params.parallel_tool_calls = false
     }
