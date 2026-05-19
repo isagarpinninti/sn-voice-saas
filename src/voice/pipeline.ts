@@ -203,7 +203,7 @@ export class VoicePipeline extends EventEmitter {
     this.audioFormat = opts.audioFormat || 'widget'
   }
 
-  // Incident context passed from the voice-agent-incident-widget.
+  // Incident context optionally passed when starting a session from an incident form.
   // Stored so it can be injected into the system prompt and referenced by built-in tools.
   private incidentContext: Record<string, string> = {}
 

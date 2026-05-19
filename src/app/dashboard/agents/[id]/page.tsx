@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
 import { VOICES, findVoice } from '@/lib/voices'
-import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2 } from 'lucide-react'
+import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check } from 'lucide-react'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
 
@@ -33,6 +33,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   // Voice state
   const [currentVoice, setCurrentVoice] = useState('aura-asteria-en')
@@ -136,6 +137,15 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  function copySnippet() {
+    if (!agent?.token) return
+    const snippet = `<script>window.ZEVOX_TOKEN = "${agent.token}";</script>\n<script src="${APP_URL}/widget.js"></script>`
+    navigator.clipboard.writeText(snippet).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
   async function handleDelete() {
     setDeleting(true)
     try {
@@ -219,6 +229,28 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
             </CardContent>
           </Card>
         </Section>
+
+        {/* Embed snippet */}
+        {agent.token && (
+          <Section title="Embed snippet" description="Paste into any SN UI Page, Workspace widget, or web page to load this specific agent.">
+            <Card>
+              <CardContent className="p-5 space-y-3">
+                <div className="flex items-start gap-2">
+                  <pre className="flex-1 px-3 py-2.5 rounded-md bg-background border border-border text-[11px] text-foreground/80 font-mono overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+{`<script>window.ZEVOX_TOKEN = "${agent.token}";</script>
+<script src="${APP_URL}/widget.js"></script>`}
+                  </pre>
+                  <Button type="button" variant="outline" size="sm" className="shrink-0 mt-0.5" onClick={copySnippet}>
+                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground/70">
+                  This token is scoped to <strong>{agent.name}</strong> — calls from this snippet always route to this agent, bypassing the orchestrator.
+                </p>
+              </CardContent>
+            </Card>
+          </Section>
+        )}
 
         {/* Voice Selection */}
         <Section title="Voice" description="Pick the voice this agent speaks with. Saved directly to ServiceNow. Click to preview.">

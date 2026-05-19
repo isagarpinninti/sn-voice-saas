@@ -205,6 +205,7 @@ app.prepare().then(() => {
     let pipeline: VoicePipeline | null = null
     let tenantRef: any = null
     let instanceRef: any = null
+    let pinnedAgentSnId: string | undefined = undefined
 
     ws.on('message', (data: RawData, isBinary: boolean) => {
       if (!authed) {
@@ -251,10 +252,10 @@ app.prepare().then(() => {
       let msg: any
       try { msg = JSON.parse(str) } catch { return }
       if (msg.type === 'start') {
-        addLog('info', 'pipeline', 'STARTING (orchestrator will pick agent)...', { tenantId: tenantRef.id })
+        addLog('info', 'pipeline', pinnedAgentSnId ? 'STARTING (pinned agent: ' + pinnedAgentSnId.substring(0, 8) + '...)' : 'STARTING (orchestrator will pick agent)...', { tenantId: tenantRef.id })
         const incidentCtx = (msg.incidentContext && typeof msg.incidentContext === 'object') ? msg.incidentContext : undefined
         if (incidentCtx?.number) addLog('info', 'pipeline', 'Incident context: ' + incidentCtx.number, { tenantId: tenantRef.id })
-        pipeline.start(undefined, endUserSnId || undefined, msg.originPortal, incidentCtx)
+        pipeline.start(pinnedAgentSnId, endUserSnId || undefined, msg.originPortal, incidentCtx)
           .then(() => addLog('info', 'pipeline', 'Started OK', { tenantId: tenantRef.id }))
           .catch((e: any) => {
             addLog('error', 'pipeline', 'FAIL: ' + e.message, { tenantId: tenantRef.id, data: { stack: e.stack?.substring(0, 500) } })
@@ -271,14 +272,22 @@ app.prepare().then(() => {
       try {
         const apiToken = await db.apiToken.findUnique({
           where: { token },
-          include: { instance: { include: { tenant: true } }, tenant: true },
+          include: {
+            instance: { include: { tenant: true } },
+            agent: { include: { instance: { include: { tenant: true } } } },
+            tenant: true,
+          },
         })
         if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
 
-        // Prefer instance-linked token, fallback to tenant's first instance
-        if (apiToken.instance && apiToken.instance.tenant) {
+        // Resolution order: instance-token → agent-token → tenant-fallback
+        if (apiToken.instance?.tenant) {
           instanceRef = apiToken.instance
           tenantRef = apiToken.instance.tenant
+        } else if (apiToken.agent?.instance?.tenant) {
+          instanceRef = apiToken.agent.instance
+          tenantRef = apiToken.agent.instance.tenant
+          if (apiToken.agent.snAgentId) pinnedAgentSnId = apiToken.agent.snAgentId
         } else if (apiToken.tenant) {
           tenantRef = apiToken.tenant
           instanceRef = await db.instance.findFirst({

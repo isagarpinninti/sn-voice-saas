@@ -32,11 +32,17 @@ export async function POST(req: Request) {
   })
 
   if (existing) {
+    const existingToken = existing.tokens[0]?.token ?? null
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com').replace(/\/$/, '')
+    const existingSnippet = existingToken
+      ? `<script>window.ZEVOX_TOKEN = "${existingToken}";</script>\n<script src="${appUrl}/widget.js"></script>`
+      : null
     return NextResponse.json({
       id: existing.id,
       name: existing.name,
       snAgentId: existing.snAgentId,
-      token: existing.tokens[0]?.token ?? null,
+      token: existingToken,
+      embed_snippet: existingSnippet,
       message: 'Agent already exists — returned existing record',
     })
   }
@@ -55,19 +61,34 @@ export async function POST(req: Request) {
     )
   }
 
+  const token =
+    'sk_live_' +
+    Array.from({ length: 32 }, () =>
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
+    ).join('')
+
   const agent = await db.agent.create({
     data: {
       tenantId: auth.tenantId,
       instanceId: auth.instanceId,
       name,
       snAgentId,
+      tokens: {
+        create: { tenantId: auth.tenantId, name: 'Default', token },
+      },
     },
+    include: { tokens: true },
   })
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com').replace(/\/$/, '')
+  const embedSnippet = `<script>window.ZEVOX_TOKEN = "${token}";</script>\n<script src="${appUrl}/widget.js"></script>`
 
   return NextResponse.json({
     id: agent.id,
     name: agent.name,
     snAgentId: agent.snAgentId,
+    token,
+    embed_snippet: embedSnippet,
     message: 'Agent created successfully',
   })
 }
