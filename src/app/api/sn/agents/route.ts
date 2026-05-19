@@ -11,15 +11,21 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { authenticateSnRequest } from '@/lib/sn-auth'
+import { addLog } from '@/lib/log-store'
 
 // ── POST — Create agent from ServiceNow ─────────────────────────────────
 export async function POST(req: Request) {
   const auth = await authenticateSnRequest(req)
-  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!auth) {
+    addLog('warn', 'sn', 'POST /api/sn/agents — Unauthorized')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const body = await req.json().catch(() => null)
   const snAgentId = (body?.sn_agent_id || '').trim()
   const name = (body?.name || '').trim() || 'Untitled Agent'
+
+  addLog('info', 'sn', `POST /api/sn/agents — tenant=${auth.tenantId} sn_agent_id=${snAgentId || '(none)'} name="${name}"`)
 
   if (!snAgentId) {
     return NextResponse.json({ error: 'sn_agent_id is required' }, { status: 400 })
@@ -33,16 +39,12 @@ export async function POST(req: Request) {
 
   if (existing) {
     const existingToken = existing.tokens[0]?.token ?? null
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com').replace(/\/$/, '')
-    const existingSnippet = existingToken
-      ? `<script>window.ZEVOX_TOKEN = "${existingToken}";</script>\n<script src="${appUrl}/widget.js"></script>`
-      : null
+    addLog('info', 'sn', `POST /api/sn/agents — agent exists id=${existing.id} token=${existingToken ? 'yes' : 'no'}`)
     return NextResponse.json({
       id: existing.id,
       name: existing.name,
       snAgentId: existing.snAgentId,
       token: existingToken,
-      embed_snippet: existingSnippet,
       message: 'Agent already exists — returned existing record',
     })
   }
@@ -80,15 +82,13 @@ export async function POST(req: Request) {
     include: { tokens: true },
   })
 
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com').replace(/\/$/, '')
-  const embedSnippet = `<script>window.ZEVOX_TOKEN = "${token}";</script>\n<script src="${appUrl}/widget.js"></script>`
+  addLog('info', 'sn', `POST /api/sn/agents — created agent id=${agent.id} token=${token.slice(0, 14)}...`)
 
   return NextResponse.json({
     id: agent.id,
     name: agent.name,
     snAgentId: agent.snAgentId,
     token,
-    embed_snippet: embedSnippet,
     message: 'Agent created successfully',
   })
 }
