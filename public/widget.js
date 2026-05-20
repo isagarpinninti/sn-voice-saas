@@ -23,30 +23,36 @@
     if(!FM)return null
     try{
       var ctx={tableName:'',sysId:'',fields:{}}
-      // Classic SN form API
+      // Classic SN form API — reads whatever fields the form view currently shows,
+      // so it works generically for incidents, work orders, change requests, custom apps, etc.
       if(window.g_form){
-        try{ctx.tableName=g_form.getTableName?g_form.getTableName():''}catch(e){}
-        try{ctx.sysId=g_form.getUniqueValue?g_form.getUniqueValue():''}catch(e){}
-        var flds=['number','short_description','description','state','priority','urgency',
-                  'category','subcategory','assignment_group','assigned_to','caller_id',
-                  'opened_by','opened_at','cmdb_ci','location','impact','close_notes',
-                  'u_work_order','work_order_task','parent','requested_for']
+        try{ctx.tableName=g_form.getTableName?g_form.getTableName():''}catch{}
+        try{ctx.sysId=g_form.getUniqueValue?g_form.getUniqueValue():''}catch{}
+        // getFieldNames() returns every field currently on this form view — fully dynamic
+        var flds=[]
+        try{if(g_form.getFieldNames)flds=g_form.getFieldNames()||[]}catch{}
+        // Fallback: common baseline fields if getFieldNames is unavailable
+        if(!flds.length)flds=['number','short_description','description','state','priority',
+          'urgency','category','subcategory','assignment_group','assigned_to','caller_id',
+          'opened_by','opened_at','cmdb_ci','location','impact']
         for(var i=0;i<flds.length;i++){
           try{
-            var dv=g_form.getDisplayValue?g_form.getDisplayValue(flds[i]):null
-            var v=g_form.getValue?g_form.getValue(flds[i]):null
-            var label=dv&&dv!==v?dv:v
-            if(label!==null&&label!==undefined&&label!=='')ctx.fields[flds[i]]=label
-          }catch(e){}
+            var fn=flds[i]
+            var dv=g_form.getDisplayValue?g_form.getDisplayValue(fn):null
+            var v=g_form.getValue?g_form.getValue(fn):null
+            var label=dv!==null&&dv!==''?dv:v
+            if(label!==null&&label!==undefined&&label!=='')
+              ctx.fields[fn]=String(label).substring(0,300)
+          }catch{}
         }
       }
       // Workspace / Next Experience fallback
       if(!ctx.tableName&&window.NOW&&window.NOW.form){
-        try{ctx.tableName=NOW.form.tableName||''}catch(e){}
-        try{ctx.sysId=NOW.form.sysId||''}catch(e){}
+        try{ctx.tableName=NOW.form.tableName||''}catch{}
+        try{ctx.sysId=NOW.form.sysId||''}catch{}
       }
       return(ctx.sysId||ctx.tableName)?ctx:null
-    }catch(e){return null}
+    }catch{return null}
   }
 
   // ── Detect the end-user's ServiceNow sys_id ──
@@ -57,7 +63,7 @@
       if(window.g_user&&window.g_user.userID)return window.g_user.userID
       if(window.NOW&&window.NOW.user&&window.NOW.user.userID)return window.NOW.user.userID
       if(window.NOW&&window.NOW.user_id)return window.NOW.user_id
-    }catch(e){}
+    }catch{}
     return ''
   }
   var SN_USER_ID=getSnUserId()
@@ -76,7 +82,7 @@
       if(m)return m[1]
       if(window.ZEVOX_PORTAL)return String(window.ZEVOX_PORTAL).toLowerCase()
       if(window.ZeVoxConfig&&window.ZeVoxConfig.portal)return String(window.ZeVoxConfig.portal).toLowerCase()
-    }catch(e){}
+    }catch{}
     return ''
   }
 
@@ -92,7 +98,7 @@
     var blocked=[]
     urls.forEach(function(u){
       var w=null
-      try{w=window.open(resolveUrl(u.url),'_blank','noopener')}catch(e){}
+      try{w=window.open(resolveUrl(u.url),'_blank','noopener')}catch{}
       if(!w)blocked.push(u)
     })
     if(blocked.length){
@@ -104,7 +110,7 @@
   function flushPendingNav(){
     if(!pendingNavUrls.length)return
     var queue=pendingNavUrls;pendingNavUrls=[]
-    queue.forEach(function(u){try{window.open(resolveUrl(u.url),'_blank','noopener')}catch(e){}})
+    queue.forEach(function(u){try{window.open(resolveUrl(u.url),'_blank','noopener')}catch{}})
   }
 
   // ── AudioWorklet for smooth streaming playback ──
@@ -279,7 +285,7 @@
   <div id="zv-br"></div>
 </div>`
 
-    var launcher=g('zv-launcher'),orb=g('zv-orb'),root=g('zv'),card=g('zv-card'),orbLg=g('zv-orb-lg')
+    var orb=g('zv-orb'),root=g('zv'),card=g('zv-card'),orbLg=g('zv-orb-lg')
     root.style[C.pos==='left'?'left':'right']='20px'
     if(C.pos==='left'){card.style.position='absolute';card.style.bottom='0';card.style.left='0'}
 
@@ -516,14 +522,14 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
           else if(m.type==='attachment_requested')showAttachmentRequest(m.url,m.reason)
           else if(m.type==='error'){setSt('Error',m.message);endCallGraceful()}
           else if(m.type==='ended')endCallGraceful()
-        }catch(e){}
+        }catch{}
       }
       ws.onclose=function(ev){if(active){if(ev.code!==1000)setSt('Connection lost','');setTimeout(function(){if(active)endCall()},1500)}}
-    }catch(e){setSt('Failed',e.message);setTimeout(endCall,2000)}
+    }catch(err){setSt('Failed',err.message);setTimeout(endCall,2000)}
   }
 
   function endCall(){
-    try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch(e){}
+    try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch{}
     ws=null;stopMic();clearAudio();active=false;muted=false;setRing(false);setWave(false)
     pendingNavUrls=[]
     if(FM){
@@ -544,7 +550,7 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
     setWave(false)
     setSt('Call ending...','')
     setTimeout(function(){
-      try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch(e){}
+      try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch{}
       ws=null
       clearAudio()
       muted=false
