@@ -12,6 +12,7 @@ import { ConfirmProvider } from '@/components/ui/confirm-dialog'
 import { PLANS, PlanKey } from '@/lib/plans'
 import { ImpersonateBanner } from '@/components/admin/impersonate-banner'
 import { isUserAdmin } from '@/lib/admin'
+import { ShieldCheck } from 'lucide-react'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -113,6 +114,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
             userEmail={session.user.email}
             userImage={session.user.image}
             isAdmin={adminUser}
+            rightSlot={
+              adminUser ? (
+                <Link
+                  href="/admin/subscriptions"
+                  className="inline-flex items-center gap-1.5 px-3 h-8 rounded-md bg-destructive/10 border border-destructive/20 text-[12px] font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Admin Portal
+                </Link>
+              ) : undefined
+            }
           />
           <main className="flex-1">
             <div className="max-w-[1100px] mx-auto px-8 py-8">{children}</div>

@@ -17,32 +17,46 @@ type Props = {
   userId: string
   currentPlan: string
   currentMinutes: number
+  currentExpiresAt?: string | null
 }
 
-export function TenantActions({ tenantId, userId, currentPlan, currentMinutes }: Props) {
+function toInputDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  return new Date(iso).toISOString().slice(0, 10)
+}
+
+export function TenantActions({ tenantId, userId, currentPlan, currentMinutes, currentExpiresAt }: Props) {
   const router = useRouter()
   const { toast } = useToast()
   const confirm = useConfirm()
   const [plan, setPlan] = useState(currentPlan)
   const [minutes, setMinutes] = useState(currentMinutes)
+  const [expiresAt, setExpiresAt] = useState<string>(toInputDate(currentExpiresAt))
   const [busy, setBusy] = useState(false)
 
-  const dirty = plan !== currentPlan || minutes !== currentMinutes
+  const dirty =
+    plan !== currentPlan ||
+    minutes !== currentMinutes ||
+    expiresAt !== toInputDate(currentExpiresAt)
 
   async function save() {
     setBusy(true)
     try {
+      const body: Record<string, unknown> = { plan, minutes_per_month: minutes }
+      // Send expiry date — null clears it (permanent access on selected plan)
+      body.plan_expires_at = expiresAt ? new Date(expiresAt).toISOString() : null
+
       const res = await fetch(`/api/admin/tenants/${tenantId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ plan, minutes_per_month: minutes }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         toast(err.error || 'Update failed', 'error')
         return
       }
-      toast('Tenant updated', 'success')
+      toast('Subscription updated', 'success')
       router.refresh()
     } finally {
       setBusy(false)
@@ -131,6 +145,34 @@ export function TenantActions({ tenantId, userId, currentPlan, currentMinutes }:
           disabled={busy}
           className="h-9 w-28 px-3 rounded-md bg-card border border-border text-[13px] text-foreground tabular-nums focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
         />
+      </div>
+      <div>
+        <label className="block text-[10px] text-muted-foreground/70 uppercase tracking-widest font-medium mb-1.5">
+          Access expires
+        </label>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+            disabled={busy}
+            className="h-9 px-3 rounded-md bg-card border border-border text-[13px] text-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+          />
+          {expiresAt && (
+            <button
+              type="button"
+              onClick={() => setExpiresAt('')}
+              disabled={busy}
+              title="Clear — grant permanent access"
+              className="h-9 px-2 rounded-md border border-border text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              Never
+            </button>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground/60 mt-1">
+          {expiresAt ? `Expires ${new Date(expiresAt).toLocaleDateString()}` : 'No expiry — permanent access'}
+        </p>
       </div>
       <Button onClick={save} disabled={!dirty || busy} size="sm">
         <Save className="w-3.5 h-3.5 mr-1.5" />
