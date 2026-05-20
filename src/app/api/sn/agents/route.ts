@@ -154,6 +154,7 @@ export async function PATCH(req: Request) {
   const updateData: Record<string, unknown> = {}
   if (body.name !== undefined) updateData.name = body.name
   if (body.active !== undefined) updateData.active = body.active
+  if (body.tts_voice !== undefined) updateData.ttsVoice = body.tts_voice
 
   const updated = await db.agent.update({
     where: { id: agent.id },

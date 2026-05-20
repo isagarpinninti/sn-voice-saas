@@ -46,6 +46,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
     name: a.name,
     snAgentId: a.snAgentId,
     active: a.active,
+    ttsVoice: a.ttsVoice,
     createdAt: a.createdAt,
     token: a.tokens[0]?.token ?? null,
   })

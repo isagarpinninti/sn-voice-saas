@@ -20,6 +20,7 @@ interface AgentConfig {
   name: string
   snAgentId: string | null
   active: boolean
+  ttsVoice: string
   token: string | null
 }
 
@@ -52,15 +53,11 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           return
         }
         setAgent(d)
+        // Initialise voice from the agent record (ttsVoice is kept in sync by the SN BR)
+        if (d.ttsVoice) setCurrentVoice(d.ttsVoice)
       })
       .catch(() => toast('Failed to load agent', 'error'))
       .finally(() => setLoading(false))
-
-    // Load current voice from SN
-    fetch(`/api/agents/${id}/voice`)
-      .then(r => r.json())
-      .then(d => { if (d.voice) setCurrentVoice(d.voice) })
-      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -106,7 +103,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
       })
       const data = await res.json()
       if (res.ok) {
-        toast('Voice updated on ServiceNow', 'success')
+        toast(data.snWarning || 'Voice updated', 'success')
       } else {
         toast(data.error || 'Failed to update voice', 'error')
       }
