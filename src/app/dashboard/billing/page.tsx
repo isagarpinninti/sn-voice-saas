@@ -31,9 +31,13 @@ export default function BillingPage() {
         body: JSON.stringify({ plan: planKey }),
       })
       const data = await res.json()
-      if (data.checkoutUrl) window.location.href = data.checkoutUrl
-      else if (data.message) { toast(data.message, 'success'); setCurrentPlan(planKey) }
-    } catch { toast('Failed to start checkout', 'error') }
+      if (data.message) {
+        toast(data.message, 'success')
+        setCurrentPlan(planKey)
+      } else if (data.error) {
+        toast(data.error, 'error')
+      }
+    } catch { toast('Failed to update plan', 'error') }
     finally { setLoading(null) }
   }
 
@@ -42,8 +46,8 @@ export default function BillingPage() {
   return (
     <div>
       <PageHeader
-        title="Billing"
-        description="Manage your subscription, view plan details, and explore upgrades."
+        title="Plans"
+        description="Choose the plan that fits your needs. Changes apply immediately."
       />
 
       {/* Current plan banner */}
@@ -53,10 +57,11 @@ export default function BillingPage() {
             <p className="text-[10px] text-muted-foreground/80 uppercase tracking-widest font-medium mb-1">Current plan</p>
             <div className="flex items-baseline gap-2">
               <h2 className="text-[24px] font-semibold tracking-tight text-foreground">{current.name}</h2>
-              <span className="text-[14px] text-muted-foreground">${current.price}/mo</span>
+              <Badge variant={currentPlan === 'FREE' ? 'secondary' : 'success'}>Active</Badge>
             </div>
             <p className="text-[12px] text-muted-foreground mt-1">
-              {current.minutesPerMonth.toLocaleString()} minutes included{current.price === 0 ? ' (one-time)' : ' per month'}
+              {current.minutesPerMonth.toLocaleString()} minutes
+              {currentPlan === 'FREE' ? ' (one-time trial)' : ' per month'}
             </p>
           </div>
           <a href="/dashboard/usage" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
@@ -116,9 +121,11 @@ export default function BillingPage() {
                       className="w-full"
                     >
                       {loading === key
-                        ? 'Processing...'
+                        ? 'Activating...'
                         : plan.price > Number(PLANS[currentPlan as PlanKey]?.price || 0)
-                        ? 'Upgrade'
+                        ? plan.cta
+                        : key === 'FREE'
+                        ? 'Switch to Free'
                         : 'Switch'}
                     </Button>
                   )}
@@ -154,13 +161,13 @@ export default function BillingPage() {
 
       {/* FAQ */}
       <div className="mt-10">
-        <Section title="FAQ" description="Common questions about plans and billing.">
+        <Section title="FAQ" description="Common questions about plans and features.">
           <Card>
             <CardContent className="p-6">
               <div className="grid md:grid-cols-2 gap-x-8 gap-y-5">
                 {[
-                  { q: 'What happens at the call limit?', a: 'Free plan: paused until next month. Paid plans: overage at $0.15/min (Pro) or $0.08/min (Enterprise).' },
-                  { q: 'Can I cancel anytime?', a: 'Yes. Access continues until the end of the billing period. No cancellation fees.' },
+                  { q: 'What happens at the call limit?', a: 'Free trial: paused once the 50-minute one-time allowance is used. Pro and Premium plans include monthly minutes that reset each period.' },
+                  { q: 'Can I switch plans anytime?', a: 'Yes. Click any plan below and it activates immediately. Your usage resets to the new plan\'s limits.' },
                   { q: 'What\'s included in STT + TTS?', a: 'Deepgram Nova-3 (STT) and Aura (TTS) are included in all plans. You only provide your LLM key.' },
                   { q: 'Do you store my ServiceNow credentials?', a: 'Encrypted at rest. Never exposed in logs or API responses. Used only for gateway ↔ SN communication.' },
                 ].map(({ q, a }) => (
