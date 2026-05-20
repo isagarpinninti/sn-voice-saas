@@ -157,6 +157,11 @@ model Agent {
   tokens     ApiToken[]
   phoneNumbers PhoneNumber[]
 
+  // Per-agent usage aggregates (incremented on call close, synced back to SN)
+  totalCalls   Int      @default(0)
+  totalMinutes Float    @default(0)
+  lastCallAt   DateTime?
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

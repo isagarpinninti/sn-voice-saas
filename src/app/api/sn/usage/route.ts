@@ -1,7 +1,9 @@
 /**
  * ServiceNow → SaaS usage stats API.
  *
- * GET /api/sn/usage — returns current-month and last-30-day usage for the tenant.
+ * GET /api/sn/usage              — tenant-level stats (calls, minutes, limit, percent)
+ * GET /api/sn/usage?sn_agent_id= — same but with per-agent breakdown in `agent` key
+ *
  * Auth: Bearer <instance API key>
  */
 export const dynamic = 'force-dynamic'
@@ -49,7 +51,7 @@ export async function GET(req: Request) {
 
   const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-  return NextResponse.json({
+  const base = {
     period,
     calls,
     minutes: Math.round(minutes * 100) / 100,
@@ -60,5 +62,27 @@ export async function GET(req: Request) {
       calls: r.calls,
       minutes: Math.round(r.minutes * 100) / 100,
     })),
-  })
+  }
+
+  // Optional: per-agent stats when SN scheduled job queries for a specific agent
+  const { searchParams } = new URL(req.url)
+  const snAgentId = (searchParams.get('sn_agent_id') || '').trim()
+  if (snAgentId) {
+    const agent = await db.agent.findFirst({
+      where: { tenantId: auth.tenantId, snAgentId },
+      select: { totalCalls: true, totalMinutes: true, lastCallAt: true },
+    })
+    return NextResponse.json({
+      ...base,
+      agent: agent
+        ? {
+            calls: agent.totalCalls,
+            minutes: Math.round(agent.totalMinutes * 100) / 100,
+            lastCallAt: agent.lastCallAt?.toISOString() ?? null,
+          }
+        : null,
+    })
+  }
+
+  return NextResponse.json(base)
 }

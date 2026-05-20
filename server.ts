@@ -7,7 +7,7 @@ import { db } from './src/lib/db'
 import { addLog } from './src/lib/log-store'
 import { VoicePipeline } from './src/voice/pipeline'
 import { IncidentPipeline } from './src/voice/incident-pipeline'
-import { checkRateLimit, recordUsage } from './src/lib/rate-limiter'
+import { checkRateLimit, recordUsage, recordAgentUsage } from './src/lib/rate-limiter'
 import { notifyAdmins } from './src/lib/alerts'
 import { logAudit } from './src/lib/audit'
 import { getTelephonyProvider } from './src/lib/telephony'
@@ -206,6 +206,7 @@ app.prepare().then(() => {
     let tenantRef: any = null
     let instanceRef: any = null
     let pinnedAgentSnId: string | undefined = undefined
+    let pinnedAgentId: string | undefined = undefined
 
     ws.on('message', (data: RawData, isBinary: boolean) => {
       if (!authed) {
@@ -227,6 +228,10 @@ app.prepare().then(() => {
           addLog('info', 'pipeline', 'Usage: ' + durationMin + ' min', { tenantId: tenantRef.id })
           recordUsage(tenantRef.id, durationMin, stats.inputTokens, stats.outputTokens, stats.toolCalls)
             .catch((err: any) => addLog('error', 'pipeline', 'Usage record failed: ' + err.message, { tenantId: tenantRef.id }))
+          if (pinnedAgentId) {
+            recordAgentUsage(pinnedAgentId, durationMin)
+              .catch((err: any) => addLog('error', 'pipeline', 'Agent usage record failed: ' + err.message, { tenantId: tenantRef.id }))
+          }
         }
       }
       if (pipeline) pipeline.stop().catch(() => {})
@@ -288,6 +293,7 @@ app.prepare().then(() => {
           instanceRef = apiToken.agent.instance
           tenantRef = apiToken.agent.instance.tenant
           if (apiToken.agent.snAgentId) pinnedAgentSnId = apiToken.agent.snAgentId
+          pinnedAgentId = apiToken.agent.id
         } else if (apiToken.tenant) {
           tenantRef = apiToken.tenant
           instanceRef = await db.instance.findFirst({
