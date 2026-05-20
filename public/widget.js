@@ -156,13 +156,13 @@
   // ── Build UI ──
   function build(){
     var el=document.createElement('div');el.id='zv'
+    document.body.appendChild(el)
+    el.addEventListener('click',flushPendingNav,true)
     if(FM){
       buildForm(el)
     } else {
       buildPortal(el)
     }
-    document.body.appendChild(el)
-    el.addEventListener('click',flushPendingNav,true)
   }
 
   // ─────────────────────────────────────────────────────────────────────────
