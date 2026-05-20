@@ -15,10 +15,21 @@ type RouteContext = { params: Promise<{ id: string }> }
 async function getAgentWithInstance(userId: string, agentId: string) {
   const tenant = await db.tenant.findUnique({ where: { userId } })
   if (!tenant) return null
-  return db.agent.findFirst({
+  const agent = await db.agent.findFirst({
     where: { id: agentId, tenantId: tenant.id },
     include: { instance: true },
   })
+  if (!agent) return null
+  // If the agent has no direct instance link, fall back to the tenant's primary instance
+  // (happens when the SN API key is a tenant-level key rather than an instance-level key)
+  if (!agent.instance) {
+    const fallbackInstance = await db.instance.findFirst({
+      where: { tenantId: agent.tenantId, active: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    return { ...agent, instance: fallbackInstance }
+  }
+  return agent
 }
 
 function snAuth(instance: { snUsername: string; snPassword: string }) {

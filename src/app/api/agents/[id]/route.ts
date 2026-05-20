@@ -87,13 +87,22 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   if (data.name !== undefined) snFields.name = data.name
   if (data.active !== undefined) snFields.active = data.active
 
-  if (Object.keys(snFields).length > 0 && agent.snAgentId && agent.instance) {
+  // Fall back to tenant's primary instance if agent has no direct instance link
+  let snInstance = agent.instance
+  if (!snInstance) {
+    snInstance = await db.instance.findFirst({
+      where: { tenantId: agent.tenantId, active: true },
+      orderBy: { createdAt: 'asc' },
+    }) as typeof agent.instance
+  }
+
+  if (Object.keys(snFields).length > 0 && agent.snAgentId && snInstance) {
     fetch(
-      `${agent.instance.snInstanceUrl}/api/now/table/x_ztpas_ai_voice_a_voice_agent/${agent.snAgentId}`,
+      `${snInstance.snInstanceUrl}/api/now/table/x_ztpas_ai_voice_a_voice_agent/${agent.snAgentId}`,
       {
         method: 'PATCH',
         headers: {
-          Authorization: snBasicAuth(agent.instance.snUsername, agent.instance.snPassword),
+          Authorization: snBasicAuth(snInstance!.snUsername, snInstance!.snPassword),
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
