@@ -260,7 +260,9 @@ app.prepare().then(() => {
         addLog('info', 'pipeline', pinnedAgentSnId ? 'STARTING (pinned agent: ' + pinnedAgentSnId.substring(0, 8) + '...)' : 'STARTING (orchestrator will pick agent)...', { tenantId: tenantRef.id })
         const incidentCtx = (msg.incidentContext && typeof msg.incidentContext === 'object') ? msg.incidentContext : undefined
         if (incidentCtx?.number) addLog('info', 'pipeline', 'Incident context: ' + incidentCtx.number, { tenantId: tenantRef.id })
-        pipeline.start(pinnedAgentSnId, endUserSnId || undefined, msg.originPortal, incidentCtx)
+        const formCtx = (msg.formContext && typeof msg.formContext === 'object') ? msg.formContext : undefined
+        if (formCtx?.tableName) addLog('info', 'pipeline', 'Form context: table=' + formCtx.tableName + ' sysId=' + (formCtx.sysId || ''), { tenantId: tenantRef.id })
+        pipeline.start(pinnedAgentSnId, endUserSnId || undefined, msg.originPortal, incidentCtx, formCtx)
           .then(() => addLog('info', 'pipeline', 'Started OK', { tenantId: tenantRef.id }))
           .catch((e: any) => {
             addLog('error', 'pipeline', 'FAIL: ' + e.message, { tenantId: tenantRef.id, data: { stack: e.stack?.substring(0, 500) } })

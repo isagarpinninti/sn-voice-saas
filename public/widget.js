@@ -18,6 +18,37 @@
   var MODE=((window.ZEVOX_MODE)||(window.ZeVoxConfig&&window.ZeVoxConfig.mode)||'portal').toLowerCase()
   var FM=MODE==='form'
 
+  // ── Detect form context when widget is embedded in a SN form (form mode only) ──
+  function getFormContext(){
+    if(!FM)return null
+    try{
+      var ctx={tableName:'',sysId:'',fields:{}}
+      // Classic SN form API
+      if(window.g_form){
+        try{ctx.tableName=g_form.getTableName?g_form.getTableName():''}catch(e){}
+        try{ctx.sysId=g_form.getUniqueValue?g_form.getUniqueValue():''}catch(e){}
+        var flds=['number','short_description','description','state','priority','urgency',
+                  'category','subcategory','assignment_group','assigned_to','caller_id',
+                  'opened_by','opened_at','cmdb_ci','location','impact','close_notes',
+                  'u_work_order','work_order_task','parent','requested_for']
+        for(var i=0;i<flds.length;i++){
+          try{
+            var dv=g_form.getDisplayValue?g_form.getDisplayValue(flds[i]):null
+            var v=g_form.getValue?g_form.getValue(flds[i]):null
+            var label=dv&&dv!==v?dv:v
+            if(label!==null&&label!==undefined&&label!=='')ctx.fields[flds[i]]=label
+          }catch(e){}
+        }
+      }
+      // Workspace / Next Experience fallback
+      if(!ctx.tableName&&window.NOW&&window.NOW.form){
+        try{ctx.tableName=NOW.form.tableName||''}catch(e){}
+        try{ctx.sysId=NOW.form.sysId||''}catch(e){}
+      }
+      return(ctx.sysId||ctx.tableName)?ctx:null
+    }catch(e){return null}
+  }
+
   // ── Detect the end-user's ServiceNow sys_id ──
   function getSnUserId(){
     try{
@@ -279,7 +310,7 @@
     var col=C.color
     el.innerHTML=`
 <style>
-#zv.zv-form{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:999999;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+#zv.zv-form{position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:999999;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
 #zv.zv-form *{box-sizing:border-box}
 
 /* ── Launcher bar — horizontal, centered ── */
@@ -466,7 +497,9 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
       if(SN_USER_ID)wsUrl+='&user='+encodeURIComponent(SN_USER_ID)
       ws=new WebSocket(wsUrl);ws.binaryType='arraybuffer'
       ws.onopen=function(){
-        ws.send(JSON.stringify({type:'start',originPortal:detectOriginPortal()}))
+        var startMsg={type:'start',originPortal:detectOriginPortal()}
+        if(FM){var fc=getFormContext();if(fc)startMsg.formContext=fc}
+        ws.send(JSON.stringify(startMsg))
         startMic().catch(function(){setSt('Listening...','Mic unavailable')})
       }
       ws.onmessage=function(ev){

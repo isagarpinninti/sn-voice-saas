@@ -207,9 +207,14 @@ export class VoicePipeline extends EventEmitter {
   // Stored so it can be injected into the system prompt and referenced by built-in tools.
   private incidentContext: Record<string, string> = {}
 
-  async start(agentId?: string, endUserSnId?: string, originPortal?: string, incidentContext?: Record<string, string>) {
+  // Generic form context — any SN table record opened in form mode.
+  // Injected into the system prompt so the agent knows the record and never asks for it.
+  private formContext: { tableName?: string; sysId?: string; fields?: Record<string, string> } = {}
+
+  async start(agentId?: string, endUserSnId?: string, originPortal?: string, incidentContext?: Record<string, string>, formContext?: { tableName?: string; sysId?: string; fields?: Record<string, string> }) {
     this.originPortal = (originPortal || '').toString().toLowerCase()
     this.incidentContext = incidentContext && typeof incidentContext === 'object' ? incidentContext : {}
+    this.formContext = formContext && typeof formContext === 'object' ? formContext : {}
     console.log(`[Pipeline] Starting. Instance: ${this.tenant.snInstanceUrl}` + (agentId ? `, Agent: ${agentId}` : ', orchestrator mode') + (endUserSnId ? `, EndUser: ${endUserSnId}` : '') + (this.originPortal ? `, Portal: ${this.originPortal}` : '') + (this.incidentContext.number ? `, Incident: ${this.incidentContext.number}` : ''))
 
     if (!this.tenant.snInstanceUrl || !this.tenant.snUsername) {
@@ -343,6 +348,30 @@ export class VoicePipeline extends EventEmitter {
       let prompt = config.system_prompt
       prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
       prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately after — do not fake progress. The ORDER of clarifying questions, KB search, and ticket creation is driven by the agent instructions above, not by this rule.'
+
+      // Inject generic form context when widget is embedded in a SN form (form mode, non-incident)
+      if (this.formContext && (this.formContext.tableName || this.formContext.sysId) && !this.incidentContext?.number) {
+        const fc = this.formContext
+        const lines: string[] = []
+        if (fc.tableName) lines.push(`  Table: ${fc.tableName}`)
+        if (fc.sysId) lines.push(`  Record sys_id: ${fc.sysId}`)
+        const fieldLabelMap: Record<string, string> = {
+          number: 'Record Number', short_description: 'Summary', description: 'Description',
+          state: 'State', priority: 'Priority', urgency: 'Urgency', category: 'Category',
+          subcategory: 'Subcategory', assignment_group: 'Assignment Group', assigned_to: 'Assigned To',
+          caller_id: 'Caller', opened_by: 'Opened By', opened_at: 'Opened At', cmdb_ci: 'Configuration Item',
+          location: 'Location', impact: 'Impact', u_work_order: 'Work Order', work_order_task: 'Work Order Task',
+          parent: 'Parent Record', requested_for: 'Requested For',
+        }
+        if (fc.fields) {
+          for (const [k, v] of Object.entries(fc.fields)) {
+            if (v) lines.push(`  ${fieldLabelMap[k] || k}: ${v}`)
+          }
+        }
+        if (lines.length > 0) {
+          prompt += '\n\nFORM CONTEXT: The user has opened this voice session directly from a ServiceNow record form. You already have the following record information — do NOT ask for the record number, work order number, ticket number, or any identifying information listed below. Use it directly to answer questions and take actions.\n' + lines.join('\n')
+        }
+      }
 
       // Inject incident context when the widget is opened from an incident form
       if (this.incidentContext && Object.keys(this.incidentContext).length > 0) {
