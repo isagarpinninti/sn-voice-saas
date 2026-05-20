@@ -44,18 +44,24 @@ export const authOptions: NextAuthOptions = {
           // Race condition — safe to ignore. The next login will reconcile.
         }
 
-        // Load isAdmin flag + auto-promote first user.
-        // We auto-promote when the *only* user in the system is this user — meaning
-        // they're the first signup. Idempotent: re-runs are no-ops once isAdmin is true.
+        // Load isAdmin flag + auto-promote.
+        // Promotion criteria (any one is enough):
+        //   1. DB flag already true
+        //   2. They are the only user in the system (first signup)
+        //   3. Their email is in the ADMIN_EMAILS env var
+        // Idempotent: once isAdmin=true in DB, subsequent logins are a no-op read.
         try {
+          const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+            .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
           const dbUser = await db.user.findUnique({
             where: { id: user.id },
-            select: { isAdmin: true },
+            select: { isAdmin: true, email: true },
           })
           let isAdmin = dbUser?.isAdmin ?? false
           if (!isAdmin) {
             const total = await db.user.count()
-            if (total === 1) {
+            const emailMatch = dbUser?.email && ADMIN_EMAILS.includes(dbUser.email.toLowerCase())
+            if (total === 1 || emailMatch) {
               await db.user.update({ where: { id: user.id }, data: { isAdmin: true } })
               isAdmin = true
             }
