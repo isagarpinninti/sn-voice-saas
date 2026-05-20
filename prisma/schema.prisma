@@ -159,6 +159,7 @@ model Agent {
 
   // Voice — cached from SN; authoritative copy lives on the SN voice agent record
   ttsVoice   String   @default("aura-asteria-en")
+  showOn     String   @default("portal")
 
   // Per-agent usage aggregates (incremented on call close, synced back to SN)
   totalCalls   Int      @default(0)

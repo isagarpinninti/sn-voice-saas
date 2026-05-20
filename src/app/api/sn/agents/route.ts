@@ -84,12 +84,15 @@ export async function POST(req: Request) {
       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
     ).join('')
 
+  const showOn = (body?.show_on || 'portal') === 'form' ? 'form' : 'portal'
+
   const agent = await db.agent.create({
     data: {
       tenantId: auth.tenantId,
       instanceId: auth.instanceId,
       name,
       snAgentId,
+      showOn,
       tokens: {
         create: { tenantId: auth.tenantId, name: 'Default', token },
       },
@@ -155,6 +158,7 @@ export async function PATCH(req: Request) {
   if (body.name !== undefined) updateData.name = body.name
   if (body.active !== undefined) updateData.active = body.active
   if (body.tts_voice !== undefined) updateData.ttsVoice = body.tts_voice
+  if (body.show_on !== undefined) updateData.showOn = body.show_on === 'form' ? 'form' : 'portal'
 
   const updated = await db.agent.update({
     where: { id: agent.id },
@@ -170,6 +174,7 @@ export async function PATCH(req: Request) {
     name: updated.name,
     snAgentId: updated.snAgentId,
     active: updated.active,
+    show_on: updated.showOn,
     token,
     message: 'Agent updated successfully',
   })
