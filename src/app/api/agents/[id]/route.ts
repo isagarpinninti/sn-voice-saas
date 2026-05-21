@@ -49,6 +49,8 @@ export async function GET(_req: Request, ctx: RouteContext) {
     ttsVoice: a.ttsVoice,
     createdAt: a.createdAt,
     token: a.tokens[0]?.token ?? null,
+    callerGroupSysId: a.callerGroupSysId ?? null,
+    callerGroupName: a.callerGroupName ?? null,
   })
 }
 

@@ -159,6 +159,8 @@ export async function PATCH(req: Request) {
   if (body.active !== undefined) updateData.active = body.active
   if (body.tts_voice !== undefined) updateData.ttsVoice = body.tts_voice
   if (body.show_on !== undefined) updateData.showOn = body.show_on === 'form' ? 'form' : 'portal'
+  if (body.caller_group_sys_id !== undefined) updateData.callerGroupSysId = body.caller_group_sys_id || null
+  if (body.caller_group_name !== undefined) updateData.callerGroupName = body.caller_group_name || null
 
   const updated = await db.agent.update({
     where: { id: agent.id },
