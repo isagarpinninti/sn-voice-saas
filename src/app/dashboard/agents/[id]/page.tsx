@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
-import { VOICES, findVoice } from '@/lib/voices'
-import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check } from 'lucide-react'
+import { VOICES } from '@/lib/voices'
+import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Phone, UserPlus, UserMinus } from 'lucide-react'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
 
@@ -22,6 +22,22 @@ interface AgentConfig {
   active: boolean
   ttsVoice: string
   token: string | null
+}
+
+interface CallerRecord {
+  id: string
+  phoneE164: string
+  name: string | null
+  email: string | null
+  employeeId: string | null
+  snUserSysId: string | null
+  active: boolean
+}
+
+interface PhoneNumberInfo {
+  id: string
+  e164: string
+  friendly: string | null
 }
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,6 +59,16 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const [loadingVoice, setLoadingVoice] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  // Phone + caller group state
+  const [phoneNumber, setPhoneNumber] = useState<PhoneNumberInfo | null>(null)
+  const [callers, setCallers] = useState<CallerRecord[]>([])
+  const [callersLoading, setCallersLoading] = useState(true)
+  const [newCallerPhone, setNewCallerPhone] = useState('')
+  const [newCallerName, setNewCallerName] = useState('')
+  const [newCallerSysId, setNewCallerSysId] = useState('')
+  const [addingCaller, setAddingCaller] = useState(false)
+  const [removingCaller, setRemovingCaller] = useState<string | null>(null)
+
   useEffect(() => {
     fetch(`/api/agents/${id}`, { cache: 'no-store' })
       .then((r) => r.json())
@@ -53,11 +79,19 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           return
         }
         setAgent(d)
-        // Initialise voice from the agent record (ttsVoice is kept in sync by the SN BR)
         if (d.ttsVoice) setCurrentVoice(d.ttsVoice)
       })
       .catch(() => toast('Failed to load agent', 'error'))
       .finally(() => setLoading(false))
+
+    fetch(`/api/agents/${id}/callers`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        setCallers(d.callers || [])
+        setPhoneNumber(d.phoneNumber || null)
+      })
+      .catch(() => {})
+      .finally(() => setCallersLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -157,6 +191,52 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
       toast('Network error', 'error')
     }
     setDeleting(false)
+  }
+
+  async function handleAddCaller() {
+    if (!newCallerPhone.trim()) return
+    setAddingCaller(true)
+    try {
+      const res = await fetch(`/api/agents/${id}/callers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneE164: newCallerPhone.trim(),
+          name: newCallerName.trim() || null,
+          snUserSysId: newCallerSysId.trim() || null,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setCallers((prev) => [...prev, data.caller])
+        setNewCallerPhone('')
+        setNewCallerName('')
+        setNewCallerSysId('')
+        toast('Caller added to group', 'success')
+      } else {
+        toast(data.error || 'Failed to add caller', 'error')
+      }
+    } catch {
+      toast('Network error', 'error')
+    }
+    setAddingCaller(false)
+  }
+
+  async function handleRemoveCaller(callerId: string) {
+    setRemovingCaller(callerId)
+    try {
+      const res = await fetch(`/api/agents/${id}/callers/${callerId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setCallers((prev) => prev.filter((c) => c.id !== callerId))
+        toast('Caller removed', 'success')
+      } else {
+        const data = await res.json()
+        toast(data.error || 'Failed to remove caller', 'error')
+      }
+    } catch {
+      toast('Network error', 'error')
+    }
+    setRemovingCaller(null)
   }
 
   if (loading || !agent) {
@@ -301,6 +381,136 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
               )
             })}
           </div>
+        </Section>
+
+        {/* Phone Number */}
+        <Section title="Phone Number" description="The Twilio/Telnyx number assigned to this agent. Assigned by your admin.">
+          <Card>
+            <CardContent className="p-5">
+              {callersLoading ? (
+                <p className="text-[13px] text-muted-foreground">Loading...</p>
+              ) : phoneNumber ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-semibold text-foreground font-mono">{phoneNumber.e164}</p>
+                    {phoneNumber.friendly && (
+                      <p className="text-[11px] text-muted-foreground">{phoneNumber.friendly}</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <Phone className="w-4 h-4 shrink-0" />
+                  <p className="text-[13px]">No phone number assigned yet. Contact your admin to provision one.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </Section>
+
+        {/* Caller Group */}
+        <Section
+          title="Caller Group"
+          description={phoneNumber
+            ? 'Only callers in this list can reach this agent by phone. Empty = open access.'
+            : 'Assign a phone number first to configure a caller group.'}
+        >
+          {callersLoading ? (
+            <p className="text-[13px] text-muted-foreground">Loading...</p>
+          ) : !phoneNumber ? (
+            <Card className="border-dashed">
+              <CardContent className="p-5 text-center text-[13px] text-muted-foreground">
+                No phone number assigned — caller group unavailable.
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-5 space-y-4">
+                {/* Existing callers */}
+                {callers.length === 0 ? (
+                  <p className="text-[13px] text-muted-foreground italic">
+                    No callers yet — all inbound calls are allowed (open access).
+                  </p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {callers.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between py-2.5 gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium text-foreground font-mono truncate">{c.phoneE164}</p>
+                          {(c.name || c.snUserSysId) && (
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {c.name}{c.name && c.snUserSysId ? ' · ' : ''}{c.snUserSysId ? <span className="font-mono">{c.snUserSysId}</span> : null}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!c.active && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">inactive</span>
+                          )}
+                          <button
+                            onClick={() => handleRemoveCaller(c.id)}
+                            disabled={removingCaller === c.id}
+                            className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            title="Remove caller"
+                          >
+                            {removingCaller === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserMinus className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new caller */}
+                <div className="pt-2 border-t border-border space-y-3">
+                  <p className="text-[12px] font-medium text-foreground">Add caller</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Phone (E.164) *</Label>
+                      <Input
+                        value={newCallerPhone}
+                        onChange={(e) => setNewCallerPhone(e.target.value)}
+                        placeholder="+14155550123"
+                        className="font-mono text-[12px]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Name (optional)</Label>
+                      <Input
+                        value={newCallerName}
+                        onChange={(e) => setNewCallerName(e.target.value)}
+                        placeholder="Jane Doe"
+                        className="text-[12px]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">SN sys_id (optional)</Label>
+                      <Input
+                        value={newCallerSysId}
+                        onChange={(e) => setNewCallerSysId(e.target.value)}
+                        placeholder="32-char sys_user sys_id"
+                        className="font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleAddCaller}
+                    disabled={addingCaller || !newCallerPhone.trim()}
+                  >
+                    {addingCaller ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : <UserPlus className="w-3 h-3 mr-1.5" />}
+                    Add to group
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground/70">
+                    When the caller group has entries, only listed numbers can connect. The SN sys_id enables tool impersonation (the agent acts as that user in ServiceNow).
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </Section>
 
         {/* Delete */}

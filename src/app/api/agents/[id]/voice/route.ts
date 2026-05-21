@@ -80,8 +80,10 @@ export async function PUT(req: Request, ctx: RouteContext) {
         },
       )
       if (!res.ok) {
+        const snBody = await res.text().catch(() => '')
+        const detail = snBody ? ` — ${snBody.slice(0, 200)}` : ''
         return NextResponse.json(
-          { success: true, voice, snWarning: 'Voice saved locally; SN update failed: HTTP ' + res.status },
+          { success: true, voice, snWarning: `Voice saved locally; SN update failed: HTTP ${res.status}${detail}` },
         )
       }
     } catch (err: any) {

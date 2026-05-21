@@ -274,7 +274,8 @@ model PhoneNumber {
   instanceId String?
   instance   Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
 
-  active     Boolean   @default(true)
+  active         Boolean        @default(true)
+  allowedCallers AllowedCaller[]
 
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -284,11 +285,11 @@ model PhoneNumber {
 }
 
 // =====================================================
-// Allowed Callers (per-tenant phone number allowlist)
-// Empty list = open access (allow everyone). Non-empty list = strict allowlist;
-// only listed callers connect, others hear a polite hangup. Optional fields
-// (name/email/employeeId/snUserSysId) are passed to the voice pipeline so the
-// agent can greet by name and SN tools can impersonate the right user.
+// Allowed Callers (per-phone-number or per-tenant allowlist)
+// Empty list = open access. Non-empty = strict; only listed callers connect.
+// phoneNumberId scopes the entry to a specific phone number/agent (per-agent
+// caller group). Entries without phoneNumberId fall back to tenant-wide.
+// The gate checks phone-scoped first; tenant-wide is the backward-compat fallback.
 // =====================================================
 
 model AllowedCaller {
@@ -296,7 +297,12 @@ model AllowedCaller {
   tenantId     String
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  phoneE164    String   // e.g. +14155550123 — match key
+  // When set, this caller is scoped to a specific phone number (per-agent group).
+  // When null, this caller is tenant-wide (backward-compat).
+  phoneNumberId String?
+  phoneNumber   PhoneNumber? @relation(fields: [phoneNumberId], references: [id], onDelete: Cascade)
+
+  phoneE164    String   // e.g. +14155550123 — match key (caller's phone number)
   name         String?
   email        String?
   employeeId   String?
@@ -306,8 +312,9 @@ model AllowedCaller {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@unique([tenantId, phoneE164])
+  @@unique([tenantId, phoneNumberId, phoneE164])
   @@index([tenantId, active])
+  @@index([phoneNumberId, active])
 }
 
 // =====================================================

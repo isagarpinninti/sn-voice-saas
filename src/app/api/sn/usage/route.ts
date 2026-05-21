@@ -70,8 +70,22 @@ export async function GET(req: Request) {
   if (snAgentId) {
     const agent = await db.agent.findFirst({
       where: { tenantId: auth.tenantId, snAgentId },
-      select: { totalCalls: true, totalMinutes: true, lastCallAt: true },
+      select: {
+        id: true,
+        totalCalls: true,
+        totalMinutes: true,
+        lastCallAt: true,
+      },
     })
+    // Include the assigned phone number so the SN scheduled job can write it back
+    let phoneE164: string | null = null
+    if (agent) {
+      const phone = await db.phoneNumber.findFirst({
+        where: { agentId: agent.id, active: true },
+        select: { e164: true },
+      })
+      phoneE164 = phone?.e164 ?? null
+    }
     return NextResponse.json({
       ...base,
       agent: agent
@@ -79,6 +93,7 @@ export async function GET(req: Request) {
             calls: agent.totalCalls,
             minutes: Math.round(agent.totalMinutes * 100) / 100,
             lastCallAt: agent.lastCallAt?.toISOString() ?? null,
+            phone_number: phoneE164,
           }
         : null,
     })

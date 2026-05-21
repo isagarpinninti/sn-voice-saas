@@ -349,7 +349,7 @@ export class VoicePipeline extends EventEmitter {
       prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
       prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately after — do not fake progress. The ORDER of clarifying questions, KB search, and ticket creation is driven by the agent instructions above, not by this rule.'
 
-      // Inject generic form context when widget is embedded in a SN form (form mode, non-incident)
+      // Inject generic form context when widget is embedded in a SN form (portal or form mode)
       if (this.formContext && (this.formContext.tableName || this.formContext.sysId) && !this.incidentContext?.number) {
         const fc = this.formContext
         const lines: string[] = []
@@ -369,7 +369,7 @@ export class VoicePipeline extends EventEmitter {
           }
         }
         if (lines.length > 0) {
-          prompt += '\n\nFORM CONTEXT: The user has opened this voice session directly from a ServiceNow record form. You already have the following record information — do NOT ask for the record number, work order number, ticket number, or any identifying information listed below. Use it directly to answer questions and take actions.\n' + lines.join('\n')
+          prompt += '\n\nFORM CONTEXT (OVERRIDE — takes precedence over all earlier instructions): The user has opened this voice session directly from a ServiceNow record form. You already have the record information below. NEVER ask the user for the record number, work order number, ticket number, or any other identifying information that is already listed here — use it directly. If your instructions say to ask for this information, skip that step entirely.\n' + lines.join('\n')
         }
       }
 
@@ -745,14 +745,16 @@ export class VoicePipeline extends EventEmitter {
         this.emit('navigate', { urls: confirmedOutput.navigation_urls })
       }
 
-      // Get LLM to formulate response
+      // Get LLM to formulate response. The confirmation nudge is transient — pass it
+      // directly to callLLMWithTools instead of storing it in this.messages to prevent
+      // accumulation across turns.
       this.messages.push({ role: 'tool', tool_call_id: 'confirm', content: JSON.stringify((result as any).output || {}) })
-      this.messages.push({ role: 'system', content: confirmed ? 'User confirmed. Communicate the result naturally.' : 'User declined. Acknowledge and ask how else to help.' })
+      const confirmNudge = confirmed ? 'User confirmed. Communicate the result naturally.' : 'User declined. Acknowledge and ask how else to help.'
 
       // Use streaming LLM — it speaks directly via TTS
       const savedTools = this.tools
       this.tools = [] // No tools for confirmation response
-      const llmResp = await this.callLLMWithTools()
+      const llmResp = await this.callLLMWithTools(false, confirmNudge)
       this.tools = savedTools
       if (llmResp.text) {
         this.messages.push({ role: 'assistant', content: llmResp.text })
@@ -939,8 +941,7 @@ export class VoicePipeline extends EventEmitter {
     if (this.isGoodbye(message)) {
       this.isAgentSpeaking = true
       this.emit('state', 'speaking')
-      this.messages.push({ role: 'user', content: message })
-      this.messageCount++
+      // Message already pushed above — do not push again
 
       // Disable tools for the closing turn (the agent shouldn't be calling any
       // record-create or KB-search tools while saying goodbye).
@@ -977,6 +978,9 @@ export class VoicePipeline extends EventEmitter {
       let iteration = 0
       let finalResponse = ''
 
+      const TOOL_NUDGE = 'The tool just returned. Speak the answer to the user now in 1-2 sentences. Do NOT stay silent. Do NOT wait for the user to ask. If the result has a `message` field, that is your spoken answer; otherwise summarize the result naturally.'
+      let pendingNudge: string | undefined
+
       while (iteration < maxToolCalls) {
         iteration++
         // After a tool result, force a text response unless the agent is
@@ -984,7 +988,8 @@ export class VoicePipeline extends EventEmitter {
         // frequently returns empty text + no tool call, forcing the pipeline
         // into its generic "I found 3 articles..." fallback.
         const forceText = iteration > 1 && !this.agentConfig.supports_tool_chaining
-        const result = await this.callLLMWithTools(forceText)
+        const result = await this.callLLMWithTools(forceText, pendingNudge)
+        pendingNudge = undefined
 
         if (!result.toolCalls?.length) {
           finalResponse = result.text
@@ -1082,16 +1087,9 @@ export class VoicePipeline extends EventEmitter {
             content: JSON.stringify(toolOutput),
           })
         }
-        // Nudge the LLM to speak the tool result immediately. Without this,
-        // weaker models (llama-3.3) often see their own pre-tool narration
-        // ("Let me search...") + the tool result and conclude they already
-        // responded — so they go silent until the user prompts "did you find it?".
-        // This system message forces a fresh spoken summary.
-        this.messages.push({
-          role: 'system',
-          content: 'The tool just returned. Speak the answer to the user now in 1-2 sentences. Do NOT stay silent. Do NOT wait for the user to ask. If the result has a `message` field, that is your spoken answer; otherwise summarize the result naturally.',
-        })
-        // Loop back so the LLM can read the tool result(s) and produce a natural response
+        // Set the nudge for the NEXT callLLMWithTools iteration. Passing it as a parameter
+        // (not storing in this.messages) keeps it transient — it won't re-fire on future turns.
+        pendingNudge = TOOL_NUDGE
         addLog('info', 'pipeline', 'Loop iteration ' + iteration + ', calling LLM again with tool results', { tenantId: this.tenant.id })
       }
 
@@ -1241,14 +1239,19 @@ export class VoicePipeline extends EventEmitter {
    *   Meanwhile tokens 2-N continue arriving → next sentence → TTS queues it
    * User hears first words ~800ms after LLM starts generating
    */
-  private async callLLMWithTools(forceText = false): Promise<{ text: string; toolCalls: any[] }> {
+  private async callLLMWithTools(forceText = false, nudge?: string): Promise<{ text: string; toolCalls: any[] }> {
     const contextWindow = this.agentConfig.context_window || 6
-    const system = this.messages.filter(m => m.role === 'system')
+    // Only include the initial system prompt (index 0). Post-turn system messages
+    // like "speak the answer now" nudges and confirmation acks are transient —
+    // if included here they accumulate across turns and cause the LLM to re-trigger
+    // on old nudges, producing repeated or doubled responses.
+    const system = this.messages.filter(m => m.role === 'system').slice(0, 1)
     const conv = this.messages.filter(m => m.role !== 'system').slice(-contextWindow)
+    const extra = nudge ? [{ role: 'system', content: nudge }] : []
 
     const params: any = {
       model: this.agentConfig.llm_model || 'llama-3.3-70b-versatile',
-      messages: [...system, ...conv],
+      messages: [...system, ...conv, ...extra],
       temperature: 0.6,
       max_tokens: 300,
       stream: true, // STREAMING — tokens arrive one by one

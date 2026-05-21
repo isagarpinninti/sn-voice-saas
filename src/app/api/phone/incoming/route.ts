@@ -91,19 +91,30 @@ export async function POST(req: NextRequest) {
     return send(provider.buildHangupResponse('Voice agent access is not enabled for this number.'))
   }
 
-  // Allowlist gate — if the tenant has any active allowlist entries, only callers
-  // matching one of them get through. Empty list = open access (backwards-compat).
-  const allowlistCount = await db.allowedCaller.count({
-    where: { tenantId: phone.tenantId, active: true },
+  // Allowlist gate — per-phone-number (per-agent) first, tenant-wide as fallback.
+  // Phase 1: check if this specific phone number has a caller group configured.
+  const phoneCallerCount = await db.allowedCaller.count({
+    where: { phoneNumberId: phone.id, active: true },
   })
+  // Phase 2: if no phone-scoped callers, fall back to legacy tenant-wide list.
+  const tenantCallerCount = phoneCallerCount === 0
+    ? await db.allowedCaller.count({ where: { tenantId: phone.tenantId, phoneNumberId: null, active: true } })
+    : 0
+
+  const effectiveCount = phoneCallerCount > 0 ? phoneCallerCount : tenantCallerCount
+  const effectiveWhere = phoneCallerCount > 0
+    ? { phoneNumberId: phone.id, active: true, phoneE164: from }
+    : { tenantId: phone.tenantId, phoneNumberId: null as null, active: true, phoneE164: from }
+
   let matchedCaller: { name: string | null; email: string | null; employeeId: string | null; snUserSysId: string | null } | null = null
-  if (allowlistCount > 0) {
+  if (effectiveCount > 0) {
     matchedCaller = await db.allowedCaller.findFirst({
-      where: { tenantId: phone.tenantId, active: true, phoneE164: from },
+      where: effectiveWhere,
       select: { name: true, email: true, employeeId: true, snUserSysId: true },
     })
     if (!matchedCaller) {
-      addLog('warn', 'phone', `Call rejected — caller ${from} not on tenant allowlist`, {
+      const scope = phoneCallerCount > 0 ? 'phone-number caller group' : 'tenant allowlist'
+      addLog('warn', 'phone', `Call rejected — caller ${from} not in ${scope}`, {
         tenantId: phone.tenantId,
       })
       await logAudit({
@@ -112,9 +123,9 @@ export async function POST(req: NextRequest) {
         action: 'phone.call.rejected',
         targetType: 'PhoneNumber',
         targetId: phone.id,
-        metadata: { reason: 'caller_not_on_allowlist', from, to, callSid },
+        metadata: { reason: 'caller_not_authorized', scope, from, to, callSid },
       })
-      return send(provider.buildHangupResponse("Sorry, this number isn't enabled for your line. Goodbye."))
+      return send(provider.buildHangupResponse('Sorry, you are not authorized to use this line. Goodbye.'))
     }
   }
 
@@ -151,7 +162,7 @@ export async function POST(req: NextRequest) {
       from, to, callSid, agentId: phone.agentId, instanceId: phone.instanceId,
       callerName: matchedCaller?.name || null,
       callerEmployeeId: matchedCaller?.employeeId || null,
-      allowlistMode: allowlistCount > 0 ? 'enforced' : 'open',
+      allowlistMode: effectiveCount > 0 ? (phoneCallerCount > 0 ? 'phone-scoped' : 'tenant-wide') : 'open',
     },
   })
 

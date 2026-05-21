@@ -18,9 +18,9 @@
   var MODE=((window.ZEVOX_MODE)||(window.ZeVoxConfig&&window.ZeVoxConfig.mode)||'portal').toLowerCase()
   var FM=MODE==='form'
 
-  // ── Detect form context when widget is embedded in a SN form (form mode only) ──
+  // ── Detect form context when widget is embedded in a SN form ──
+  // Works in both portal and form mode — g_form availability is the real guard.
   function getFormContext(){
-    if(!FM)return null
     try{
       var ctx={tableName:'',sysId:'',fields:{}}
       // Classic SN form API — reads whatever fields the form view currently shows,
@@ -504,7 +504,7 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
       ws=new WebSocket(wsUrl);ws.binaryType='arraybuffer'
       ws.onopen=function(){
         var startMsg={type:'start',originPortal:detectOriginPortal()}
-        if(FM){var fc=getFormContext();if(fc)startMsg.formContext=fc}
+        var fc=getFormContext();if(fc)startMsg.formContext=fc
         ws.send(JSON.stringify(startMsg))
         startMic().catch(function(){setSt('Listening...','Mic unavailable')})
       }
