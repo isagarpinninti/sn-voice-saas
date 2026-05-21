@@ -240,6 +240,7 @@ export class VoicePipeline extends EventEmitter {
 
       this.snSessionId = config.session_id
       this.selectedAgentId = config.selected_agent_id || agentId || ''
+      addLog('info', 'pipeline', 'Init OK — session=' + this.snSessionId.substring(0, 8) + '... agentId=' + (this.selectedAgentId || '(empty!)'), { tenantId: this.tenant.id })
       this.tools = config.tools || []
 
       // Widget-only built-in: lets the agent ask the user to upload a file.
@@ -1025,6 +1026,7 @@ export class VoicePipeline extends EventEmitter {
             toolResult = this.handleSuggestReply(tc.arguments)
           } else {
             // Execute tool (no extra filler — the initial ack covers the wait)
+            addLog('debug', 'pipeline', 'Tool call body: session=' + (this.snSessionId || '(empty!)') + ' agent=' + (this.selectedAgentId || '(empty!)') + ' tool=' + tc.name, { tenantId: this.tenant.id })
             toolResult = await this.snFetch('POST', '/gateway/tool', {
               session_id: this.snSessionId,
               agent_id: this.selectedAgentId,
