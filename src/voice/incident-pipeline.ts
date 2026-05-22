@@ -135,6 +135,7 @@ export class IncidentPipeline extends EventEmitter {
   private messages: any[] = []
   private stt: any = null
   private ttsWs: any = null
+  private ttsKeepAlive: ReturnType<typeof setInterval> | null = null
   private ttsKey = ''
   private ttsVoice = 'aura-asteria-en'
   private llm: any = null
@@ -325,6 +326,7 @@ export class IncidentPipeline extends EventEmitter {
     if (this.stopped) return
     this.stopped = true
     try { if (this.stt?.close) this.stt.close() } catch {}
+    if (this.ttsKeepAlive) { clearInterval(this.ttsKeepAlive); this.ttsKeepAlive = null }
     try { if (this.ttsWs?.close) this.ttsWs.close() } catch {}
     this.ttsWs = null
     this.emit('ended')
@@ -848,7 +850,17 @@ VOICE RULES: Keep replies to 2–4 sentences. No markdown, no bullet points, no 
     return new Promise((resolve, reject) => {
       const url = `wss://api.deepgram.com/v1/speak?model=${this.ttsVoice}&encoding=linear16&sample_rate=24000`
       this.ttsWs = new WS(url, { headers: { Authorization: `Token ${this.ttsKey}` } })
-      this.ttsWs.on('open', () => resolve())
+      this.ttsWs.on('open', () => {
+        if (this.ttsKeepAlive) clearInterval(this.ttsKeepAlive)
+        this.ttsKeepAlive = setInterval(() => {
+          if (this.ttsWs && this.ttsWs.readyState === 1) {
+            try { this.ttsWs.send(JSON.stringify({ type: 'KeepAlive' })) } catch {}
+          } else {
+            if (this.ttsKeepAlive) { clearInterval(this.ttsKeepAlive); this.ttsKeepAlive = null }
+          }
+        }, 8000)
+        resolve()
+      })
       this.ttsWs.on('message', (data: any, isBinary: boolean) => {
         if (isBinary && Buffer.isBuffer(data) && data.length > 10 && !this.isBargingIn) {
           this.emit('audio', data)
@@ -864,7 +876,10 @@ VOICE RULES: Keep replies to 2–4 sentences. No markdown, no bullet points, no 
         }
       })
       this.ttsWs.on('error', (e: any) => reject(e))
-      this.ttsWs.on('close', () => { this.ttsWs = null })
+      this.ttsWs.on('close', () => {
+        if (this.ttsKeepAlive) { clearInterval(this.ttsKeepAlive); this.ttsKeepAlive = null }
+        this.ttsWs = null
+      })
       setTimeout(() => reject(new Error('TTS timeout')), 5000)
     })
   }

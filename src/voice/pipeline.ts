@@ -702,6 +702,7 @@ export class VoicePipeline extends EventEmitter {
         else if (typeof this.stt.requestClose === 'function') this.stt.requestClose()
       } catch {}
     }
+    if (this.ttsKeepAlive) { clearInterval(this.ttsKeepAlive); this.ttsKeepAlive = null }
     if (this.ttsWs) {
       try { this.ttsWs.close() } catch {}
       this.ttsWs = null
@@ -890,7 +891,7 @@ export class VoicePipeline extends EventEmitter {
   private messageQueue: string[] = []
 
   private async processUserMessage(message: string) {
-    if (!message.trim()) return
+    if (!message.trim() || this.stopped) return
 
     // If already processing, queue the message for later
     if (this.processing) {
@@ -1004,6 +1005,7 @@ export class VoicePipeline extends EventEmitter {
 
         // Tool call — speak a natural filler while executing
         for (const tc of result.toolCalls) {
+          if (this.stopped) break  // Pipeline stopped mid-turn — abort tool dispatch
           this.toolCallCount++
           addLog('info', 'pipeline', 'Tool call: ' + tc.name + ' (#' + this.toolCallCount + ')', { tenantId: this.tenant.id })
 
@@ -1551,6 +1553,7 @@ export class VoicePipeline extends EventEmitter {
   private ttsAudioBuffer: Buffer[] = []
   private ttsResolve: (() => void) | null = null
   private ttsWs: any = null
+  private ttsKeepAlive: ReturnType<typeof setInterval> | null = null
 
   private async connectTtsWs(): Promise<void> {
     const WebSocket = require('ws')
@@ -1560,7 +1563,19 @@ export class VoicePipeline extends EventEmitter {
       const url = `wss://api.deepgram.com/v1/speak?model=${this.ttsVoice}&encoding=${ttsEncoding}&sample_rate=${ttsSampleRate}`
       this.ttsWs = new WebSocket(url, { headers: { 'Authorization': `Token ${this.ttsKey}` } })
 
-      this.ttsWs.on('open', () => resolve())
+      this.ttsWs.on('open', () => {
+        // Deepgram TTS closes after ~10s of inactivity. Send KeepAlive every 8s
+        // so the connection stays alive between the greeting and the first response.
+        if (this.ttsKeepAlive) clearInterval(this.ttsKeepAlive)
+        this.ttsKeepAlive = setInterval(() => {
+          if (this.ttsWs && this.ttsWs.readyState === 1) {
+            try { this.ttsWs.send(JSON.stringify({ type: 'KeepAlive' })) } catch {}
+          } else {
+            if (this.ttsKeepAlive) { clearInterval(this.ttsKeepAlive); this.ttsKeepAlive = null }
+          }
+        }, 8000)
+        resolve()
+      })
       this.ttsWs.on('message', (data: any, isBinary: boolean) => {
         if (isBinary && Buffer.isBuffer(data) && data.length > 10 && !this.isBargingIn) {
           // Stream audio immediately to widget — AudioWorklet handles smooth playback
@@ -1579,7 +1594,10 @@ export class VoicePipeline extends EventEmitter {
         }
       })
       this.ttsWs.on('error', (e: any) => reject(e))
-      this.ttsWs.on('close', () => { this.ttsWs = null })
+      this.ttsWs.on('close', () => {
+        if (this.ttsKeepAlive) { clearInterval(this.ttsKeepAlive); this.ttsKeepAlive = null }
+        this.ttsWs = null
+      })
       setTimeout(() => reject(new Error('TTS timeout')), 5000)
     })
   }
