@@ -1423,6 +1423,23 @@ export class VoicePipeline extends EventEmitter {
         return { text: safe, toolCalls: [] }
       }
 
+      // Recovery 3: Groq server-side JSON Schema validation rejected the tool call
+      // (e.g. enum mismatch, wrong type). This is recoverable — the LLM chose to
+      // call the tool before collecting enough info. Ask the user to clarify
+      // rather than ending the call.
+      if (/tool call validation failed|did not match schema/i.test(msg)) {
+        const toolMatch = msg.match(/parameters for tool ([a-z_]+)/i)
+        const toolName = toolMatch ? toolMatch[1] : 'that action'
+        addLog('warn', 'llm', 'Schema validation rejected ' + toolName + ' — asking user to clarify', { tenantId: this.tenant.id })
+        const clarify = "I'm sorry, I need a bit more information to complete that. Could you clarify your request?"
+        if (!this.isBargingIn) {
+          this.emit('state', 'speaking')
+          this.emit('agent_message', clarify)
+          await this.speakAndStream(clarify)
+        }
+        return { text: clarify, toolCalls: [] }
+      }
+
       addLog('error', 'llm', 'Stream error: ' + msg, { tenantId: this.tenant.id })
       throw err
     }
