@@ -420,10 +420,12 @@ export class VoicePipeline extends EventEmitter {
       })
 
       this.setupSTT()
-      // v5 SDK: need to call connect() to actually open the WebSocket
-      if (typeof this.stt.connect === 'function') {
-        await this.stt.connect()
-      }
+      // The v5 SDK auto-connects in the constructor. Do NOT call stt.connect() —
+      // it re-adds all event listeners a second time, causing every Deepgram event
+      // to fire twice. The duplicate fires trigger a false barge-in on the same tick
+      // that processUserMessage starts, which sets isBargingIn=true and silently
+      // aborts the LLM stream before the agent can speak.
+      await this.stt.waitForOpen()
       addLog('info', 'stt', 'Deepgram connected and ready', { tenantId: this.tenant.id })
 
       // Init TTS WebSocket — persistent connection for streaming audio
@@ -469,10 +471,13 @@ export class VoicePipeline extends EventEmitter {
   feedAudio(buffer: Buffer) {
     if (this.stt) {
       try {
-        // Deepgram SDK v5: use sendMedia() to send audio bytes
-        if (typeof this.stt.sendMedia === 'function') this.stt.sendMedia(buffer)
+        // sendBinary bypasses assertSocketIsOpen — ReconnectingWebSocket queues
+        // frames during reconnect windows so no audio is silently dropped.
+        // sendMedia calls assertSocketIsOpen first and would throw+drop frames
+        // whenever the underlying socket is in CONNECTING state.
+        if (typeof this.stt.sendBinary === 'function') this.stt.sendBinary(buffer)
+        else if (typeof this.stt.sendMedia === 'function') this.stt.sendMedia(buffer)
         else if (typeof this.stt.send === 'function') this.stt.send(buffer)
-        else if (typeof this.stt.sendBinary === 'function') this.stt.sendBinary(buffer)
       } catch {}
     }
   }
@@ -831,6 +836,13 @@ export class VoicePipeline extends EventEmitter {
 
     this.stt.on('close', () => {
       addLog('info', 'stt', 'STT connection closed', { tenantId: this.tenant.id })
+      // Flush any accumulated final transcript — ensures the utterance is processed
+      // even if speech_final or UtteranceEnd doesn't arrive before the connection cycles.
+      if (this.utteranceBuffer && !this.processing) {
+        const msg = this.utteranceBuffer
+        this.utteranceBuffer = ''
+        this.processUserMessage(msg).catch(() => {})
+      }
     })
   }
 
