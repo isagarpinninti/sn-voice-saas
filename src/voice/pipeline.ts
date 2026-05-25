@@ -348,7 +348,7 @@ export class VoicePipeline extends EventEmitter {
       // Voice Agent record so it can be customized per use case.
       let prompt = config.system_prompt
       prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
-      prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately after — do not fake progress. The ORDER of clarifying questions, KB search, and ticket creation is driven by the agent instructions above, not by this rule.'
+      prompt += '\n\nTOOL DISCIPLINE: Never narrate an action without immediately calling the tool. If you say "let me check" or "I\'ll create that", call the tool in the same turn. Do not fake progress.'
 
       // Inject generic form context when widget is embedded in a SN form (portal or form mode)
       if (this.formContext && (this.formContext.tableName || this.formContext.sysId) && !this.incidentContext?.number) {
@@ -1092,9 +1092,12 @@ export class VoicePipeline extends EventEmitter {
             tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.arguments) } }],
           })
           savedNarration = true
+          // Truncate large tool results (e.g. KB articles with full text) to
+          // keep input tokens in check across multi-turn conversations.
+          const toolOutputStr = JSON.stringify(toolOutput)
           this.messages.push({
             role: 'tool', tool_call_id: tc.id,
-            content: JSON.stringify(toolOutput),
+            content: toolOutputStr.length > 1500 ? toolOutputStr.slice(0, 1499) + '…' : toolOutputStr,
           })
         }
         // Set the nudge for the NEXT callLLMWithTools iteration. Passing it as a parameter
@@ -1242,6 +1245,58 @@ export class VoicePipeline extends EventEmitter {
     }
   }
 
+  // ── Token-efficient tool selection ──
+
+  private trimToolDescriptions(tools: any[]): any[] {
+    return tools.map(t => {
+      const desc: string = t.function?.description || ''
+      if (desc.length <= 150) return t
+      return { ...t, function: { ...t.function, description: desc.slice(0, 149) + '…' } }
+    })
+  }
+
+  private selectRelevantTools(maxTools = 3): any[] {
+    const all = this.tools
+    if (all.length <= maxTools) return this.trimToolDescriptions(all)
+
+    // Score every tool against recent conversation context.
+    // Looking at user + assistant messages (not raw tool results, which are noisy JSON)
+    // gives the strongest intent signal: e.g. agent asked "what service type?" → the
+    // word "service" in the conversation boosts create_service_order appropriately.
+    const recent = this.messages
+      .filter(m => m.role !== 'system' && m.role !== 'tool')
+      .slice(-6)
+
+    const contextText = recent.map(m => {
+      const c = m.content
+      if (typeof c === 'string') return c
+      if (Array.isArray(c)) return c.map((x: any) => x.text || '').join(' ')
+      return ''
+    }).join(' ').toLowerCase()
+
+    // Boost tools that were recently called — still relevant to the ongoing flow
+    const recentCalled = new Set<string>()
+    for (const m of this.messages.slice(-8)) {
+      if (m.role === 'assistant' && Array.isArray((m as any).tool_calls)) {
+        for (const tc of (m as any).tool_calls) {
+          if (tc.function?.name) recentCalled.add(tc.function.name)
+        }
+      }
+    }
+
+    const keywords = contextText.split(/\s+/).filter(w => w.length > 3)
+    const scored = all.map(tool => {
+      const name = (tool.function?.name || '').replace(/_/g, ' ')
+      const desc = (tool.function?.description || '').slice(0, 300).toLowerCase()
+      let score = keywords.filter(w => (name + ' ' + desc).includes(w)).length
+      if (recentCalled.has(tool.function?.name)) score += 10
+      return { tool, score }
+    })
+
+    scored.sort((a, b) => b.score - a.score)
+    return this.trimToolDescriptions(scored.slice(0, maxTools).map(s => s.tool))
+  }
+
   /**
    * Call LLM with STREAMING — pipe completed sentences directly to TTS
    * This is the key to ElevenLabs-like latency:
@@ -1266,19 +1321,21 @@ export class VoicePipeline extends EventEmitter {
       max_tokens: 300,
       stream: true, // STREAMING — tokens arrive one by one
     }
-    if (this.tools.length) {
-      params.tools = this.tools
-      // forceText=true on post-tool iterations guarantees the model speaks
-      // about the tool result instead of returning empty text (a common
-      // llama-3.3 failure mode that falls through to the generic fallback).
-      params.tool_choice = forceText ? 'none' : 'auto'
-      // Force serial tool execution. Llama / Groq frequently fail on parallel
-      // tool calls with schema validation errors — serial is also a better UX
-      // for voice (one tool per turn, narrated).
+    if (this.tools.length && !forceText) {
+      // Select only the tools most relevant to the current conversation turn —
+      // sending all tools every call wastes hundreds of input tokens and hits
+      // Groq's daily token cap faster. On post-tool iterations (forceText=true)
+      // we skip tools entirely: the model only needs to narrate the result.
+      const selectedTools = this.selectRelevantTools(3)
+      params.tools = selectedTools
+      params.tool_choice = 'auto'
+      // Force serial execution — parallel tool calls cause schema validation
+      // errors on Groq with llama-3.3 and are worse UX on voice anyway.
       params.parallel_tool_calls = false
+      addLog('info', 'llm', 'Streaming LLM with ' + selectedTools.length + '/' + this.tools.length + ' tools', { tenantId: this.tenant.id })
+    } else {
+      addLog('info', 'llm', 'Streaming LLM text-only', { tenantId: this.tenant.id })
     }
-
-    addLog('info', 'llm', 'Streaming LLM with ' + this.tools.length + ' tools', { tenantId: this.tenant.id })
 
     let fullText = ''
     let sentenceBuffer = ''
