@@ -401,34 +401,26 @@ export class VoicePipeline extends EventEmitter {
       const deepgramKey = (!sttKey || sttKey === 'PROVIDED_BY_ZEVOX') ? process.env.DEEPGRAM_API_KEY : sttKey
       if (!deepgramKey) throw new Error('No Deepgram API key configured')
 
-      const { DeepgramClient } = require('@deepgram/sdk')
-      const dgClient = new DeepgramClient(deepgramKey)
-
-      addLog('info', 'stt', 'Connecting to Deepgram...', { tenantId: this.tenant.id })
-
-      this.stt = await dgClient.listen.v1.connect({
+      // Raw WebSocket to Deepgram STT — same approach as TTS (connectTtsWs).
+      // The Deepgram SDK v5 listen.v1 wraps ReconnectingWebSocket which silently
+      // fails to fire the 'open' event on Render, leaving STT dead for the call.
+      const WebSocket = require('ws')
+      const sttParams = new URLSearchParams({
         model: config.stt_config?.model || 'nova-3',
         language: config.stt_config?.language || 'en-US',
-        smart_format: true,
-        punctuate: true,
-        interim_results: true,
-        utterance_end_ms: 1500,
-        endpointing: config.stt_config?.endpointing_ms || 800,
+        smart_format: 'true',
+        punctuate: 'true',
+        interim_results: 'true',
+        utterance_end_ms: '1500',
+        endpointing: String(config.stt_config?.endpointing_ms || 800),
         encoding: this.audioFormat === 'phone' ? 'mulaw' : 'linear16',
-        sample_rate: this.audioFormat === 'phone' ? 8000 : 16000,
-        channels: 1,
+        sample_rate: String(this.audioFormat === 'phone' ? 8000 : 16000),
+        channels: '1',
       })
-
+      const sttUrl = `wss://api.deepgram.com/v1/listen?${sttParams}`
+      addLog('info', 'stt', 'Connecting to Deepgram STT...', { tenantId: this.tenant.id })
+      this.stt = new WebSocket(sttUrl, { headers: { 'Authorization': `Token ${deepgramKey}` } })
       this.setupSTT()
-      // The v5 SDK auto-connects in the constructor. Do NOT call stt.connect() —
-      // it re-adds all event listeners a second time, causing every Deepgram event
-      // to fire twice. The duplicate fires trigger a false barge-in on the same tick
-      // that processUserMessage starts, which sets isBargingIn=true and silently
-      // aborts the LLM stream before the agent can speak.
-      // Do NOT await waitForOpen() here — it can hang if Deepgram is slow to respond
-      // and blocks the greeting TTS from playing. The connection opens in the background;
-      // the greeting + TTS init (~5s total) gives sufficient time before audio arrives.
-      addLog('info', 'stt', 'Deepgram connecting (background)...', { tenantId: this.tenant.id })
 
       // Init TTS WebSocket — persistent connection for streaming audio
       const ttsConfigKey = config.tts_config?.api_key
@@ -471,16 +463,8 @@ export class VoicePipeline extends EventEmitter {
   }
 
   feedAudio(buffer: Buffer) {
-    if (this.stt) {
-      try {
-        // sendBinary bypasses assertSocketIsOpen — ReconnectingWebSocket queues
-        // frames during reconnect windows so no audio is silently dropped.
-        // sendMedia calls assertSocketIsOpen first and would throw+drop frames
-        // whenever the underlying socket is in CONNECTING state.
-        if (typeof this.stt.sendBinary === 'function') this.stt.sendBinary(buffer)
-        else if (typeof this.stt.sendMedia === 'function') this.stt.sendMedia(buffer)
-        else if (typeof this.stt.send === 'function') this.stt.send(buffer)
-      } catch {}
+    if (this.stt && this.stt.readyState === 1) {
+      try { this.stt.send(buffer) } catch {}
     }
   }
 
@@ -794,8 +778,12 @@ export class VoicePipeline extends EventEmitter {
     })
 
     this.stt.on('message', (data: any) => {
-      // data is already parsed JSON from Deepgram
-      const parsed = typeof data === 'string' ? JSON.parse(data) : data
+      // Raw WebSocket delivers data as Buffer — parse to JSON
+      let parsed: any
+      try {
+        const raw = Buffer.isBuffer(data) ? data.toString('utf8') : String(data)
+        parsed = JSON.parse(raw)
+      } catch { return }
       addLog('debug', 'stt', 'DG event type=' + parsed.type + ' transcript=' + (parsed.channel?.alternatives?.[0]?.transcript || '').substring(0, 50), { tenantId: this.tenant.id })
 
       // Handle transcript results
