@@ -425,8 +425,10 @@ export class VoicePipeline extends EventEmitter {
       // to fire twice. The duplicate fires trigger a false barge-in on the same tick
       // that processUserMessage starts, which sets isBargingIn=true and silently
       // aborts the LLM stream before the agent can speak.
-      await this.stt.waitForOpen()
-      addLog('info', 'stt', 'Deepgram connected and ready', { tenantId: this.tenant.id })
+      // Do NOT await waitForOpen() here — it can hang if Deepgram is slow to respond
+      // and blocks the greeting TTS from playing. The connection opens in the background;
+      // the greeting + TTS init (~5s total) gives sufficient time before audio arrives.
+      addLog('info', 'stt', 'Deepgram connecting (background)...', { tenantId: this.tenant.id })
 
       // Init TTS WebSocket — persistent connection for streaming audio
       const ttsConfigKey = config.tts_config?.api_key
@@ -787,6 +789,10 @@ export class VoicePipeline extends EventEmitter {
   // ── STT Setup (Deepgram SDK v5 — uses 'message' event with parsed JSON) ──
   private setupSTT() {
     // v5 SDK uses simple string events: 'open', 'message', 'close', 'error'
+    this.stt.on('open', () => {
+      addLog('info', 'stt', 'Deepgram connected and ready', { tenantId: this.tenant.id })
+    })
+
     this.stt.on('message', (data: any) => {
       // data is already parsed JSON from Deepgram
       const parsed = typeof data === 'string' ? JSON.parse(data) : data
