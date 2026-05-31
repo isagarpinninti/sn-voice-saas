@@ -347,8 +347,7 @@ export class VoicePipeline extends EventEmitter {
       // KB-first triage, confirmation policy) lives in the customer's ServiceNow
       // Voice Agent record so it can be customized per use case.
       let prompt = config.system_prompt
-      prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
-      prompt += '\n\nTOOL DISCIPLINE: Never narrate an action without immediately calling the tool. If you say "let me check" or "I\'ll create that", call the tool in the same turn. Do not fake progress.'
+      prompt += '\n\nVOICE: Live voice call. 1-2 sentences max. No markdown/lists. Lead with the answer, then offer next step. Sound confident and helpful. Use the caller\'s name once. Don\'t over-apologize.'
 
       // Inject generic form context when widget is embedded in a SN form (portal or form mode)
       if (this.formContext && (this.formContext.tableName || this.formContext.sysId) && !this.incidentContext?.number) {
@@ -986,7 +985,8 @@ export class VoicePipeline extends EventEmitter {
       let iteration = 0
       let finalResponse = ''
 
-      const TOOL_NUDGE = 'The tool just returned. Speak the answer to the user now in 1-2 sentences. Do NOT stay silent. Do NOT wait for the user to ask. If the result has a `message` field, that is your spoken answer; otherwise summarize the result naturally.'
+      // Nudge only injected if the LLM returned empty before calling the tool
+      const TOOL_NUDGE = 'Speak the answer to the user.'
       let pendingNudge: string | undefined
 
       while (iteration < maxToolCalls) {
@@ -1097,12 +1097,11 @@ export class VoicePipeline extends EventEmitter {
           const toolOutputStr = JSON.stringify(toolOutput)
           this.messages.push({
             role: 'tool', tool_call_id: tc.id,
-            content: toolOutputStr.length > 1500 ? toolOutputStr.slice(0, 1499) + '…' : toolOutputStr,
+            content: toolOutputStr.length > 800 ? toolOutputStr.slice(0, 799) + '…' : toolOutputStr,
           })
         }
-        // Set the nudge for the NEXT callLLMWithTools iteration. Passing it as a parameter
-        // (not storing in this.messages) keeps it transient — it won't re-fire on future turns.
-        pendingNudge = TOOL_NUDGE
+        // Nudge the model to speak if it was silent before the tool call
+        if (!savedNarration) pendingNudge = TOOL_NUDGE
         addLog('info', 'pipeline', 'Loop iteration ' + iteration + ', calling LLM again with tool results', { tenantId: this.tenant.id })
       }
 
@@ -1311,14 +1310,24 @@ export class VoicePipeline extends EventEmitter {
     // if included here they accumulate across turns and cause the LLM to re-trigger
     // on old nudges, producing repeated or doubled responses.
     const system = this.messages.filter(m => m.role === 'system').slice(0, 1)
-    const conv = this.messages.filter(m => m.role !== 'system').slice(-contextWindow)
+    
+    // Compress history: omit raw tool outputs from messages older than the last turn
+    // to save tokens, since the LLM already summarized them in its assistant reply.
+    const rawConv = this.messages.filter(m => m.role !== 'system').slice(-contextWindow)
+    const conv = rawConv.map((m, i) => {
+      // Keep everything in the most recent turn (last 2 messages)
+      if (i >= rawConv.length - 2) return m
+      // Compress old raw tool JSON — the API needs the tool message to match the tool_call, but the content can be tiny
+      if (m.role === 'tool') return { ...m, content: '{"omitted":true}' }
+      return m
+    })
     const extra = nudge ? [{ role: 'system', content: nudge }] : []
 
     const params: any = {
       model: this.agentConfig.llm_model || 'llama-3.3-70b-versatile',
       messages: [...system, ...conv, ...extra],
-      temperature: 0.6,
-      max_tokens: 300,
+      temperature: 0.35,
+      max_tokens: 150,
       stream: true, // STREAMING — tokens arrive one by one
     }
     if (this.tools.length && !forceText) {
