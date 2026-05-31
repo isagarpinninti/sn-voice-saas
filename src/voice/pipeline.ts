@@ -230,9 +230,14 @@ export class VoicePipeline extends EventEmitter {
       // When agent_id is omitted, the SN orchestrator picks the best agent.
       // `caller_user_id` is the SN sys_id of the actual end-user talking to the
       // widget (extracted client-side from g_user.userID when embedded in SN).
-      const initPayload: { agent_id?: string; caller_user_id?: string } = {}
+      const initPayload: { agent_id?: string; caller_user_id?: string; form_table?: string; form_sys_id?: string } = {}
       if (agentId) initPayload.agent_id = agentId
       if (endUserSnId) initPayload.caller_user_id = endUserSnId
+      // Pass form record identity so SN can do a server-side GlideRecord lookup and
+      // inject authoritative record data into the system prompt — more reliable than
+      // reading from g_form client-side, especially in Workspace where g_form is absent.
+      if (this.formContext?.tableName) initPayload.form_table = this.formContext.tableName
+      if (this.formContext?.sysId) initPayload.form_sys_id = this.formContext.sysId
       const config = await this.snFetch('POST', '/gateway/init', initPayload) as SNConfig & { selected_agent_id?: string }
 
       console.log('[Pipeline] SN init response success:', config.success, 'session:', config.session_id)
