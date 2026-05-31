@@ -166,6 +166,11 @@ export class VoicePipeline extends EventEmitter {
   private totalTokens = 0
   public toolCallCount = 0  // Public so server can read it
 
+  // Language detected by Deepgram STT during the call (ISO 639-1 code, e.g. 'hi', 'en').
+  // Updated on every STT result when using multi-language mode. Used to route TTS to the
+  // correct provider — Deepgram for English, OpenAI for non-Latin scripts (Hindi etc.).
+  private detectedLanguage: string = ''
+
   // Voice-native confirmation state. When a tool returns requires_confirmation,
   // we speak the prompt and stash the pending action here. The next user utterance
   // is intercepted by processUserMessage and routed to handleConfirmation.
@@ -353,6 +358,7 @@ export class VoicePipeline extends EventEmitter {
       // Voice Agent record so it can be customized per use case.
       let prompt = config.system_prompt
       prompt += '\n\nVOICE: Live voice call. 1-2 sentences max. No markdown/lists. Lead with the answer, then offer next step. Sound confident and helpful. Use the caller\'s name once. Don\'t over-apologize.'
+      prompt += '\n\nLANGUAGE: Always respond in the same language the user is speaking. If the user speaks Hindi, respond entirely in Hindi using Devanagari script. If they speak any non-English language, match it for the rest of the conversation. If the user explicitly asks you to switch language, comply immediately and maintain that language.'
 
       // Inject generic form context when widget is embedded in a SN form (portal or form mode)
       if (this.formContext && (this.formContext.tableName || this.formContext.sysId) && !this.incidentContext?.number) {
@@ -411,7 +417,7 @@ export class VoicePipeline extends EventEmitter {
       const WebSocket = require('ws')
       const sttParams = new URLSearchParams({
         model: config.stt_config?.model || 'nova-3',
-        language: config.stt_config?.language || 'en-US',
+        language: config.stt_config?.language || 'multi',
         smart_format: 'true',
         punctuate: 'true',
         interim_results: 'true',
@@ -451,7 +457,7 @@ export class VoicePipeline extends EventEmitter {
       if (config.greeting) {
         this.isAgentSpeaking = true
         this.emit('state', 'speaking')
-        await this.speakAndStream(config.greeting)
+        await this.speakAndStreamAny(config.greeting)
         this.isAgentSpeaking = false
       }
 
@@ -765,7 +771,7 @@ export class VoicePipeline extends EventEmitter {
       const fallback = this.agentConfig.fallback_message || "Sorry, I am having trouble right now. Please try again in a few minutes."
       try {
         this.emit('agent_message', fallback)
-        await this.speakAndStream(fallback)
+        await this.speakAndStreamAny(fallback)
       } catch (speakErr: any) {
         addLog('error', 'pipeline', 'Fallback speak failed: ' + speakErr.message, { tenantId: this.tenant.id })
       }
@@ -794,6 +800,16 @@ export class VoicePipeline extends EventEmitter {
       if (parsed.type === 'Results') {
         const transcript = parsed.channel?.alternatives?.[0]?.transcript
         if (!transcript) return
+
+        // Track language detected by Deepgram (available in multi-language mode).
+        // Used by speakAndStreamAny to route Hindi/non-Latin speech to the correct TTS.
+        if (parsed.channel?.detected_language) {
+          const lang = (parsed.channel.detected_language as string).split('-')[0].toLowerCase()
+          if (lang && lang !== this.detectedLanguage) {
+            this.detectedLanguage = lang
+            addLog('info', 'stt', 'Language detected: ' + lang, { tenantId: this.tenant.id })
+          }
+        }
 
         if (parsed.is_final) {
           if (this.isAgentSpeaking) {
@@ -970,7 +986,7 @@ export class VoicePipeline extends EventEmitter {
         // call itself errors. Uses the SN agent's own fallback_message (also from
         // the agent record), not a SaaS string.
         const failsafe = this.agentConfig.fallback_message || 'Goodbye.'
-        await this.speakAndStream(failsafe)
+        await this.speakAndStreamAny(failsafe)
       } finally {
         this.tools = savedTools
       }
@@ -1064,7 +1080,7 @@ export class VoicePipeline extends EventEmitter {
             if (confirmMsg && !this.isBargingIn) {
               this.emit('state', 'speaking')
               this.emit('agent_message', confirmMsg)
-              await this.speakAndStream(confirmMsg)
+              await this.speakAndStreamAny(confirmMsg)
               this.messages.push({ role: 'assistant', content: confirmMsg })
             }
 
@@ -1125,7 +1141,7 @@ export class VoicePipeline extends EventEmitter {
             if (clean) {
               this.emit('state', 'speaking')
               this.emit('agent_message', clean)
-              await this.speakAndStream(clean)
+              await this.speakAndStreamAny(clean)
               this.messages.push({ role: 'assistant', content: clean })
             }
           } catch {}
@@ -1145,7 +1161,7 @@ export class VoicePipeline extends EventEmitter {
       const fallback = this.agentConfig.fallback_message || "Sorry, I am having trouble right now. Please try again in a few minutes."
       try {
         this.emit('agent_message', fallback)
-        await this.speakAndStream(fallback)
+        await this.speakAndStreamAny(fallback)
       } catch (speakErr: any) {
         addLog('error', 'pipeline', 'Fallback speak failed: ' + speakErr.message, { tenantId: this.tenant.id })
       }
@@ -1223,7 +1239,7 @@ export class VoicePipeline extends EventEmitter {
               if (clean) {
                 this.emit('state', 'speaking')
                 this.emit('agent_message', clean)
-                await this.speakAndStream(clean)
+                await this.speakAndStreamAny(clean)
               }
             }
             return { text: fbText, toolCalls: fbToolCalls }
@@ -1239,7 +1255,7 @@ export class VoicePipeline extends EventEmitter {
         if (clean) {
           this.emit('state', 'speaking')
           this.emit('agent_message', clean)
-          await this.speakAndStream(clean)
+          await this.speakAndStreamAny(clean)
         }
       }
       return { text: fbText, toolCalls: fbToolCalls }
@@ -1381,8 +1397,8 @@ export class VoicePipeline extends EventEmitter {
                 this.emit('state', 'speaking')
               }
               this.emit('agent_message', sentence)
-              // Send to TTS WebSocket — audio streams back immediately
-              await this.speakAndStream(sentence)
+              // Send to TTS — Deepgram for Latin script, OpenAI for non-Latin (Hindi etc.)
+              await this.speakAndStreamAny(sentence)
             }
           }
         }
@@ -1406,7 +1422,7 @@ export class VoicePipeline extends EventEmitter {
         if (remaining) {
           if (!hasStartedSpeaking) this.emit('state', 'speaking')
           this.emit('agent_message', remaining)
-          await this.speakAndStream(remaining)
+          await this.speakAndStreamAny(remaining)
         }
       }
     } catch (err: any) {
@@ -1489,7 +1505,7 @@ export class VoicePipeline extends EventEmitter {
         if (!this.isBargingIn) {
           this.emit('state', 'speaking')
           this.emit('agent_message', safe)
-          await this.speakAndStream(safe)
+          await this.speakAndStreamAny(safe)
         }
         return { text: safe, toolCalls: [] }
       }
@@ -1506,7 +1522,7 @@ export class VoicePipeline extends EventEmitter {
         if (!this.isBargingIn) {
           this.emit('state', 'speaking')
           this.emit('agent_message', clarify)
-          await this.speakAndStream(clarify)
+          await this.speakAndStreamAny(clarify)
         }
         return { text: clarify, toolCalls: [] }
       }
@@ -1641,6 +1657,47 @@ export class VoicePipeline extends EventEmitter {
     // Collapse whitespace
     clean = clean.replace(/\s+/g, ' ').trim()
     return clean
+  }
+
+  // ── Multilingual TTS routing ──
+  // Routes to OpenAI TTS when the text contains non-Latin script (Devanagari, Arabic, etc.)
+  // and OPENAI_API_KEY is set. Falls back to Deepgram for Latin-script languages.
+  private async speakAndStreamAny(text: string): Promise<void> {
+    if (!text || this.isBargingIn) return
+    const hasNonLatin = /[^ -ɏ]/.test(text)
+    if (hasNonLatin && process.env.OPENAI_API_KEY) {
+      await this.speakWithOpenAI(text)
+    } else {
+      await this.speakAndStream(text)
+    }
+  }
+
+  // OpenAI TTS — multilingual, supports Devanagari/Hindi natively.
+  // Returns raw PCM at 24kHz 16-bit, matching the widget's AudioWorklet sample rate.
+  private async speakWithOpenAI(text: string): Promise<void> {
+    if (!text || this.isBargingIn) return
+    addLog('info', 'tts', 'OpenAI TTS (multilingual): "' + text.substring(0, 60) + '"', { tenantId: this.tenant.id })
+    try {
+      const OpenAI = require('openai')
+      const oai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      const response = await oai.audio.speech.create({
+        model: 'tts-1',
+        voice: 'alloy',           // multilingual, gender-neutral
+        input: text,
+        response_format: 'pcm',   // raw 24kHz 16-bit mono — matches widget AudioWorklet
+      })
+      if (this.isBargingIn) return
+      const buf = Buffer.from(await response.arrayBuffer())
+      // Emit in chunks to simulate Deepgram's streaming behaviour
+      const CHUNK = 4096
+      for (let i = 0; i < buf.length; i += CHUNK) {
+        if (this.isBargingIn) break
+        this.emit('audio', buf.slice(i, i + CHUNK))
+      }
+    } catch (e: any) {
+      addLog('error', 'tts', 'OpenAI TTS failed, falling back to Deepgram: ' + e.message, { tenantId: this.tenant.id })
+      await this.speakAndStream(text)
+    }
   }
 
   // ── TTS WebSocket with proper buffering ──
