@@ -42,6 +42,10 @@ services:
       - key: DEEPGRAM_API_KEY
         sync: false
 
+      # Groq LLM (used as fallback / shared LLM key)
+      - key: GROQ_API_KEY
+        sync: false
+
       # Admin access (comma-separated email addresses)
       - key: ADMIN_EMAILS
         sync: false

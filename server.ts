@@ -6,7 +6,6 @@ import { WebSocketServer, WebSocket, RawData } from 'ws'
 import { db } from './src/lib/db'
 import { addLog } from './src/lib/log-store'
 import { VoicePipeline } from './src/voice/pipeline'
-import { IncidentPipeline } from './src/voice/incident-pipeline'
 import { checkRateLimit, recordUsage, recordAgentUsage } from './src/lib/rate-limiter'
 import { notifyAdmins } from './src/lib/alerts'
 import { logAudit } from './src/lib/audit'
@@ -33,7 +32,7 @@ app.prepare().then(() => {
   const wssVoice = new WebSocketServer({ noServer: true })
   const wssPhone = new WebSocketServer({ noServer: true })
   const wssTranscribe = new WebSocketServer({ noServer: true })
-  const wssIncident = new WebSocketServer({ noServer: true })
+
 
   server.on('upgrade', (req, socket, head) => {
     const { pathname } = parse(req.url || '', true)
@@ -43,8 +42,6 @@ app.prepare().then(() => {
       wssPhone.handleUpgrade(req, socket, head, (ws) => wssPhone.emit('connection', ws, req))
     } else if (pathname === '/transcribe') {
       wssTranscribe.handleUpgrade(req, socket, head, (ws) => wssTranscribe.emit('connection', ws, req))
-    } else if (pathname === '/incident-agent') {
-      wssIncident.handleUpgrade(req, socket, head, (ws) => wssIncident.emit('connection', ws, req))
     } else {
       socket.destroy()
     }
@@ -274,17 +271,29 @@ app.prepare().then(() => {
     }
 
     // Async auth — resolve token → Instance → Tenant
+    // Retry once on DB connection failure — Neon/Render free-tier DBs auto-pause
+    // and the first connection attempt after a cold start often fails with ECONNREFUSED.
     ;(async () => {
       if (!token) { ws.close(4001, 'Token required'); return }
       try {
-        const apiToken = await db.apiToken.findUnique({
-          where: { token },
-          include: {
-            instance: { include: { tenant: true } },
-            agent: { include: { instance: { include: { tenant: true } } } },
-            tenant: true,
-          },
-        })
+        let apiToken: any = null
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            apiToken = await db.apiToken.findUnique({
+              where: { token },
+              include: {
+                instance: { include: { tenant: true } },
+                agent: { include: { instance: { include: { tenant: true } } } },
+                tenant: true,
+              },
+            })
+            break
+          } catch (dbErr: any) {
+            addLog('warn', 'ws', `Auth DB attempt ${attempt} failed: ${dbErr.message?.split('\n')[0]}`)
+            if (attempt === 2) { ws.close(4500, 'Auth error'); return }
+            await new Promise(r => setTimeout(r, 3000))
+          }
+        }
         if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
 
         // Resolution order: instance-token → agent-token → tenant-fallback
@@ -518,146 +527,7 @@ app.prepare().then(() => {
     })
   })
 
-  // ── /incident-agent — dedicated incident resolution voice agent ──
-  // No SN gateway calls. Uses shared Deepgram + Groq keys.
-  // Receives incidentContext from the widget's {type:'start'} message.
-  wssIncident.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-    const url = parse(req.url || '', true)
-    const token = url.query.token as string
-    addLog('info', 'incident-ws', 'Connection. Token: ' + (token ? token.substring(0, 12) + '...' : 'NONE'))
 
-    ws.on('error', (e) => addLog('error', 'incident-ws', 'Browser WS error: ' + e.message))
-
-    const buffer: { data: RawData; isBinary: boolean }[] = []
-    let authed = false
-    let pipeline: IncidentPipeline | null = null
-    let tenantRef: any = null
-    let instanceRef: any = null
-    let incidentAgentCfg: any = null
-
-    ws.on('message', (data: RawData, isBinary: boolean) => {
-      if (!authed) { buffer.push({ data, isBinary }); return }
-      processIncidentMsg(data, isBinary)
-    })
-
-    ws.on('close', (code) => {
-      addLog('info', 'incident-ws', 'Closed code=' + code, { tenantId: tenantRef?.id })
-      if (pipeline) pipeline.stop().catch(() => {})
-    })
-
-    const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); else clearInterval(ping) }, 30000)
-    ws.on('close', () => clearInterval(ping))
-
-    function processIncidentMsg(rawData: RawData, isBinary: boolean) {
-      if (isBinary) {
-        if (pipeline) pipeline.feedAudio(Buffer.from(rawData as ArrayBuffer))
-        return
-      }
-      let msg: any
-      try { msg = JSON.parse(rawData.toString()) } catch { return }
-
-      if (msg.type === 'start') {
-        const incidentCtx: Record<string, string> = (msg.incidentContext && typeof msg.incidentContext === 'object') ? msg.incidentContext : {}
-        addLog('info', 'incident-ws', 'START incident=' + (incidentCtx.number || 'unknown'), { tenantId: tenantRef?.id })
-
-        const snCreds = instanceRef?.snInstanceUrl ? {
-          url: instanceRef.snInstanceUrl,
-          username: instanceRef.snUsername || '',
-          password: instanceRef.snPassword || '',
-        } : undefined
-        pipeline = new IncidentPipeline(incidentCtx, snCreds, incidentAgentCfg || {})
-        pipeline.on('ready',   (d: any)  => { addLog('info', 'incident-pipeline', 'READY', { tenantId: tenantRef?.id }); send(ws, { type: 'ready', ...d }) })
-        pipeline.on('state',   (s: string) => send(ws, { type: 'state', state: s }))
-        pipeline.on('transcript', (d: any) => send(ws, { type: 'transcript', ...d }))
-        pipeline.on('user_message',  (t: string) => { addLog('info', 'incident-pipeline', 'USER: '  + t.substring(0, 80), { tenantId: tenantRef?.id }); send(ws, { type: 'user_message',  text: t }) })
-        pipeline.on('agent_message', (t: string) => { addLog('info', 'incident-pipeline', 'AGENT: ' + t.substring(0, 80), { tenantId: tenantRef?.id }); send(ws, { type: 'agent_message', text: t }) })
-        pipeline.on('audio', (b: Buffer) => { if (ws.readyState === WebSocket.OPEN) ws.send(b) })
-        pipeline.on('barge_in', () => send(ws, { type: 'barge_in' }))
-        pipeline.on('context_enriched', (d: any) => {
-          addLog('info', 'incident-pipeline', `Context enriched: ${d.slas?.length || 0} SLAs, ${d.attachments?.length || 0} attachments`, { tenantId: tenantRef?.id })
-          send(ws, { type: 'context_enriched', slas: d.slas, attachments: d.attachments, related: d.related })
-        })
-        pipeline.on('field_update_pending', (d: any) => {
-          addLog('info', 'incident-pipeline', 'Confirm pending: ' + d.field + ' → ' + d.valueLabel, { tenantId: tenantRef?.id })
-          send(ws, { type: 'field_update_pending', confirmId: d.confirmId, field: d.field, value: d.value, valueLabel: d.valueLabel, reason: d.reason })
-        })
-        pipeline.on('form_update', (d: any) => {
-          addLog('info', 'incident-pipeline', 'Form update (direct): ' + d.field + ' → ' + d.valueLabel, { tenantId: tenantRef?.id })
-          send(ws, { type: 'form_update', field: d.field, value: d.value, valueLabel: d.valueLabel, applyNow: d.applyNow })
-        })
-        pipeline.on('suggestion', (d: any) => {
-          addLog('info', 'incident-pipeline', 'Suggestion (' + d.sugType + '): ' + String(d.text).substring(0, 60), { tenantId: tenantRef?.id })
-          send(ws, { type: 'suggestion', sugType: d.sugType, text: d.text })
-        })
-        pipeline.on('error', (e: any) => { addLog('error', 'incident-pipeline', String(e.message || e), { tenantId: tenantRef?.id }); send(ws, { type: 'error', message: e.message || 'Error' }) })
-        pipeline.on('ended', () => { addLog('info', 'incident-pipeline', 'ENDED', { tenantId: tenantRef?.id }); send(ws, { type: 'ended' }) })
-
-        pipeline.start()
-          .then(() => addLog('info', 'incident-ws', 'Pipeline started', { tenantId: tenantRef?.id }))
-          .catch((e: any) => {
-            addLog('error', 'incident-ws', 'Start failed: ' + e.message, { tenantId: tenantRef?.id })
-            send(ws, { type: 'error', message: e.message })
-          })
-
-      } else if (msg.type === 'stop') {
-        if (pipeline) pipeline.stop().catch(() => {})
-
-      } else if (msg.type === 'field_confirm') {
-        if (pipeline && msg.confirmId !== undefined) {
-          pipeline.handleFieldConfirm(String(msg.confirmId), !!msg.confirmed)
-        }
-      } else if (msg.type === 'apply_suggestion') {
-        if (pipeline && msg.field) {
-          pipeline.applyManualUpdate(String(msg.field), String(msg.value ?? '')).catch(() => {})
-        }
-      }
-    }
-
-    // Auth — same retry pattern as /transcribe for Neon cold-start tolerance
-    ;(async () => {
-      if (!token) { ws.close(4001, 'Token required'); return }
-      let apiToken: any = null
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          apiToken = await db.apiToken.findUnique({
-            where: { token },
-            include: { instance: { include: { tenant: true } }, tenant: true },
-          })
-          break
-        } catch (err: any) {
-          addLog('warn', 'incident-ws', `Auth DB attempt ${attempt} failed: ${err.message?.split('\n')[0]}`)
-          if (attempt === 2) { ws.close(4500, 'Auth error'); return }
-          await new Promise(r => setTimeout(r, 3000))
-        }
-      }
-      if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
-
-      if (apiToken.instance?.tenant) {
-        tenantRef   = apiToken.instance.tenant
-        instanceRef = apiToken.instance
-      } else if (apiToken.tenant) {
-        tenantRef   = apiToken.tenant
-        instanceRef = await db.instance.findFirst({
-          where: { tenantId: tenantRef.id, active: true },
-          orderBy: { createdAt: 'asc' },
-        })
-      } else {
-        ws.close(4003, 'Invalid token'); return
-      }
-
-      // Load per-tenant incident agent config (falls back to pipeline defaults if not set)
-      incidentAgentCfg = await db.incidentAgentConfig.findUnique({
-        where: { tenantId: tenantRef.id },
-      }).catch(() => null)
-
-      db.apiToken.update({ where: { id: apiToken.id }, data: { lastUsed: new Date() } }).catch(() => {})
-      addLog('info', 'incident-ws', `Authed. TenantId=${tenantRef.id} Instance=${instanceRef?.id || 'none'}`, { tenantId: tenantRef.id })
-      authed = true
-
-      for (const b of buffer) processIncidentMsg(b.data, b.isBinary)
-      buffer.length = 0
-    })()
-  })
 
   server.listen(port, () => {
     addLog('info', 'server', 'ZeVox on port ' + port)
