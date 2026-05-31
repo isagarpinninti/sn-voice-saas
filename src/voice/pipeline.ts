@@ -358,7 +358,7 @@ export class VoicePipeline extends EventEmitter {
       // Voice Agent record so it can be customized per use case.
       let prompt = config.system_prompt
       prompt += '\n\nVOICE: Live voice call. 1-2 sentences max. No markdown/lists. Lead with the answer, then offer next step. Sound confident and helpful. Use the caller\'s name once. Don\'t over-apologize.'
-      prompt += '\n\nLANGUAGE: Always respond in the same language the user is speaking. If the user speaks Hindi, respond entirely in Hindi using Devanagari script. If they speak any non-English language, match it for the rest of the conversation. If the user explicitly asks you to switch language, comply immediately and maintain that language.'
+      prompt += '\n\nLANGUAGE: Always respond in the same language the user is speaking. Supported languages include Hindi, Spanish, French, German, Portuguese, Italian, Arabic, Japanese, Korean, Chinese (Mandarin), Russian, Turkish, Dutch, Polish, and Swedish — respond natively in whichever one the user uses. If they speak English, respond in English. If the user explicitly asks you to switch language, comply immediately and maintain that language for the rest of the call. Never mix languages unless the user does.'
 
       // Inject generic form context when widget is embedded in a SN form (portal or form mode)
       if (this.formContext && (this.formContext.tableName || this.formContext.sysId) && !this.incidentContext?.number) {
@@ -415,9 +415,16 @@ export class VoicePipeline extends EventEmitter {
       // The Deepgram SDK v5 listen.v1 wraps ReconnectingWebSocket which silently
       // fails to fire the 'open' event on Render, leaving STT dead for the call.
       const WebSocket = require('ws')
+      // Seed detectedLanguage from the agent's STT config when it's pinned to a specific
+      // non-English language — ensures TTS uses OpenAI from the very first greeting.
+      const sttLangConfig = (config.stt_config?.language || 'multi').toLowerCase()
+      if (sttLangConfig !== 'multi' && !sttLangConfig.startsWith('en')) {
+        this.detectedLanguage = sttLangConfig.split('-')[0]
+      }
+
       const sttParams = new URLSearchParams({
         model: config.stt_config?.model || 'nova-3',
-        language: config.stt_config?.language || 'multi',
+        language: sttLangConfig,
         smart_format: 'true',
         punctuate: 'true',
         interim_results: 'true',
@@ -1660,12 +1667,17 @@ export class VoicePipeline extends EventEmitter {
   }
 
   // ── Multilingual TTS routing ──
-  // Routes to OpenAI TTS when the text contains non-Latin script (Devanagari, Arabic, etc.)
-  // and OPENAI_API_KEY is set. Falls back to Deepgram for Latin-script languages.
+  // Routes to OpenAI TTS for any non-English language:
+  //   • Latin-script languages (Spanish, French, German, Portuguese, Italian, Dutch,
+  //     Polish, Swedish, Turkish…) — detected via detectedLanguage from STT.
+  //   • Non-Latin scripts (Hindi/Devanagari, Arabic, Chinese, Japanese, Korean, Russian…)
+  //     — detected from text characters, works even before STT fires.
+  // Falls back to Deepgram for English (lower latency streaming).
   private async speakAndStreamAny(text: string): Promise<void> {
     if (!text || this.isBargingIn) return
-    const hasNonLatin = /[^ -ɏ]/.test(text)
-    if (hasNonLatin && process.env.OPENAI_API_KEY) {
+    const isNonEnglish = !!this.detectedLanguage && this.detectedLanguage !== 'en'
+    const hasNonLatinScript = /[\u0250-\uFFFF]/.test(text)
+    if ((isNonEnglish || hasNonLatinScript) && process.env.OPENAI_API_KEY) {
       await this.speakWithOpenAI(text)
     } else {
       await this.speakAndStream(text)
