@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
 import { VOICES } from '@/lib/voices'
-import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Phone, UserPlus, UserMinus, RefreshCw, Users } from 'lucide-react'
+import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Phone, UserPlus, UserMinus, RefreshCw, Users, ExternalLink } from 'lucide-react'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
 
@@ -60,6 +60,8 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedUrl, setCopiedUrl] = useState(false)
+  const [copiedIframe, setCopiedIframe] = useState(false)
 
   // Voice state
   const [currentVoice, setCurrentVoice] = useState('aura-asteria-en')
@@ -199,6 +201,23 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     navigator.clipboard.writeText(snippet).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  function copyPageUrl() {
+    if (!agent?.token) return
+    navigator.clipboard.writeText(`${APP_URL}/voice?token=${agent.token}`).then(() => {
+      setCopiedUrl(true)
+      setTimeout(() => setCopiedUrl(false), 2000)
+    })
+  }
+
+  function copyIframe() {
+    if (!agent?.token) return
+    const code = `<iframe\n  src="${APP_URL}/voice?token=${agent.token}"\n  width="100%"\n  height="600"\n  frameborder="0"\n  allow="microphone"\n></iframe>`
+    navigator.clipboard.writeText(code).then(() => {
+      setCopiedIframe(true)
+      setTimeout(() => setCopiedIframe(false), 2000)
     })
   }
 
@@ -414,6 +433,60 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 <p className="text-[10px] text-muted-foreground/70">
                   This token is scoped to <strong>{agent.name}</strong> — calls from this snippet always route to this agent, bypassing the orchestrator.
                 </p>
+              </CardContent>
+            </Card>
+          </Section>
+        )}
+
+        {/* Widget Page */}
+        {agent.token && (
+          <Section title="Widget Page" description="Standalone page with this agent pre-loaded. Share the link directly or embed it in any website or portal via iframe.">
+            <Card>
+              <CardContent className="p-5 space-y-5">
+
+                {/* Direct link */}
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-2">Direct link</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 min-w-0 px-3 py-2 rounded-md bg-muted/50 border border-border text-[11.5px] font-mono text-foreground/80 truncate">
+                      {APP_URL}/voice?token={agent.token}
+                    </code>
+                    <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={copyPageUrl} title="Copy link">
+                      {copiedUrl ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    </Button>
+                    <a href={`${APP_URL}/voice?token=${agent.token}`} target="_blank" rel="noopener noreferrer" tabIndex={-1}>
+                      <Button type="button" variant="outline" size="sm" className="shrink-0" title="Open page">
+                        <ExternalLink className="w-3 h-3" />
+                      </Button>
+                    </a>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/70 mt-1.5">
+                    Anyone with this link can launch the voice widget. Bookmark it or share with your team.
+                  </p>
+                </div>
+
+                {/* iFrame embed */}
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.1em] mb-2">iFrame embed</p>
+                  <div className="flex items-start gap-2">
+                    <pre className="flex-1 min-w-0 px-3 py-2.5 rounded-md bg-muted/50 border border-border text-[11px] text-foreground/80 font-mono overflow-x-auto whitespace-pre leading-relaxed">
+{`<iframe
+  src="${APP_URL}/voice?token=${agent.token}"
+  width="100%"
+  height="600"
+  frameborder="0"
+  allow="microphone"
+></iframe>`}
+                    </pre>
+                    <Button type="button" variant="outline" size="sm" className="shrink-0 mt-0.5" onClick={copyIframe} title="Copy iframe">
+                      {copiedIframe ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/70 mt-1.5">
+                    The <code className="font-mono text-[10px]">allow=&quot;microphone&quot;</code> attribute is required for the browser to grant microphone access inside an iframe.
+                  </p>
+                </div>
+
               </CardContent>
             </Card>
           </Section>
