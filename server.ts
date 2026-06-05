@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket, RawData } from 'ws'
 import { db } from './src/lib/db'
 import { addLog } from './src/lib/log-store'
 import { VoicePipeline } from './src/voice/pipeline'
+import { ManageEnginePipeline } from './src/voice/me-pipeline'
 import { checkRateLimit, recordUsage, recordAgentUsage } from './src/lib/rate-limiter'
 import { notifyAdmins } from './src/lib/alerts'
 import { logAudit } from './src/lib/audit'
@@ -199,11 +200,12 @@ app.prepare().then(() => {
 
     const buffer: { data: RawData; isBinary: boolean }[] = []
     let authed = false
-    let pipeline: VoicePipeline | null = null
+    let pipeline: VoicePipeline | ManageEnginePipeline | null = null
     let tenantRef: any = null
     let instanceRef: any = null
     let pinnedAgentSnId: string | undefined = undefined
     let pinnedAgentId: string | undefined = undefined
+    let meMode = false
 
     ws.on('message', (data: RawData, isBinary: boolean) => {
       if (!authed) {
@@ -240,7 +242,7 @@ app.prepare().then(() => {
 
     let audioChunks = 0
     function processMessage(rawData: RawData, isBinary: boolean) {
-      if (!pipeline || !instanceRef) return
+      if (!pipeline || (!instanceRef && !meMode)) return
       if (isBinary) {
         audioChunks++
         if (audioChunks === 1 || audioChunks % 50 === 0) {
@@ -275,6 +277,58 @@ app.prepare().then(() => {
     // and the first connection attempt after a cold start often fails with ECONNREFUSED.
     ;(async () => {
       if (!token) { ws.close(4001, 'Token required'); return }
+
+      // ── ManageEngine agent token check (takes priority over SN ApiToken) ──
+      if (token.startsWith('me_')) {
+        try {
+          const meAgent = await db.manageEngineAgent.findUnique({ where: { token }, include: { tenant: true } })
+          if (!meAgent || !meAgent.active) { ws.close(4003, 'Invalid or inactive ME token'); return }
+          tenantRef = meAgent.tenant
+          meMode = true
+
+          // Plan quota gate
+          const gate = await checkRateLimit(tenantRef.id)
+          if (!gate.allowed) {
+            try { ws.send(JSON.stringify({ type: 'error', code: 'quota_exceeded', message: gate.reason, usage: gate.usage })) } catch {}
+            ws.close(4402, 'Quota exceeded'); return
+          }
+
+          const mePipeline = new ManageEnginePipeline({
+            id: meAgent.id, tenantId: meAgent.tenantId, name: meAgent.name,
+            meUrl: meAgent.meUrl, apiKey: meAgent.apiKey,
+            llmApiKey: meAgent.llmApiKey, llmModel: meAgent.llmModel,
+            llmBaseUrl: meAgent.llmBaseUrl, llmProvider: meAgent.llmProvider,
+            ttsVoice: meAgent.ttsVoice, sttLanguage: meAgent.sttLanguage,
+            greeting: meAgent.greeting, identity: meAgent.identity, instructions: meAgent.instructions,
+          })
+          pipeline = mePipeline
+          pipeline.on('ready', (d: any) => { send(ws, { type: 'ready', ...d }) })
+          pipeline.on('state', (s: string) => send(ws, { type: 'state', state: s }))
+          pipeline.on('transcript', (d: any) => send(ws, { type: 'transcript', ...d }))
+          pipeline.on('user_message', (t: string) => send(ws, { type: 'user_message', text: t }))
+          pipeline.on('agent_message', (t: string) => send(ws, { type: 'agent_message', text: t }))
+          pipeline.on('audio', (b: Buffer) => { if (ws.readyState === WebSocket.OPEN) ws.send(b) })
+          pipeline.on('error', (e: any) => send(ws, { type: 'error', message: e.message || 'Error' }))
+          pipeline.on('ended', () => send(ws, { type: 'ended' }))
+          pipeline.on('barge_in', () => send(ws, { type: 'barge_in' }))
+
+          authed = true
+          addLog('info', 'ws', `ME agent "${meAgent.name}" authed (tenant=${tenantRef.id})`, { tenantId: tenantRef.id })
+          for (const b of buffer) processMessage(b.data, b.isBinary)
+          buffer.length = 0
+
+          // ME pipeline starts immediately (no SN init needed)
+          mePipeline.start().catch((e: any) => {
+            addLog('error', 'ws', 'ME pipeline start failed: ' + e.message, { tenantId: tenantRef.id })
+            send(ws, { type: 'error', message: e.message })
+          })
+          return
+        } catch (err: any) {
+          addLog('error', 'ws', 'ME auth error: ' + err.message)
+          ws.close(4500, 'ME auth error'); return
+        }
+      }
+
       try {
         let apiToken: any = null
         for (let attempt = 1; attempt <= 2; attempt++) {
