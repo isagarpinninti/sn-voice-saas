@@ -20,14 +20,14 @@
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? ''
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
-// ── Browser / client-side client (publishable key — safe to expose) ──
+// ── Browser / client-side client (anon key — safe to expose) ──
 // Singleton so all client components share one connection.
-export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 export function createBrowserClient() {
-  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 }
 
 // ── Server-side client (service_role key — bypasses Row Level Security) ──
