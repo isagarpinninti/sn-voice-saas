@@ -33,7 +33,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const body = await req.json()
   const allowed: any = {}
-  const fields = ['name', 'active', 'meUrl', 'apiKey', 'llmProvider', 'llmApiKey', 'llmModel', 'llmBaseUrl', 'ttsVoice', 'sttLanguage', 'greeting', 'identity', 'instructions']
+  const fields = ['name', 'active', 'meUrl', 'apiKey', 'llmProvider', 'llmApiKey', 'llmModel', 'llmBaseUrl', 'ttsVoice', 'sttLanguage', 'greeting', 'identity', 'instructions', 'oauthClientId', 'oauthClientSecret', 'oauthRefreshToken', 'oauthDomain']
   for (const f of fields) {
     if (body[f] !== undefined) {
       // Don't overwrite masked values

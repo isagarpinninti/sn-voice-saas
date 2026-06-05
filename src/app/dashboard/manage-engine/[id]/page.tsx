@@ -17,6 +17,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
 interface MEAgent {
   id: string; name: string; active: boolean
   meUrl: string; apiKey: string
+  oauthClientId: string; oauthClientSecret: string; oauthRefreshToken: string; oauthDomain: string
   llmProvider: string; llmApiKey: string; llmModel: string; llmBaseUrl: string
   ttsVoice: string; sttLanguage: string
   greeting: string; identity: string; instructions: string
@@ -196,6 +197,47 @@ export default function MEAgentDetailPage({ params }: { params: Promise<{ id: st
                   {testResult.success ? testResult.message : testResult.error}
                 </div>
               )}
+            </div>
+          </CardContent></Card>
+        </Section>
+
+        {/* ── SDP Cloud OAuth ── */}
+        <Section title="SDP Cloud OAuth" description="Zoho OAuth credentials for ManageEngine ServiceDesk Plus Cloud. When set, these are used instead of the Technician API key.">
+          <Card><CardContent className="p-5 space-y-4">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100 text-[12px] text-blue-700">
+              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              For SDP Cloud, fill these fields. Leave blank to use the Technician API key (on-premise only).
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Client ID</Label>
+                <Input value={agent.oauthClientId} onChange={e => upd('oauthClientId', e.target.value)} placeholder="1000.XXXX..." className="font-mono text-[12px]" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Zoho Domain</Label>
+                <select
+                  value={agent.oauthDomain}
+                  onChange={e => upd('oauthDomain', e.target.value)}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-[13px] focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="accounts.zoho.com">Global (accounts.zoho.com)</option>
+                  <option value="accounts.zoho.in">India (accounts.zoho.in)</option>
+                  <option value="accounts.zoho.eu">EU (accounts.zoho.eu)</option>
+                  <option value="accounts.zoho.com.au">Australia (accounts.zoho.com.au)</option>
+                  <option value="accounts.zoho.jp">Japan (accounts.zoho.jp)</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Client Secret</Label>
+              <Input type="password" value={agent.oauthClientSecret} onChange={e => upd('oauthClientSecret', e.target.value)} placeholder="0b0657e..." className="font-mono text-[12px]" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Refresh Token</Label>
+              <Input type="password" value={agent.oauthRefreshToken} onChange={e => upd('oauthRefreshToken', e.target.value)} placeholder="1000.xxxx..." className="font-mono text-[12px]" />
+              <p className="text-[10px] text-muted-foreground/70">
+                Get this from Zoho API Console → Self Client → generate code with scope <code className="font-mono text-[10px]">SDPOnDemand.requests.ALL,SDPOnDemand.setup.READ</code> → exchange for tokens.
+              </p>
             </div>
           </CardContent></Card>
         </Section>

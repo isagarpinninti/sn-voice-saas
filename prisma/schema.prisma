@@ -127,6 +127,14 @@ model ManageEngineAgent {
   identity    String   @default("You are a helpful IT support agent. You help users create, check, and update support tickets in ManageEngine ServiceDesk.")
   instructions String  @default("Always confirm the issue clearly before creating a ticket. Read back the ticket number after creation. Keep responses concise for voice.")
 
+  // OAuth for SDP Cloud (Zoho OAuth — used instead of apiKey when set)
+  oauthClientId     String  @default("")
+  oauthClientSecret String  @default("")
+  oauthRefreshToken String  @default("")
+  // Zoho accounts domain — accounts.zoho.in (India), accounts.zoho.com (Global),
+  // accounts.zoho.eu (EU), accounts.zoho.com.au (AU)
+  oauthDomain       String  @default("accounts.zoho.com")
+
   // Widget token — set when agent is activated
   token       String?  @unique
 

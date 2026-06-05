@@ -19,6 +19,11 @@ export interface MEAgentConfig {
   name: string
   meUrl: string
   apiKey: string
+  // Zoho OAuth for SDP Cloud
+  oauthClientId: string
+  oauthClientSecret: string
+  oauthRefreshToken: string
+  oauthDomain: string   // e.g. accounts.zoho.in
   llmProvider: string
   llmApiKey: string
   llmModel: string
@@ -100,6 +105,9 @@ const ME_TOOLS = [
 export class ManageEnginePipeline extends EventEmitter {
   private agentConfig: MEAgentConfig
   private messages: any[] = []
+  // OAuth access token cache — refreshed automatically when expired
+  private _oauthAccessToken: string = ''
+  private _oauthTokenExpiry: number = 0
   private stt: any = null
   private ttsKey: string = ''
   private ttsVoice: string = 'aura-asteria-en'
@@ -432,10 +440,50 @@ export class ManageEnginePipeline extends EventEmitter {
     return { text: fullText.trim(), toolCalls }
   }
 
+  // ── OAuth token refresh (Zoho — used for SDP Cloud) ──
+  private get _usesOAuth(): boolean {
+    const c = this.agentConfig
+    return !!(c.oauthRefreshToken && c.oauthClientId && c.oauthClientSecret)
+  }
+
+  private async _refreshOAuthToken(): Promise<string> {
+    const { oauthClientId, oauthClientSecret, oauthRefreshToken, oauthDomain } = this.agentConfig
+    const domain = (oauthDomain || 'accounts.zoho.com').replace(/^https?:\/\//, '')
+    const res = await fetch(`https://${domain}/oauth/v2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: oauthClientId,
+        client_secret: oauthClientSecret,
+        refresh_token: oauthRefreshToken,
+      }).toString(),
+    })
+    const data = await res.json()
+    if (!data.access_token) throw new Error('OAuth refresh failed: ' + (data.error || JSON.stringify(data)))
+    this._oauthAccessToken = data.access_token
+    this._oauthTokenExpiry = Date.now() + ((data.expires_in || 3600) - 60) * 1000  // refresh 60s early
+    addLog('info', 'me-pipeline', 'OAuth token refreshed', { tenantId: this.agentConfig.tenantId })
+    return this._oauthAccessToken
+  }
+
+  private async _getAuthHeaders(): Promise<Record<string, string>> {
+    if (this._usesOAuth) {
+      // Refresh if expired or not yet fetched
+      if (!this._oauthAccessToken || Date.now() >= this._oauthTokenExpiry) {
+        await this._refreshOAuthToken()
+      }
+      return { 'Authorization': `Zoho-oauthtoken ${this._oauthAccessToken}` }
+    }
+    // On-premise: Technician Key
+    return { 'technician_key': this.agentConfig.apiKey }
+  }
+
   // ── ManageEngine REST API tool execution ──
   private async executeMETool(toolName: string, args: any): Promise<any> {
-    const { meUrl, apiKey } = this.agentConfig
+    const { meUrl } = this.agentConfig
     const base = meUrl.replace(/\/$/, '')
+    const authHeaders = await this._getAuthHeaders()
 
     try {
       switch (toolName) {
@@ -448,7 +496,7 @@ export class ManageEnginePipeline extends EventEmitter {
 
           const res = await fetch(`${base}/api/v3/requests`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'technician_key': apiKey },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...authHeaders },
             body: `input_data=${encodeURIComponent(JSON.stringify({ request: requestData }))}`,
           })
           const data = await res.json()
@@ -457,9 +505,7 @@ export class ManageEnginePipeline extends EventEmitter {
         }
 
         case 'get_request': {
-          const res = await fetch(`${base}/api/v3/requests/${args.request_id}`, {
-            headers: { 'technician_key': apiKey },
-          })
+          const res = await fetch(`${base}/api/v3/requests/${args.request_id}`, { headers: authHeaders })
           const data = await res.json()
           const req = data.request || data
           return {
@@ -482,7 +528,7 @@ export class ManageEnginePipeline extends EventEmitter {
 
           const res = await fetch(`${base}/api/v3/requests/${args.request_id}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'technician_key': apiKey },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...authHeaders },
             body: `input_data=${encodeURIComponent(JSON.stringify({ request: updateData }))}`,
           })
           const data = await res.json()
@@ -496,7 +542,7 @@ export class ManageEnginePipeline extends EventEmitter {
           if (args.status) listInfo.search_criteria = [{ field: 'status.name', condition: 'is', value: args.status }]
 
           const res = await fetch(`${base}/api/v3/requests?input_data=${encodeURIComponent(JSON.stringify({ list_info: listInfo }))}`, {
-            headers: { 'technician_key': apiKey },
+            headers: authHeaders,
           })
           const data = await res.json()
           const requests = (data.requests || []).map((r: any) => ({

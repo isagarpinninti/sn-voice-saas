@@ -296,6 +296,8 @@ app.prepare().then(() => {
           const mePipeline = new ManageEnginePipeline({
             id: meAgent.id, tenantId: meAgent.tenantId, name: meAgent.name,
             meUrl: meAgent.meUrl, apiKey: meAgent.apiKey,
+            oauthClientId: meAgent.oauthClientId, oauthClientSecret: meAgent.oauthClientSecret,
+            oauthRefreshToken: meAgent.oauthRefreshToken, oauthDomain: meAgent.oauthDomain,
             llmApiKey: meAgent.llmApiKey, llmModel: meAgent.llmModel,
             llmBaseUrl: meAgent.llmBaseUrl, llmProvider: meAgent.llmProvider,
             ttsVoice: meAgent.ttsVoice, sttLanguage: meAgent.sttLanguage,
