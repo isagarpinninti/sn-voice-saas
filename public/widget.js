@@ -530,6 +530,7 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
       if(SN_USER_ID)wsUrl+='&user='+encodeURIComponent(SN_USER_ID)
       ws=new WebSocket(wsUrl);ws.binaryType='arraybuffer'
       ws.onopen=function(){
+        console.log('[ZeVox] WS open')
         var startMsg={type:'start',originPortal:detectOriginPortal()}
         var fc=getFormContext();if(fc)startMsg.formContext=fc
         ws.send(JSON.stringify(startMsg))
@@ -546,6 +547,9 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
             _wsRetried=false
             startMic().catch(function(){setSt('Listening...','Mic unavailable')})
           }
+          else if(m.type==='status'){
+            if(m.state==='connecting')setSt('Initializing...','')
+          }
           else if(m.type==='state'){
             if(m.state==='listening'){setSt('Listening...','Talk to interrupt');setRing(true);setWave(true)}
             else if(m.state==='speaking'){setSt('Speaking...','Talk to interrupt');setRing(true);setWave(true)}
@@ -559,6 +563,7 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
         }catch{}
       }
       ws.onclose=function(ev){
+        console.log('[ZeVox] WS close code='+ev.code+' clean='+ev.wasClean+' reason="'+ev.reason+'"')
         // Code 1006 = abnormal closure (network drop / Render proxy blip) before
         // the pipeline was fully ready. Silently retry once — the server is fine.
         if(active && ev.code===1006 && !_wsRetried){

@@ -238,7 +238,13 @@ app.prepare().then(() => {
     })
     ws.on('error', (err) => addLog('error', 'ws', 'Err: ' + err.message))
 
-    const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); else clearInterval(ping) }, 30000)
+    // Send an immediate text frame so any HTTP proxy (Render, Nginx) sees
+    // bidirectional traffic and doesn't close an "idle" WebSocket before auth
+    // completes. DB lookup on a cold Neon connection can take 3-5 seconds.
+    try { ws.send(JSON.stringify({ type: 'status', state: 'connecting' })) } catch {}
+
+    // Ping every 3 s — fast enough to keep the proxy alive during the auth phase.
+    const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); else clearInterval(ping) }, 3000)
     ws.on('close', () => clearInterval(ping))
 
     let audioChunks = 0
