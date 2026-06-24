@@ -250,17 +250,17 @@ app.prepare().then(() => {
       addLog('warn', 'ws', 'Status send failed: ' + e.message)
     }
 
-    // Send a JSON text frame every 2 s to keep Render's reverse-proxy idle timer
-    // from firing. Render's proxy resets its timer on APPLICATION DATA frames
-    // (text/binary) but NOT on WS control frames (ping opcode 0x9) — sending
-    // ws.ping() was actually causing the proxy to close the TCP connection.
+    // Render's proxy closes WS connections with ~1.8 s of server→client idle.
+    // Send a JSON text frame every 1 s so the idle timer never fires.
+    // WS PING control frames (opcode 0x9) do NOT reset this timer and actually
+    // trigger a forced TCP close — only text/binary application frames work.
     const keepAlive = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         try { ws.send(JSON.stringify({ type: 'ping' })) } catch {}
       } else {
         clearInterval(keepAlive)
       }
-    }, 2000)
+    }, 1000)
     ws.on('close', () => clearInterval(keepAlive))
 
     let audioChunks = 0
