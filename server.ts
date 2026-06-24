@@ -202,6 +202,7 @@ app.prepare().then(() => {
 
     const buffer: { data: RawData; isBinary: boolean }[] = []
     let authed = false
+    let wsClosed = false
     let pipeline: VoicePipeline | null = null
     let tenantRef: any = null
     let instanceRef: any = null
@@ -220,6 +221,7 @@ app.prepare().then(() => {
     const connectionStartTime = Date.now()
 
     ws.on('close', (code) => {
+      wsClosed = true
       addLog('info', 'ws', 'Closed code=' + code, { tenantId: tenantRef?.id })
       if (tenantRef) {
         const durationMin = Math.round((Date.now() - connectionStartTime) / 60000 * 100) / 100
@@ -241,7 +243,12 @@ app.prepare().then(() => {
     // Send an immediate text frame so any HTTP proxy (Render, Nginx) sees
     // bidirectional traffic and doesn't close an "idle" WebSocket before auth
     // completes. DB lookup on a cold Neon connection can take 3-5 seconds.
-    try { ws.send(JSON.stringify({ type: 'status', state: 'connecting' })) } catch {}
+    try {
+      ws.send(JSON.stringify({ type: 'status', state: 'connecting' }))
+      addLog('info', 'ws', 'Sent status:connecting')
+    } catch (e: any) {
+      addLog('warn', 'ws', 'Status send failed: ' + e.message)
+    }
 
     // Ping every 3 s — fast enough to keep the proxy alive during the auth phase.
     const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); else clearInterval(ping) }, 3000)
@@ -374,6 +381,14 @@ app.prepare().then(() => {
       }
 
       addLog('info', 'ws', 'Authed. Tenant=' + tenantRef.id + ' Instance=' + instanceRef.id + ' SN=' + instanceRef.snInstanceUrl, { tenantId: tenantRef.id })
+
+      // Guard: browser may have closed the WS during the DB auth round-trip
+      // (cold Neon start can take 3-5 s). Bail out here so we don't create an
+      // orphaned pipeline that runs forever with no client to receive audio.
+      if (wsClosed) {
+        addLog('warn', 'ws', 'WS closed before auth completed — aborting pipeline creation', { tenantId: tenantRef.id })
+        return
+      }
 
       // Pipeline uses Instance credentials
       pipeline = new VoicePipeline({
