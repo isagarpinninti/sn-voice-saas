@@ -519,6 +519,12 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
     }
     setSt('Connecting...','')
     await initAudioWorklet()
+    _connectWs()
+  }
+
+  // Separated so the 1006 retry path can call it directly without re-running startCall guards.
+  var _wsRetried=false
+  function _connectWs(){
     try{
       var wsUrl=GW.replace('http','ws')+'/voice?token='+TK
       if(SN_USER_ID)wsUrl+='&user='+encodeURIComponent(SN_USER_ID)
@@ -527,12 +533,19 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
         var startMsg={type:'start',originPortal:detectOriginPortal()}
         var fc=getFormContext();if(fc)startMsg.formContext=fc
         ws.send(JSON.stringify(startMsg))
-        startMic().catch(function(){setSt('Listening...','Mic unavailable')})
+        // Mic starts only after {type:'ready'} — prevents 10+ audio chunks
+        // being buffered on the server during the auth+init phase, which can
+        // cause the connection to appear stale and drop with code 1006 before
+        // any audio is spoken back to the user.
       }
       ws.onmessage=function(ev){
         if(ev.data instanceof ArrayBuffer){feedAudio(ev.data);return}
         try{var m=JSON.parse(ev.data)
-          if(m.type==='ready'){setSt('Listening...','Say something');setRing(true);setWave(true)}
+          if(m.type==='ready'){
+            setSt('Listening...','Say something');setRing(true);setWave(true)
+            _wsRetried=false
+            startMic().catch(function(){setSt('Listening...','Mic unavailable')})
+          }
           else if(m.type==='state'){
             if(m.state==='listening'){setSt('Listening...','Talk to interrupt');setRing(true);setWave(true)}
             else if(m.state==='speaking'){setSt('Speaking...','Talk to interrupt');setRing(true);setWave(true)}
@@ -545,13 +558,25 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
           else if(m.type==='ended')endCallGraceful()
         }catch{}
       }
-      ws.onclose=function(ev){if(active){if(ev.code!==1000)setSt('Connection lost','');setTimeout(function(){if(active)endCall()},1500)}}
+      ws.onclose=function(ev){
+        // Code 1006 = abnormal closure (network drop / Render proxy blip) before
+        // the pipeline was fully ready. Silently retry once — the server is fine.
+        if(active && ev.code===1006 && !_wsRetried){
+          _wsRetried=true
+          stopMic()
+          ws=null
+          setSt('Connecting...','')
+          setTimeout(_connectWs,1200)
+          return
+        }
+        if(active){if(ev.code!==1000)setSt('Connection lost','');setTimeout(function(){if(active)endCall()},1500)}
+      }
     }catch(err){setSt('Failed',err.message);setTimeout(endCall,2000)}
   }
 
   function endCall(){
     try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch{}
-    ws=null;stopMic();clearAudio();active=false;muted=false;setRing(false);setWave(false)
+    ws=null;stopMic();clearAudio();active=false;muted=false;_wsRetried=false;setRing(false);setWave(false)
     pendingNavUrls=[]
     if(FM){
       var card=g('zvf-card');if(card)card.classList.remove('on')
