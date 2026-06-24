@@ -569,7 +569,15 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
           setTimeout(_connectWs,1200)
           return
         }
-        if(active){if(ev.code!==1000)setSt('Connection lost','');setTimeout(function(){if(active)endCall()},1500)}
+        if(active){
+          // Only set status if no error message was already shown via onmessage
+          // (error messages set status and call endCallGraceful which sets active=false)
+          if(ev.code===4001)setSt('Setup needed','Embed snippet not on page')
+          else if(ev.code===4003)setSt('Invalid token','Re-sync agent in ServiceNow')
+          else if(ev.code===4500)setSt('Server error','Check Render logs')
+          else if(ev.code!==1000)setSt('Connection lost','')
+          setTimeout(function(){if(active)endCall()},1500)
+        }
       }
     }catch(err){setSt('Failed',err.message);setTimeout(endCall,2000)}
   }

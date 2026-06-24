@@ -275,7 +275,10 @@ app.prepare().then(() => {
     // Retry once on DB connection failure — Neon/Render free-tier DBs auto-pause
     // and the first connection attempt after a cold start often fails with ECONNREFUSED.
     ;(async () => {
-      if (!token) { ws.close(4001, 'Token required'); return }
+      if (!token) {
+        try { ws.send(JSON.stringify({ type: 'error', message: 'No token — paste the embed snippet from ZeVox Dashboard → Agents onto your portal page.' })) } catch {}
+        ws.close(4001, 'Token required'); return
+      }
 
       try {
         let apiToken: any = null
@@ -292,11 +295,17 @@ app.prepare().then(() => {
             break
           } catch (dbErr: any) {
             addLog('warn', 'ws', `Auth DB attempt ${attempt} failed: ${dbErr.message?.split('\n')[0]}`)
-            if (attempt === 2) { ws.close(4500, 'Auth error'); return }
+            if (attempt === 2) {
+              try { ws.send(JSON.stringify({ type: 'error', message: 'Database error — the server is waking up. Please try again in 10 seconds.' })) } catch {}
+              ws.close(4500, 'Auth error'); return
+            }
             await new Promise(r => setTimeout(r, 5000))
           }
         }
-        if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
+        if (!apiToken?.active) {
+          try { ws.send(JSON.stringify({ type: 'error', message: 'Invalid token — open your Voice Agent in ServiceNow and click "Sync with SaaS", then update the embed snippet on your portal.' })) } catch {}
+          ws.close(4003, 'Invalid token'); return
+        }
 
         // Resolution order: instance-token → agent-token → tenant-fallback
         if (apiToken.instance?.tenant) {
@@ -313,8 +322,12 @@ app.prepare().then(() => {
             where: { tenantId: tenantRef.id, active: true },
             orderBy: { createdAt: 'asc' },
           })
-          if (!instanceRef) { ws.close(4003, 'No instance configured'); return }
+          if (!instanceRef) {
+            try { ws.send(JSON.stringify({ type: 'error', message: 'No ServiceNow instance configured — go to ZeVox Dashboard → Connection and add your instance.' })) } catch {}
+            ws.close(4003, 'No instance configured'); return
+          }
         } else {
+          try { ws.send(JSON.stringify({ type: 'error', message: 'Token not linked to an instance — click "Sync with SaaS" on your Voice Agent record in ServiceNow.' })) } catch {}
           ws.close(4003, 'Invalid token'); return
         }
 
@@ -346,7 +359,11 @@ app.prepare().then(() => {
             data: { usage: gate.usage },
           }).catch(() => {})
         }
-      } catch (err: any) { addLog('error', 'ws', 'Auth error: ' + err.message); ws.close(4500, 'Error'); return }
+      } catch (err: any) {
+        addLog('error', 'ws', 'Auth error: ' + err.message)
+        try { ws.send(JSON.stringify({ type: 'error', message: 'Auth error: ' + (err.message || 'Unknown') })) } catch {}
+        ws.close(4500, 'Error'); return
+      }
 
       addLog('info', 'ws', 'Authed. Tenant=' + tenantRef.id + ' Instance=' + instanceRef.id + ' SN=' + instanceRef.snInstanceUrl, { tenantId: tenantRef.id })
 
