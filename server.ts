@@ -30,7 +30,9 @@ app.prepare().then(() => {
   //   /voice      — browser widget (linear16 @ 16kHz)
   //   /phone      — Twilio/Telnyx Media Streams (mulaw @ 8kHz)
   //   /transcribe — SN Voice Assistant transcription widget (linear16 @ 16kHz)
-  const wssVoice = new WebSocketServer({ noServer: true })
+  // perMessageDeflate disabled: PCM audio is incompressible and the compression
+  // context can corrupt on the first large binary frame, causing 1006 drops.
+  const wssVoice = new WebSocketServer({ noServer: true, perMessageDeflate: false })
   const wssPhone = new WebSocketServer({ noServer: true })
   const wssTranscribe = new WebSocketServer({ noServer: true })
 

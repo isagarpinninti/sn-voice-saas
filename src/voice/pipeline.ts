@@ -460,16 +460,26 @@ export class VoicePipeline extends EventEmitter {
         baseURL: llmBaseUrl,
       })
 
-      // Speak greeting
-      if (config.greeting) {
-        this.isAgentSpeaking = true
-        this.emit('state', 'speaking')
-        await this.speakAndStreamAny(config.greeting)
-        this.isAgentSpeaking = false
-      }
-
+      // Emit ready BEFORE the greeting so the widget starts the mic immediately.
+      // This establishes bidirectional binary traffic (mic audio browser→server)
+      // before TTS audio flows server→browser. Without it the WS was one-sided
+      // binary at greeting start, which caused code-1006 drops on Render's proxy.
       this.emit('state', 'listening')
       this.emit('ready', { sessionId: this.snSessionId, greeting: config.greeting })
+      addLog('info', 'pipeline', 'Started OK', { tenantId: this.tenant.id })
+
+      // Small pause so getUserMedia resolves and mic binary frames start flowing
+      // before TTS audio arrives — gives Render's proxy bidirectional traffic.
+      if (config.greeting) {
+        await new Promise(r => setTimeout(r, 1200))
+        if (!this.stopped) {
+          this.isAgentSpeaking = true
+          this.emit('state', 'speaking')
+          await this.speakAndStreamAny(config.greeting)
+          this.isAgentSpeaking = false
+          this.emit('state', 'listening')
+        }
+      }
 
     } catch (err: any) {
       const errorMsg = err.message || String(err)
