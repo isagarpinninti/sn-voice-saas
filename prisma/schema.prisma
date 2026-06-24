@@ -86,62 +86,11 @@ model Tenant {
   allowedCallers    AllowedCaller[]
   attachmentUploads AttachmentUpload[]
   incidentAgentConfig IncidentAgentConfig?
-  meAgents          ManageEngineAgent[]
 
   company           String?
 
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
-}
-
-// =====================================================
-// ManageEngine Voice Agents
-// Fully self-contained: LLM, persona, and ME credentials
-// stored here — no ServiceNow instance required.
-// =====================================================
-
-model ManageEngineAgent {
-  id          String   @id @default(cuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  name        String
-  active      Boolean  @default(true)
-
-  // ManageEngine ServiceDesk connection
-  meUrl       String   // e.g. https://helpdesk.company.com
-  apiKey      String   // Technician API key
-
-  // LLM config (stored in SaaS — not backed by ServiceNow)
-  llmProvider String   @default("openai")
-  llmApiKey   String   @default("")
-  llmModel    String   @default("gpt-4o-mini")
-  llmBaseUrl  String   @default("https://api.openai.com/v1")
-
-  // Voice
-  ttsVoice    String   @default("aura-asteria-en")
-  sttLanguage String   @default("multi")
-
-  // Agent persona
-  greeting    String   @default("Hello! I'm your IT support assistant. How can I help you today?")
-  identity    String   @default("You are a helpful IT support agent. You help users create, check, and update support tickets in ManageEngine ServiceDesk.")
-  instructions String  @default("Always confirm the issue clearly before creating a ticket. Read back the ticket number after creation. Keep responses concise for voice.")
-
-  // OAuth for SDP Cloud (Zoho OAuth — used instead of apiKey when set)
-  oauthClientId     String  @default("")
-  oauthClientSecret String  @default("")
-  oauthRefreshToken String  @default("")
-  // Zoho accounts domain — accounts.zoho.in (India), accounts.zoho.com (Global),
-  // accounts.zoho.eu (EU), accounts.zoho.com.au (AU)
-  oauthDomain       String  @default("accounts.zoho.com")
-
-  // Widget token — set when agent is activated
-  token       String?  @unique
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([tenantId])
 }
 
 enum Plan {
