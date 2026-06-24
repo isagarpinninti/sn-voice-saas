@@ -162,6 +162,17 @@ model Agent {
   ttsVoice   String   @default("aura-asteria-en")
   showOn     String   @default("portal")
 
+  // Widget customization (per-agent config/override)
+  widgetColor        String?  @default("#10b981")
+  widgetPosition     String?  @default("right")
+  widgetVoiceOnly    Boolean  @default(false)
+  widgetAutoOpen     Boolean  @default(false)
+  widgetGreeting     String?
+  widgetAgentName    String?
+  widgetShowBranding Boolean  @default(true)
+  widgetLogoUrl      String?
+  widgetBorderRadius String?  @default("full")
+
   // Caller group — SN sys_user_group synced from ServiceNow
   callerGroupSysId String?
   callerGroupName  String?

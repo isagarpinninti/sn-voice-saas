@@ -8,6 +8,27 @@
  *   "form"              — centered rectangle card, no corner positioning
  */
 (function(){
+  // ── Safeguard: Do not load on the SaaS dashboard or landing pages, or if the dashboard is embedded in an iframe ──
+  try {
+    var loc = window.location;
+    var isVoicePage = loc.pathname.indexOf('/voice') === 0;
+    var isSaaS = loc.hostname === 'zevox.onrender.com' || loc.hostname === 'localhost' || loc.hostname === '127.0.0.1';
+    if (isSaaS && !isVoicePage) {
+      return;
+    }
+    // If we are in a parent window (like ServiceNow) that embeds the SaaS dashboard in an iframe, hide the widget
+    var frames = document.getElementsByTagName('iframe');
+    for (var i = 0; i < frames.length; i++) {
+      try {
+        var src = frames[i].src || '';
+        if (src.indexOf('/dashboard') !== -1 && (src.indexOf('zevox.onrender.com') !== -1 || src.indexOf('localhost') !== -1)) {
+          console.log('[ZeVox] SaaS dashboard detected in iframe, hiding widget');
+          return;
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
+
   var sc=document.currentScript||document.querySelector('script[data-token]')
   var TK=(window.ZeVoxConfig&&window.ZeVoxConfig.token)||window.ZEVOX_TOKEN||(sc&&sc.getAttribute('data-token'))||''
   var GW=(window.ZeVoxConfig&&window.ZeVoxConfig.gateway)||(sc&&sc.src?new URL(sc.src).origin:'')||'https://zevox.onrender.com'
