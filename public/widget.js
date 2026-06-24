@@ -529,22 +529,16 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
       var wsUrl=GW.replace('http','ws')+'/voice?token='+TK
       if(SN_USER_ID)wsUrl+='&user='+encodeURIComponent(SN_USER_ID)
       ws=new WebSocket(wsUrl);ws.binaryType='arraybuffer'
-      var _hbId=null
       ws.onopen=function(){
         console.log('[ZeVox] WS open')
         var startMsg={type:'start',originPortal:detectOriginPortal()}
         var fc=getFormContext();if(fc)startMsg.formContext=fc
         ws.send(JSON.stringify(startMsg))
-        _hbId=setInterval(function(){
-          if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'heartbeat'}))
-          else{clearInterval(_hbId);_hbId=null}
-        },400)
       }
       ws.onmessage=function(ev){
         if(ev.data instanceof ArrayBuffer){feedAudio(ev.data);return}
         try{var m=JSON.parse(ev.data)
           if(m.type==='ready'){
-            clearInterval(_hbId);_hbId=null
             setSt('Listening...','Say something');setRing(true);setWave(true)
             _wsRetried=false
             startMic().catch(function(){setSt('Listening...','Mic unavailable')})
@@ -565,7 +559,6 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
         }catch{}
       }
       ws.onclose=function(ev){
-        clearInterval(_hbId);_hbId=null
         console.log('[ZeVox] WS close code='+ev.code+' clean='+ev.wasClean+' reason="'+ev.reason+'"')
         // Code 1006 = abnormal closure (network drop / Render proxy blip) before
         // the pipeline was fully ready. Silently retry once — the server is fine.

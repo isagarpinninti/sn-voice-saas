@@ -17,6 +17,12 @@ const app = next({ dev })
 const handle = app.getRequestHandler()
 const port = parseInt(process.env.PORT || '3000')
 
+// Cache resolved API tokens for 5 minutes so repeat WS connections skip the
+// Neon round-trip entirely. First connection on a cold Neon instance still
+// takes 2-4s and will hit Render's idle timeout; the widget auto-retries once
+// and the second attempt hits this cache and authenticates in <1ms.
+const apiTokenCache = new Map<string, { data: any; expiresAt: number }>()
+
 app.prepare().then(() => {
   // Warm up the Prisma connection pool so the first WS auth query
   // completes in <100ms instead of 3-5s (Neon cold-start penalty).
@@ -244,28 +250,12 @@ app.prepare().then(() => {
     })
     ws.on('error', (err) => addLog('error', 'ws', 'Err: ' + err.message))
 
-    // Send an immediate text frame so any HTTP proxy (Render, Nginx) sees
-    // bidirectional traffic and doesn't close an "idle" WebSocket before auth
-    // completes. DB lookup on a cold Neon connection can take 3-5 seconds.
-    try {
-      ws.send(JSON.stringify({ type: 'status', state: 'connecting' }))
-      addLog('info', 'ws', 'Sent status:connecting')
-    } catch (e: any) {
-      addLog('warn', 'ws', 'Status send failed: ' + e.message)
-    }
-
-    // Render's proxy closes WS connections with ~1.8 s of server→client idle.
-    // Send a JSON text frame every 1 s so the idle timer never fires.
-    // WS PING control frames (opcode 0x9) do NOT reset this timer and actually
-    // trigger a forced TCP close — only text/binary application frames work.
-    const keepAlive = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        try { ws.send(JSON.stringify({ type: 'ping' })) } catch {}
-      } else {
-        clearInterval(keepAlive)
-      }
-    }, 200)
-    ws.on('close', () => clearInterval(keepAlive))
+    // Do NOT send any server-initiated frames during auth — Render's proxy
+    // closes the WS ~1ms after the second server frame if the client has not
+    // yet "responded" (empirically confirmed: 500ms ping → 501ms close,
+    // 200ms ping → 202ms close). Auth latency is handled by the token cache
+    // instead: cached tokens resolve in <1ms; the widget auto-retries once on
+    // a 1006 so a cold-Neon first connection succeeds on the second attempt.
 
     let audioChunks = 0
     function processMessage(rawData: RawData, isBinary: boolean) {
@@ -310,24 +300,31 @@ app.prepare().then(() => {
 
       try {
         let apiToken: any = null
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            apiToken = await db.apiToken.findUnique({
-              where: { token },
-              include: {
-                instance: { include: { tenant: true } },
-                agent: { include: { instance: { include: { tenant: true } } } },
-                tenant: true,
-              },
-            })
-            break
-          } catch (dbErr: any) {
-            addLog('warn', 'ws', `Auth DB attempt ${attempt} failed: ${dbErr.message?.split('\n')[0]}`)
-            if (attempt === 2) {
-              try { ws.send(JSON.stringify({ type: 'error', message: 'Database error — the server is waking up. Please try again in 10 seconds.' })) } catch {}
-              ws.close(4500, 'Auth error'); return
+        const cached = apiTokenCache.get(token)
+        if (cached && cached.expiresAt > Date.now()) {
+          apiToken = cached.data
+          addLog('info', 'ws', 'Token resolved from cache', { tenantId: cached.data?.instance?.tenant?.id || cached.data?.tenant?.id })
+        } else {
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              apiToken = await db.apiToken.findUnique({
+                where: { token },
+                include: {
+                  instance: { include: { tenant: true } },
+                  agent: { include: { instance: { include: { tenant: true } } } },
+                  tenant: true,
+                },
+              })
+              if (apiToken) apiTokenCache.set(token, { data: apiToken, expiresAt: Date.now() + 5 * 60 * 1000 })
+              break
+            } catch (dbErr: any) {
+              addLog('warn', 'ws', `Auth DB attempt ${attempt} failed: ${dbErr.message?.split('\n')[0]}`)
+              if (attempt === 2) {
+                try { ws.send(JSON.stringify({ type: 'error', message: 'Database error — the server is waking up. Please try again in 10 seconds.' })) } catch {}
+                ws.close(4500, 'Auth error'); return
+              }
+              await new Promise(r => setTimeout(r, 5000))
             }
-            await new Promise(r => setTimeout(r, 5000))
           }
         }
         if (!apiToken?.active) {
