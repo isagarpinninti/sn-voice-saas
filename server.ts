@@ -260,7 +260,7 @@ app.prepare().then(() => {
       } else {
         clearInterval(keepAlive)
       }
-    }, 1000)
+    }, 500)
     ws.on('close', () => clearInterval(keepAlive))
 
     let audioChunks = 0
