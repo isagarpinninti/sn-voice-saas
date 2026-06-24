@@ -80,7 +80,7 @@ app.prepare().then(() => {
         } catch (err: any) {
           addLog('warn', 'transcribe-ws', `Auth DB attempt ${attempt} failed: ${err.message?.split('\n')[0]}`)
           if (attempt === 2) { ws.close(4500, 'Auth error'); return }
-          await new Promise(r => setTimeout(r, 3000))
+          await new Promise(r => setTimeout(r, 5000))
         }
       }
       if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
@@ -347,7 +347,7 @@ app.prepare().then(() => {
           } catch (dbErr: any) {
             addLog('warn', 'ws', `Auth DB attempt ${attempt} failed: ${dbErr.message?.split('\n')[0]}`)
             if (attempt === 2) { ws.close(4500, 'Auth error'); return }
-            await new Promise(r => setTimeout(r, 3000))
+            await new Promise(r => setTimeout(r, 5000))
           }
         }
         if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
