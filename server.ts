@@ -18,6 +18,10 @@ const handle = app.getRequestHandler()
 const port = parseInt(process.env.PORT || '3000')
 
 app.prepare().then(() => {
+  // Warm up the Prisma connection pool so the first WS auth query
+  // completes in <100ms instead of 3-5s (Neon cold-start penalty).
+  db.$connect().catch((e: any) => addLog('warn', 'server', 'DB warmup failed: ' + e.message))
+
   const server = createServer((req, res) => {
     if (req.url?.startsWith('/widget.js') || req.url?.startsWith('/voice-transcribe-widget.js') || req.url?.startsWith('/voice-agent-incident-widget.js')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')

@@ -538,7 +538,7 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
         _hbId=setInterval(function(){
           if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'heartbeat'}))
           else{clearInterval(_hbId);_hbId=null}
-        },800)
+        },400)
       }
       ws.onmessage=function(ev){
         if(ev.data instanceof ArrayBuffer){feedAudio(ev.data);return}
