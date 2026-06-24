@@ -36,7 +36,7 @@ app.prepare().then(() => {
   //   /transcribe — SN Voice Assistant transcription widget (linear16 @ 16kHz)
   // perMessageDeflate disabled: PCM audio is incompressible and the compression
   // context can corrupt on the first large binary frame, causing 1006 drops.
-  const wssVoice = new WebSocketServer({ noServer: true, perMessageDeflate: false })
+  const wssVoice = new WebSocketServer({ noServer: true })
   const wssPhone = new WebSocketServer({ noServer: true })
   const wssTranscribe = new WebSocketServer({ noServer: true })
 
@@ -226,7 +226,7 @@ app.prepare().then(() => {
 
     ws.on('close', (code) => {
       wsClosed = true
-      addLog('info', 'ws', 'Closed code=' + code, { tenantId: tenantRef?.id })
+      addLog('info', 'ws', 'Closed code=' + code + ' after ' + (Date.now() - connectionStartTime) + 'ms', { tenantId: tenantRef?.id })
       if (tenantRef) {
         const durationMin = Math.round((Date.now() - connectionStartTime) / 60000 * 100) / 100
         if (durationMin > 0.01) {
@@ -393,7 +393,7 @@ app.prepare().then(() => {
         ws.close(4500, 'Error'); return
       }
 
-      addLog('info', 'ws', 'Authed. Tenant=' + tenantRef.id + ' Instance=' + instanceRef.id + ' SN=' + instanceRef.snInstanceUrl, { tenantId: tenantRef.id })
+      addLog('info', 'ws', 'Authed after ' + (Date.now() - connectionStartTime) + 'ms. Tenant=' + tenantRef.id + ' Instance=' + instanceRef.id + ' SN=' + instanceRef.snInstanceUrl, { tenantId: tenantRef.id })
 
       // Guard: browser may have closed the WS during the DB auth round-trip
       // (cold Neon start can take 3-5 s). Bail out here so we don't create an
