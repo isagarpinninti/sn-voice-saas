@@ -363,7 +363,15 @@ app.prepare().then(() => {
       pipeline.on('user_message', (t: string) => { addLog('info', 'pipeline', 'USER: ' + t.substring(0, 80), { tenantId: tenantRef.id }); send(ws, { type: 'user_message', text: t }) })
       pipeline.on('agent_message', (t: string) => { addLog('info', 'pipeline', 'AGENT: ' + t.substring(0, 80), { tenantId: tenantRef.id }); send(ws, { type: 'agent_message', text: t }) })
       pipeline.on('audio', (b: Buffer) => { if (ws.readyState === WebSocket.OPEN) ws.send(b) })
-      pipeline.on('error', (e: any) => { addLog('error', 'pipeline', String(e.message || e), { tenantId: tenantRef.id }); send(ws, { type: 'error', message: e.message || 'Error' }) })
+      pipeline.on('error', (e: any) => {
+        const errMsg = String(e.message || e)
+        addLog('error', 'pipeline', errMsg, { tenantId: tenantRef.id })
+        console.error('[WS] Pipeline error (will close 4500):', errMsg)
+        try { ws.send(JSON.stringify({ type: 'error', message: errMsg })) } catch {}
+        // Close with a non-1000 code so the client knows it was an error,
+        // and Render doesn't kill it with 1006 (abnormal closure).
+        try { ws.close(4500, errMsg.substring(0, 100)) } catch {}
+      })
       pipeline.on('ended', () => { addLog('info', 'pipeline', 'ENDED', { tenantId: tenantRef.id }); send(ws, { type: 'ended' }) })
       pipeline.on('navigate', (d: any) => { addLog('info', 'pipeline', 'NAV ' + (d.urls?.length || 0) + ' url(s)', { tenantId: tenantRef.id }); send(ws, { type: 'navigate', urls: d.urls }) })
       pipeline.on('attachment_requested', (d: any) => { addLog('info', 'pipeline', 'Attachment requested: ' + d.reason, { tenantId: tenantRef.id }); send(ws, { type: 'attachment_requested', url: d.url, reason: d.reason }) })
