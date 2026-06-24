@@ -250,9 +250,18 @@ app.prepare().then(() => {
       addLog('warn', 'ws', 'Status send failed: ' + e.message)
     }
 
-    // Ping every 3 s — fast enough to keep the proxy alive during the auth phase.
-    const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); else clearInterval(ping) }, 3000)
-    ws.on('close', () => clearInterval(ping))
+    // Send a JSON text frame every 2 s to keep Render's reverse-proxy idle timer
+    // from firing. Render's proxy resets its timer on APPLICATION DATA frames
+    // (text/binary) but NOT on WS control frames (ping opcode 0x9) — sending
+    // ws.ping() was actually causing the proxy to close the TCP connection.
+    const keepAlive = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ type: 'ping' })) } catch {}
+      } else {
+        clearInterval(keepAlive)
+      }
+    }, 2000)
+    ws.on('close', () => clearInterval(keepAlive))
 
     let audioChunks = 0
     function processMessage(rawData: RawData, isBinary: boolean) {
