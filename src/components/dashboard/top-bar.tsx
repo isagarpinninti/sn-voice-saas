@@ -99,12 +99,12 @@ export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboa
             <div
               className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium ${
                 connected
-                  ? 'border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-700'
-                  : 'border-amber-500/25 bg-amber-500/[0.08] text-amber-700'
+                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+                  : 'border-amber-500/20 bg-amber-500/10 text-amber-400'
               }`}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-amber-400'}`}
               />
               {connected ? 'ServiceNow connected' : 'Not connected'}
             </div>
