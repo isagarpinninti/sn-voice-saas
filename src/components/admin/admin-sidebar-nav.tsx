@@ -40,8 +40,8 @@ export function AdminSidebarNav({ items }: { items: AdminNavItem[] }) {
                     className={cn(
                       'group relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] transition-all duration-150',
                       active
-                        ? 'bg-card text-foreground font-medium shadow-[0_1px_2px_0_rgb(16_24_40/0.04)] border border-border'
-                        : 'text-sidebar-foreground hover:text-foreground hover:bg-sidebar-accent'
+                        ? 'bg-white/8 text-[#ededed] font-medium'
+                        : 'text-[#666666] hover:text-[#a1a1a1] hover:bg-white/4'
                     )}
                   >
                     {active && (
@@ -50,7 +50,7 @@ export function AdminSidebarNav({ items }: { items: AdminNavItem[] }) {
                     <svg
                       className={cn(
                         'w-[16px] h-[16px] shrink-0 transition-colors',
-                        active ? 'text-destructive' : 'text-muted-foreground group-hover:text-foreground'
+                        active ? 'text-[#ef4444]' : 'text-[#666666] group-hover:text-[#a1a1a1]'
                       )}
                       fill="none"
                       viewBox="0 0 24 24"

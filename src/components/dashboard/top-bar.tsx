@@ -71,20 +71,20 @@ export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboa
   const pageLabel = (pathname && PAGE_LABELS[pathname]) || 'Dashboard'
 
   return (
-    <header className="sticky top-0 z-40 h-14 border-b border-border bg-background/85 backdrop-blur-md">
-      <div className="h-full px-6 flex items-center justify-between">
+    <header className="sticky top-0 z-40 h-13 border-b border-white/8 bg-[#0a0a0a] shrink-0">
+      <div className="h-full px-5 flex items-center justify-between">
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[13px]">
-          <span className="text-foreground font-semibold tracking-tight">{workspaceName}</span>
+          <span className="text-[#a1a1a1] font-medium tracking-tight">{workspaceName}</span>
           {variant === 'admin' && (
             <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold tracking-wider bg-destructive/10 text-destructive border border-destructive/20">
               ADMIN
             </span>
           )}
-          <svg className="w-3 h-3 text-muted-foreground/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg className="w-3 h-3 text-[#666]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
-          <span className="text-muted-foreground">{pageLabel}</span>
+          <span className="text-[#666]">{pageLabel}</span>
         </nav>
 
         {/* Right side */}
@@ -93,14 +93,12 @@ export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboa
           {/* Connection status — dashboard only */}
           {variant === 'dashboard' && connected !== null && (
             <div
-              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium ${
-                connected
-                  ? 'border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-700'
-                  : 'border-amber-500/25 bg-amber-500/[0.08] text-amber-700'
+              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium bg-white/4 border-white/8 ${
+                connected ? 'text-[#22c55e]' : 'text-[#f59e0b]'
               }`}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-[#22c55e]' : 'bg-[#f59e0b]'}`}
               />
               {connected ? 'ServiceNow connected' : 'Not connected'}
             </div>
@@ -111,36 +109,36 @@ export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboa
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="flex items-center gap-2 px-1.5 py-1 rounded-md hover:bg-secondary transition-colors"
+              className="flex items-center gap-2 px-1.5 py-1 rounded-md hover:bg-white/6 transition-colors"
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
               {userImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={userImage} alt="" className="w-7 h-7 rounded-full ring-1 ring-border" />
+                <img src={userImage} alt="" className="w-7 h-7 rounded-full ring-1 ring-white/10" />
               ) : (
-                <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-primary text-[11px] font-bold ring-1 ring-primary/20">
+                <div className="w-7 h-7 rounded-full bg-[#6366f1]/20 flex items-center justify-center text-[#6366f1] text-[11px] font-bold ring-1 ring-[#6366f1]/20">
                   {userEmail?.[0]?.toUpperCase() || '?'}
                 </div>
               )}
-              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+              <ChevronDown className="w-3.5 h-3.5 text-[#666]" />
             </button>
 
             {menuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 top-full mt-1 w-64 rounded-lg border border-border bg-popover shadow-[0_8px_24px_-4px_rgb(16_24_40/0.12)] overflow-hidden"
+                className="absolute right-0 top-full mt-1 w-64 rounded-lg border border-white/10 bg-[#111] shadow-[0_8px_24px_-4px_rgba(0,0,0,0.6)] overflow-hidden"
               >
-                <div className="px-3 py-3 border-b border-border bg-secondary/40">
-                  <p className="text-[12px] font-medium text-foreground truncate">{userEmail || 'Account'}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Signed in</p>
+                <div className="px-3 py-3 border-b border-white/8 bg-white/3">
+                  <p className="text-[12px] font-medium text-[#ededed] truncate">{userEmail || 'Account'}</p>
+                  <p className="text-[10px] text-[#666] mt-0.5">Signed in</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => signOut({ callbackUrl: '/' })}
-                  className="w-full text-left px-3 py-2.5 text-[12px] text-foreground hover:bg-secondary transition-colors flex items-center gap-2"
+                  className="w-full text-left px-3 py-2.5 text-[12px] text-[#ededed] hover:bg-white/6 transition-colors flex items-center gap-2"
                 >
-                  <svg className="w-3.5 h-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                  <svg className="w-3.5 h-3.5 text-[#666]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
                   </svg>
                   Sign out

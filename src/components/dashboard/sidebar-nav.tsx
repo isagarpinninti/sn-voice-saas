@@ -27,7 +27,7 @@ export function SidebarNav({ items }: { items: NavItem[] }) {
         if (groupItems.length === 0) return null
         return (
           <div key={group} className="mb-5 last:mb-0">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-[0.12em] px-2.5 pt-1 pb-2 font-semibold">
+            <p className="text-[10px] text-[#666] uppercase tracking-widest px-2.5 pt-1 pb-2 font-medium">
               {NAV_GROUP_LABELS[group]}
             </p>
             <div className="space-y-[2px]">
@@ -41,17 +41,14 @@ export function SidebarNav({ items }: { items: NavItem[] }) {
                     className={cn(
                       'group relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] transition-all duration-150',
                       active
-                        ? 'bg-card text-foreground font-medium shadow-[0_1px_2px_0_rgb(16_24_40/0.04)] border border-border'
-                        : 'text-sidebar-foreground hover:text-foreground hover:bg-sidebar-accent'
+                        ? 'bg-white/8 text-[#ededed] font-medium'
+                        : 'text-[#666666] hover:text-[#a1a1a1] hover:bg-white/4'
                     )}
                   >
-                    {active && (
-                      <span className="absolute -left-[13px] top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
-                    )}
                     <svg
                       className={cn(
                         'w-[16px] h-[16px] shrink-0 transition-colors',
-                        active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                        active ? 'text-[#a1a1a1]' : 'text-[#666666] group-hover:text-[#a1a1a1]'
                       )}
                       fill="none"
                       viewBox="0 0 24 24"

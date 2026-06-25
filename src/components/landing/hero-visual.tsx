@@ -12,7 +12,7 @@ export function HeroWaveform() {
         className="absolute inset-0 rounded-[2rem] opacity-60 blur-3xl pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse at 30% 40%, rgba(16,185,129,0.45), transparent 60%), radial-gradient(ellipse at 70% 60%, rgba(99,102,241,0.35), transparent 60%)',
+            'radial-gradient(ellipse at 30% 40%, rgba(99,102,241,0.45), transparent 60%), radial-gradient(ellipse at 70% 60%, rgba(139,92,246,0.35), transparent 60%)',
         }}
       />
 
@@ -39,7 +39,7 @@ export function HeroWaveform() {
             {Array.from({ length: BAR_COUNT }).map((_, i) => (
               <span
                 key={i}
-                className="wave-bar w-[3px] rounded-full bg-gradient-to-t from-primary/40 via-primary to-indigo-400"
+                className="wave-bar w-[3px] rounded-full bg-gradient-to-t from-[#6366f1]/40 via-[#6366f1] to-[#818cf8]"
                 style={{
                   height: `${20 + Math.abs(Math.sin((i / BAR_COUNT) * Math.PI * 2)) * 60}px`,
                   animationDelay: `${(i * 70) % 900}ms`,

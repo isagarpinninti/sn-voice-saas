@@ -50,36 +50,39 @@ export default async function DashboardLayout({ children }: { children: React.Re
           targetUserEmail={impersonationContext.targetEmail}
         />
       )}
-      <div className="min-h-screen flex bg-background text-foreground">
+      <div className="flex h-screen overflow-hidden bg-black">
         {/* ── Sidebar ── */}
-        <aside className="w-[228px] border-r border-sidebar-border bg-sidebar flex flex-col shrink-0 sticky top-0 h-screen">
+        <aside className="w-56 shrink-0 flex flex-col border-r border-white/8 bg-[#0a0a0a]">
           {/* Logo */}
-          <div className="px-5 pt-5 pb-4">
-            <Link href="/dashboard" className="flex items-center gap-2 group">
-              <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center transition-transform group-hover:scale-105">
-                <svg className="w-3.5 h-3.5 text-primary-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <div className="flex items-center gap-2.5 px-4 h-13 border-b border-white/8 shrink-0">
+            <Link href="/dashboard" className="flex items-center gap-2.5 group">
+              <div
+                className="w-6 h-6 rounded-md bg-[#6366f1] flex items-center justify-center transition-transform group-hover:scale-105"
+                style={{ boxShadow: '0 0 12px rgba(99,102,241,0.45)' }}
+              >
+                <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                 </svg>
               </div>
-              <span className="text-[13px] font-semibold tracking-tight text-sidebar-foreground group-hover:text-foreground transition-colors">
+              <span className="text-[13px] font-semibold tracking-tight text-[#ededed] group-hover:text-white transition-colors">
                 ZeVox
               </span>
             </Link>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 overflow-y-auto pt-1">
+          <nav className="flex-1 px-3 overflow-y-auto py-3">
             <SidebarNav items={NAV} />
 
             {/* Resources (always shown) */}
             <div className="mb-4 last:mb-0">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest px-2.5 pt-1 pb-1.5 font-medium">
+              <p className="text-[10px] text-[#666] uppercase tracking-widest px-2.5 pt-1 pb-1.5 font-medium">
                 Resources
               </p>
               <a
                 href="/docs"
                 target="_blank"
-                className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/60 transition-all duration-150"
+                className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] text-[#666] hover:text-[#a1a1a1] hover:bg-white/4 transition-all duration-150"
               >
                 <svg className="w-[16px] h-[16px] shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
@@ -87,28 +90,31 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 Documentation
               </a>
             </div>
-
           </nav>
 
-          {/* Workspace footer (replaces user card — user moved to top bar dropdown) */}
-          <div className="px-3 py-3 border-t border-sidebar-border">
-            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md">
-              <div className="min-w-0">
-                <p className="text-[12px] font-medium text-foreground truncate">{workspaceName}</p>
-                <p className="text-[10px] text-muted-foreground">{planLabel} plan</p>
+          {/* Sidebar footer */}
+          <div className="px-3 py-3 border-t border-white/8 space-y-2 shrink-0">
+            {/* Plan badge */}
+            <Link
+              href="/dashboard/billing"
+              className="flex items-center justify-between px-2.5 py-1.5 rounded-md border border-white/8 bg-white/3 hover:bg-white/5 transition-colors"
+            >
+              <span className="text-[12px] font-medium text-[#ededed] truncate">{workspaceName}</span>
+              <span className="text-[10px] text-[#666] ml-2 shrink-0">{planLabel}</span>
+            </Link>
+
+            {/* User row with initials avatar */}
+            <div className="flex items-center gap-2 px-2.5 py-1.5">
+              <div className="w-6 h-6 rounded-full bg-[#6366f1]/20 flex items-center justify-center text-[#6366f1] text-[10px] font-bold shrink-0 ring-1 ring-[#6366f1]/20">
+                {session.user.email?.[0]?.toUpperCase() || '?'}
               </div>
-              <Link
-                href="/dashboard/billing"
-                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Manage
-              </Link>
+              <p className="text-[11px] text-[#a1a1a1] truncate flex-1 min-w-0">{session.user.email}</p>
             </div>
           </div>
         </aside>
 
         {/* ── Main column ── */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           <TopBar
             workspaceName={workspaceName}
             userEmail={session.user.email}
@@ -125,7 +131,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               ) : undefined
             }
           />
-          <main className="flex-1">
+          <main className="flex-1 bg-black overflow-y-auto">
             <div className="max-w-[1100px] mx-auto px-8 py-8">{children}</div>
           </main>
         </div>
