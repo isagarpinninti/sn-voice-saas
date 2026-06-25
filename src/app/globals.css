@@ -1,14 +1,13 @@
 @import "tailwindcss";
 
 /* ============================================================
- * ZeVox Design System — Dark Indigo Edition
- * Landing page: custom dark tokens (canvas, surface-*, text-*)
- * Dashboard: shadcn :root tokens (unchanged)
- * Accent: #6366f1 indigo (replaces emerald throughout)
+ * ZeVox Design System — Light edition
+ * Token architecture inspired by Resonance / shadcn.
+ * Brand color (emerald) preserved as the single vibrant accent.
+ * Light is default; dark palette retained for future toggle.
  * ============================================================ */
 
 @theme inline {
-    /* ── Shadcn token bridge (used by dashboard) ── */
     --color-background: var(--background);
     --color-foreground: var(--foreground);
     --color-card: var(--card);
@@ -49,101 +48,117 @@
     --radius-2xl: calc(var(--radius) + 8px);
     --radius-3xl: calc(var(--radius) + 12px);
 
-    --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
-    --font-mono: "SF Mono", "Fira Code", ui-monospace, monospace;
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
 
-    --shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.25), 0 1px 3px 0 rgb(0 0 0 / 0.30);
-    --shadow-lift: 0 2px 4px -1px rgb(0 0 0 / 0.3), 0 4px 12px -2px rgb(0 0 0 / 0.35);
-    --shadow-focus: 0 0 0 3px rgb(99 102 241 / 0.25);
-
-    /* ── Dark landing-page tokens (canvas, surface-*, text-*, brand accent) ── */
-    --color-canvas: #000000;
-    --color-surface-1: #0a0a0a;
-    --color-surface-2: #111111;
-    --color-surface-3: #1a1a1a;
-    --color-border-subtle: rgba(255,255,255,0.08);
-    --color-border-strong: rgba(255,255,255,0.15);
-
-    --color-text-primary: #ededed;
-    --color-text-secondary: #a1a1a1;
-    --color-text-tertiary: #666666;
-
-    /* Landing brand accent — indigo */
-    --color-brand: #6366f1;
-    --color-brand-hover: #818cf8;
-    --color-brand-subtle: rgba(99,102,241,0.1);
-    --color-brand-subtle-hover: rgba(99,102,241,0.18);
+    /* Soft elevation system — hairline + low-contrast shadow, never heavy */
+    --shadow-soft: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
+    --shadow-lift: 0 2px 4px -1px rgb(16 24 40 / 0.05), 0 4px 12px -2px rgb(16 24 40 / 0.08);
+    --shadow-focus: 0 0 0 3px rgb(16 185 129 / 0.18);
 }
 
-/* ── Dashboard shadcn tokens — Dark mode (default) ── */
-:root, .dark {
+/* ── Light mode (DEFAULT for ZeVox) ── */
+:root {
     --radius: 0.75rem;
 
-    --background: #000000;
-    --foreground: #ededed;
-    
-    --card: #0a0a0a;
-    --card-foreground: #ededed;
-    
-    --popover: #111111;
-    --popover-foreground: #ededed;
+    /* Off-white canvas, true white card — creates subtle layering without heavy shadows */
+    --background: oklch(0.985 0.002 260);          /* ~#FAFAFB — cool off-white */
+    --foreground: oklch(0.16 0 0);                 /* near-black, never pure */
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.16 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.16 0 0);
 
-    --primary: #6366f1;
-    --primary-foreground: #ffffff;
+    /* ZeVox brand: emerald-500 — the single vibrant accent across the product */
+    --primary: oklch(0.696 0.17 162.48);
+    --primary-foreground: oklch(0.985 0 0);
 
-    --secondary: #1a1a1a;
-    --secondary-foreground: #ededed;
-    
-    --muted: #111111;
-    --muted-foreground: #a1a1a1;
-    
-    --accent: #111111;
-    --accent-foreground: #ededed;
+    /* Monochrome secondary scale — used for buttons, chips, panels */
+    --secondary: oklch(0.968 0 0);                 /* neutral-100 */
+    --secondary-foreground: oklch(0.21 0 0);
+    --muted: oklch(0.968 0 0);
+    --muted-foreground: oklch(0.47 0 0);           /* stronger contrast than default for a11y */
+    --accent: oklch(0.968 0 0);
+    --accent-foreground: oklch(0.21 0 0);
 
-    --destructive: #ef4444;
-    --destructive-foreground: #ffffff;
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.985 0 0);
 
-    --border: rgba(255, 255, 255, 0.08);
-    --input: rgba(255, 255, 255, 0.08);
-    --ring: #6366f1;
+    /* Hairline borders — subtle but visible */
+    --border: oklch(0.918 0 0);
+    --input: oklch(0.918 0 0);
+    --ring: oklch(0.696 0.17 162.48);
 
-    --sidebar: #0a0a0a;
-    --sidebar-foreground: #a1a1a1;
-    --sidebar-primary: #6366f1;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: rgba(255, 255, 255, 0.04);
-    --sidebar-accent-foreground: #ededed;
-    --sidebar-border: rgba(255, 255, 255, 0.08);
-    --sidebar-ring: #6366f1;
+    --chart-1: oklch(0.696 0.17 162.48);           /* emerald */
+    --chart-2: oklch(0.6 0.118 264);               /* indigo */
+    --chart-3: oklch(0.398 0.07 227);
+    --chart-4: oklch(0.828 0.189 84);              /* amber */
+    --chart-5: oklch(0.769 0.188 70);
 
-    --chart-1: #6366f1;
-    --chart-2: #a78bfa;
-    --chart-3: #f472b6;
-    --chart-4: #60a5fa;
-    --chart-5: #34d399;
+    /* Sidebar matches canvas for a seamless panel feel (ElevenLabs move) */
+    --sidebar: oklch(0.985 0.002 260);
+    --sidebar-foreground: oklch(0.35 0 0);
+    --sidebar-primary: oklch(0.696 0.17 162.48);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.955 0 0);
+    --sidebar-accent-foreground: oklch(0.16 0 0);
+    --sidebar-border: oklch(0.918 0 0);
+    --sidebar-ring: oklch(0.696 0.17 162.48);
+}
+
+/* ── Dark mode (retained for future toggle, not currently enabled) ── */
+.dark {
+    --background: oklch(0.09 0 0);            /* #050505-ish */
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.13 0 0);                  /* slightly elevated surface */
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.145 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+
+    /* ZeVox brand: emerald-400 (#34d399) — slightly brighter for dark mode */
+    --primary: oklch(0.765 0.177 162.48);
+    --primary-foreground: oklch(0.13 0 0);
+
+    --secondary: oklch(0.205 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.205 0 0);
+    --muted-foreground: oklch(0.62 0 0);      /* zinc-500 ish */
+    --accent: oklch(0.205 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(1 0 0 / 6%);              /* white/[0.06] equivalent */
+    --input: oklch(1 0 0 / 10%);
+    --ring: oklch(0.765 0.177 162.48);
+
+    --chart-1: oklch(0.765 0.177 162.48);     /* emerald */
+    --chart-2: oklch(0.696 0.17 162.48);
+    --chart-3: oklch(0.6 0.118 264);          /* indigo */
+    --chart-4: oklch(0.828 0.189 84);         /* amber */
+    --chart-5: oklch(0.704 0.191 22.216);     /* red */
+
+    --sidebar: oklch(0.09 0 0);
+    --sidebar-foreground: oklch(0.62 0 0);
+    --sidebar-primary: oklch(0.765 0.177 162.48);
+    --sidebar-primary-foreground: oklch(0.13 0 0);
+    --sidebar-accent: oklch(1 0 0 / 4%);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 6%);
+    --sidebar-ring: oklch(0.765 0.177 162.48);
 }
 
 /* ── Base layer ── */
-*, ::after, ::before {
+* {
     box-sizing: border-box;
     border-color: var(--color-border);
-}
-
-html {
-    scroll-behavior: smooth;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 body {
     background: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
-    margin: 0;
-    line-height: 1.5;
-    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 button:not(:disabled),
@@ -151,66 +166,84 @@ button:not(:disabled),
     cursor: pointer;
 }
 
-input, textarea, select, button {
-    font-family: inherit;
-    font-feature-settings: inherit;
-    letter-spacing: inherit;
-}
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
-
-::selection { background: rgba(99,102,241,0.3); color: #fff; }
-
 /* ============================================================
- * Landing-page dark utilities
+ * Landing-page utilities (preserved from original)
  * ============================================================ */
 
-/* Canvas background for landing sections */
-.bg-canvas    { background-color: #000000; }
-.bg-surface-1 { background-color: #0a0a0a; }
-.bg-surface-2 { background-color: #111111; }
-.bg-surface-3 { background-color: #1a1a1a; }
+.gradient-hero {
+    background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 80% 50%, rgba(99, 102, 241, 0.06) 0%, transparent 50%);
+}
 
-.text-text-primary   { color: #ededed; }
-.text-text-secondary { color: #a1a1a1; }
-.text-text-tertiary  { color: #666666; }
+.gradient-glow {
+    background: radial-gradient(ellipse at center, rgba(16, 185, 129, 0.08) 0%, transparent 70%);
+}
 
-/* Indigo brand on landing page */
-.bg-brand         { background-color: #6366f1; }
-.bg-brand-hover   { background-color: #818cf8; }
-.text-brand       { color: #6366f1; }
-.border-brand     { border-color: rgba(99,102,241,0.3); }
+.gradient-card {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%);
+}
 
-/* ── Mesh backgrounds ── */
+.glass {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(16px) saturate(180%);
+    border-bottom: 1px solid oklch(0.918 0 0);
+}
+
+.border-gradient {
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    position: relative;
+}
+.border-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(99, 102, 241, 0.1), transparent);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+}
+
+.text-gradient {
+    background: linear-gradient(135deg, #10b981, #6366f1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ============================================================
+ * Revamp utilities — motion, mesh, glow
+ * ============================================================ */
+
 .mesh-bg {
     background:
-        radial-gradient(ellipse 60% 40% at 15% 10%, rgba(99,102,241,0.18) 0%, transparent 60%),
-        radial-gradient(ellipse 50% 40% at 85% 30%, rgba(139,92,246,0.12) 0%, transparent 60%),
-        radial-gradient(ellipse 70% 50% at 50% 100%, rgba(59,130,246,0.08) 0%, transparent 60%);
+        radial-gradient(ellipse 60% 40% at 15% 10%, rgba(16, 185, 129, 0.14) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 85% 30%, rgba(99, 102, 241, 0.10) 0%, transparent 60%),
+        radial-gradient(ellipse 70% 50% at 50% 100%, rgba(236, 72, 153, 0.06) 0%, transparent 60%);
 }
 
 .mesh-bg-soft {
     background:
-        radial-gradient(ellipse 50% 30% at 20% 0%, rgba(99,102,241,0.12) 0%, transparent 60%),
-        radial-gradient(ellipse 40% 30% at 80% 20%, rgba(139,92,246,0.08) 0%, transparent 60%);
+        radial-gradient(ellipse 50% 30% at 20% 0%, rgba(16, 185, 129, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 80% 20%, rgba(99, 102, 241, 0.06) 0%, transparent 60%);
 }
 
 .grid-overlay {
     background-image:
-        linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
     background-size: 48px 48px;
     mask-image: radial-gradient(ellipse 60% 50% at 50% 30%, #000 0%, transparent 80%);
     -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 30%, #000 0%, transparent 80%);
 }
 
-/* ── Text gradients ── */
 .text-gradient-brand {
-    background: linear-gradient(110deg, #818cf8 0%, #6366f1 40%, #c084fc 100%);
+    background: linear-gradient(110deg, #34d399 0%, #10b981 40%, #6366f1 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -223,27 +256,18 @@ input, textarea, select, button {
     background-clip: text;
 }
 
-.text-gradient {
-    background: linear-gradient(135deg, #6366f1, #c084fc);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-/* ── Glow rings ── */
 .glow-ring {
     box-shadow:
-        0 0 0 1px rgba(99,102,241,0.25),
-        0 8px 40px -8px rgba(99,102,241,0.35);
+        0 0 0 1px rgba(16, 185, 129, 0.18),
+        0 8px 40px -8px rgba(16, 185, 129, 0.25);
 }
 
 .glow-ring-violet {
     box-shadow:
-        0 0 0 1px rgba(139,92,246,0.22),
-        0 8px 40px -8px rgba(139,92,246,0.30);
+        0 0 0 1px rgba(99, 102, 241, 0.22),
+        0 8px 40px -8px rgba(99, 102, 241, 0.28);
 }
 
-/* ── Animations ── */
 @keyframes fade-up {
     from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -253,9 +277,9 @@ input, textarea, select, button {
 }
 
 @keyframes pulse-ring {
-    0%   { box-shadow: 0 0 0 0 rgba(99,102,241,0.45); }
-    70%  { box-shadow: 0 0 0 14px rgba(99,102,241,0); }
-    100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+    0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
+    70%  { box-shadow: 0 0 0 14px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 .animate-pulse-ring { animation: pulse-ring 2s ease-out infinite; }
 
@@ -266,9 +290,9 @@ input, textarea, select, button {
 .shimmer-text {
     background: linear-gradient(
         90deg,
-        rgba(255,255,255,0.3) 0%,
-        rgba(255,255,255,0.9) 50%,
-        rgba(255,255,255,0.3) 100%
+        rgba(255, 255, 255, 0.45) 0%,
+        rgba(255, 255, 255, 0.95) 50%,
+        rgba(255, 255, 255, 0.45) 100%
     );
     background-size: 200% 100%;
     -webkit-background-clip: text;
@@ -286,7 +310,33 @@ input, textarea, select, button {
     animation: wave-bar 1.2s ease-in-out infinite;
 }
 
-/* ── ZeVox waveform motif ── */
+/* ── Misc polish ── */
+html { scroll-behavior: smooth; }
+
+::selection {
+    background: rgba(16, 185, 129, 0.22);
+    color: inherit;
+}
+
+/* Subtle light-mode scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: oklch(0.85 0 0);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.72 0 0);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+}
+
+/* ============================================================
+ * ZeVox touch — voice waveform motif for empty states / dividers
+ * A subtle signature that reinforces the voice-product identity.
+ * ============================================================ */
 .zvx-wave {
     display: inline-flex;
     gap: 3px;
@@ -312,4 +362,6 @@ input, textarea, select, button {
     0%, 100% { transform: scaleY(0.5); }
     50%      { transform: scaleY(1); }
 }
+
+/* Static version — for non-animated contexts like section dividers */
 .zvx-wave-static > span { animation: none; }

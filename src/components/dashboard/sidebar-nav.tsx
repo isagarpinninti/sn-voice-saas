@@ -41,8 +41,8 @@ export function SidebarNav({ items }: { items: NavItem[] }) {
                     className={cn(
                       'group relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] transition-all duration-150',
                       active
-                        ? 'bg-white/8 text-foreground font-medium border border-white/5'
-                        : 'text-sidebar-foreground hover:text-foreground hover:bg-white/4'
+                        ? 'bg-card text-foreground font-medium shadow-[0_1px_2px_0_rgb(16_24_40/0.04)] border border-border'
+                        : 'text-sidebar-foreground hover:text-foreground hover:bg-sidebar-accent'
                     )}
                   >
                     {active && (

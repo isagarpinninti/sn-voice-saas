@@ -14,11 +14,6 @@ services:
         fromDatabase:
           name: zevox-db
           property: connectionString
-      # Same connection string — used by Prisma's directUrl when configured
-      - key: DIRECT_URL
-        fromDatabase:
-          name: zevox-db
-          property: connectionString
 
       # NextAuth — generated once, stored in Render secrets
       - key: NEXTAUTH_SECRET
