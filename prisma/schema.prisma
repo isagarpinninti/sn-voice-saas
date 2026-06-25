@@ -152,6 +152,17 @@ model Agent {
   name       String   @default("Default Agent")
   snAgentId  String?
 
+  // Widget customization (per-agent — overrides instance-level settings)
+  widgetMode         String?  @default("voice_only")  // voice_only | chat_only | both
+  widgetColor        String?
+  widgetPosition     String?  @default("right")
+  widgetAutoOpen     Boolean  @default(false)
+  widgetGreeting     String?
+  widgetTitle        String?
+  widgetShowBranding Boolean  @default(true)
+  widgetLogoUrl      String?
+  widgetBorderRadius String?  @default("full")
+
   active     Boolean  @default(true)
   tokens     ApiToken[]
   phoneNumbers PhoneNumber[]

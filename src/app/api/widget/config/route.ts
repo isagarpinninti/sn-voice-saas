@@ -3,12 +3,6 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-/**
- * Widget config endpoint.
- * Token resolves to Instance → instance-level widget config.
- * One widget per ServiceNow instance.
- */
-
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -23,6 +17,7 @@ export async function OPTIONS() {
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const token = url.searchParams.get('token')
+  const agentId = url.searchParams.get('agent') // SaaS Agent.id (= saas_token stored on SN)
 
   if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400, headers: CORS_HEADERS })
 
@@ -35,7 +30,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Invalid token' }, { status: 403, headers: CORS_HEADERS })
   }
 
-  // Prefer instance-linked token, fallback to tenant's first instance
+  // Resolve instance
   let instance = apiToken.instance
   if (!instance && apiToken.tenant) {
     instance = await db.instance.findFirst({
@@ -47,18 +42,41 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'No instance configured' }, { status: 404, headers: CORS_HEADERS })
   }
 
-  return NextResponse.json(
-    {
-      color: instance.widgetColor || '#10b981',
-      position: instance.widgetPosition || 'right',
-      voiceOnly: instance.widgetVoiceOnly,
-      autoOpen: instance.widgetAutoOpen,
-      greeting: instance.widgetGreeting || null,
-      agentName: instance.widgetAgentName || null,
-      showBranding: instance.widgetShowBranding,
-      logoUrl: instance.widgetLogoUrl || null,
-      borderRadius: instance.widgetBorderRadius || 'full',
-    },
-    { headers: CORS_HEADERS }
-  )
+  // Instance-level defaults
+  const base = {
+    color:        instance.widgetColor        || '#10b981',
+    position:     instance.widgetPosition     || 'right',
+    widgetMode:   'voice_only',
+    autoOpen:     instance.widgetAutoOpen,
+    greeting:     instance.widgetGreeting     || null,
+    agentName:    instance.widgetAgentName    || null,
+    showBranding: instance.widgetShowBranding,
+    logoUrl:      instance.widgetLogoUrl      || null,
+    borderRadius: instance.widgetBorderRadius || 'full',
+  }
+
+  // Per-agent override — look up by Agent.id (= saas_token stored on SN voice_agent)
+  if (agentId) {
+    const agent = await db.agent.findFirst({
+      where: { id: agentId, tenantId: apiToken.tenantId },
+    })
+    if (agent) {
+      return NextResponse.json(
+        {
+          color:        agent.widgetColor        || base.color,
+          position:     agent.widgetPosition     || base.position,
+          widgetMode:   agent.widgetMode         || 'voice_only',
+          autoOpen:     agent.widgetAutoOpen     ?? base.autoOpen,
+          greeting:     agent.widgetGreeting     || base.greeting,
+          agentName:    agent.widgetTitle        || agent.name || base.agentName,
+          showBranding: agent.widgetShowBranding ?? base.showBranding,
+          logoUrl:      agent.widgetLogoUrl      || base.logoUrl,
+          borderRadius: agent.widgetBorderRadius || base.borderRadius,
+        },
+        { headers: CORS_HEADERS }
+      )
+    }
+  }
+
+  return NextResponse.json(base, { headers: CORS_HEADERS })
 }
