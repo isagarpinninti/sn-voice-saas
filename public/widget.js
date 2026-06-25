@@ -494,7 +494,7 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
     box.className='';box.innerHTML=''
   }
 
-  function startMic(){if(micStr)return Promise.resolve();return navigator.mediaDevices.getUserMedia({audio:{channelCount:1,sampleRate:16000,echoCancellation:true,noiseSuppression:true}}).then(function(s){micCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});micStr=s;var src=micCtx.createMediaStreamSource(s);micP=micCtx.createScriptProcessor(4096,1,1);micP.onaudioprocess=function(e){if(ws&&ws.readyState===1&&!muted){var f=e.inputBuffer.getChannelData(0),i=new Int16Array(f.length);for(var j=0;j<f.length;j++)i[j]=Math.max(-32768,Math.min(32767,Math.round(f[j]*32767)));ws.send(i.buffer)}};src.connect(micP);micP.connect(micCtx.destination)})}
+  function startMic(){return navigator.mediaDevices.getUserMedia({audio:{channelCount:1,sampleRate:16000,echoCancellation:true,noiseSuppression:true}}).then(function(s){micCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});micStr=s;var src=micCtx.createMediaStreamSource(s);micP=micCtx.createScriptProcessor(4096,1,1);micP.onaudioprocess=function(e){if(ws&&ws.readyState===1&&!muted){var f=e.inputBuffer.getChannelData(0),i=new Int16Array(f.length);for(var j=0;j<f.length;j++)i[j]=Math.max(-32768,Math.min(32767,Math.round(f[j]*32767)));ws.send(i.buffer)}};src.connect(micP);micP.connect(micCtx.destination)})}
   function stopMic(){if(micP){micP.disconnect();micP=null}if(micStr){micStr.getTracks().forEach(function(t){t.stop()});micStr=null}if(micCtx){micCtx.close();micCtx=null}}
 
   function toggleMute(){
@@ -519,87 +519,39 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
     }
     setSt('Connecting...','')
     await initAudioWorklet()
-    // Acquire mic while still in user-gesture context (button click → startCall).
-    // getUserMedia can fail in ws.onopen if the gesture context has expired.
-    await startMic().catch(function(){})
-    _connectWs()
-  }
-
-  // Separated so the 1006 retry path can call it directly without re-running startCall guards.
-  var _wsRetried=false
-  function _connectWs(){
     try{
       var wsUrl=GW.replace('http','ws')+'/voice?token='+TK
       if(SN_USER_ID)wsUrl+='&user='+encodeURIComponent(SN_USER_ID)
       ws=new WebSocket(wsUrl);ws.binaryType='arraybuffer'
       ws.onopen=function(){
-        console.log('[ZeVox] WS open')
-        // Send silence every 100ms so Render's proxy always sees client binary,
-        // even if mic hasn't produced its first real PCM frame yet.
-        // Stops automatically once real mic audio starts flowing.
-        var _sil=setInterval(function(){
-          if(!ws||ws.readyState!==1){clearInterval(_sil);return}
-          if(micStr){clearInterval(_sil);return}
-          ws.send(new Int16Array(160).buffer)
-        },100)
-        // On retry attempts mic was stopped; restart it.  No-ops if already running.
-        startMic().then(function(){clearInterval(_sil)}).catch(function(){})
         var startMsg={type:'start',originPortal:detectOriginPortal()}
         var fc=getFormContext();if(fc)startMsg.formContext=fc
         ws.send(JSON.stringify(startMsg))
+        startMic().catch(function(){setSt('Listening...','Mic unavailable')})
       }
       ws.onmessage=function(ev){
         if(ev.data instanceof ArrayBuffer){feedAudio(ev.data);return}
         try{var m=JSON.parse(ev.data)
-          if(m.type==='ready'){
-            setSt('Listening...','Say something');setRing(true);setWave(true)
-            _wsRetried=false
-            // Mic started in ws.onopen; startMic() no-ops if already running.
-            startMic().catch(function(){setSt('Listening...','Mic unavailable')})
-          }
-          else if(m.type==='status'){
-            if(m.state==='connecting')setSt('Initializing...','')
-          }
+          if(m.type==='ready'){setSt('Listening...','Say something');setRing(true);setWave(true)}
           else if(m.type==='state'){
             if(m.state==='listening'){setSt('Listening...','Talk to interrupt');setRing(true);setWave(true)}
             else if(m.state==='speaking'){setSt('Speaking...','Talk to interrupt');setRing(true);setWave(true)}
             else if(m.state==='processing'){setSt('Thinking...','');setRing(false);setWave(false)}
           }
-          else if(m.type==='barge_in'){clearAudio();setSt('Listening...','Talk to interrupt');setRing(true);setWave(true)}
+          else if(m.type==='barge_in')clearAudio()
           else if(m.type==='navigate')openNavUrls(m.urls)
           else if(m.type==='attachment_requested')showAttachmentRequest(m.url,m.reason)
           else if(m.type==='error'){setSt('Error',m.message);endCallGraceful()}
           else if(m.type==='ended')endCallGraceful()
         }catch{}
       }
-      ws.onclose=function(ev){
-        console.log('[ZeVox] WS close code='+ev.code+' clean='+ev.wasClean+' reason="'+ev.reason+'"')
-        // Code 1006 = abnormal closure (network drop / Render proxy blip) before
-        // the pipeline was fully ready. Silently retry once — the server is fine.
-        if(active && ev.code===1006 && !_wsRetried){
-          _wsRetried=true
-          stopMic()
-          ws=null
-          setSt('Connecting...','')
-          setTimeout(_connectWs,1200)
-          return
-        }
-        if(active){
-          // Only set status if no error message was already shown via onmessage
-          // (error messages set status and call endCallGraceful which sets active=false)
-          if(ev.code===4001)setSt('Setup needed','Embed snippet not on page')
-          else if(ev.code===4003)setSt('Invalid token','Re-sync agent in ServiceNow')
-          else if(ev.code===4500)setSt('Server error','Check Render logs')
-          else if(ev.code!==1000)setSt('Connection lost','')
-          setTimeout(function(){if(active)endCall()},1500)
-        }
-      }
+      ws.onclose=function(ev){if(active){if(ev.code!==1000)setSt('Connection lost','');setTimeout(function(){if(active)endCall()},1500)}}
     }catch(err){setSt('Failed',err.message);setTimeout(endCall,2000)}
   }
 
   function endCall(){
     try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch{}
-    ws=null;stopMic();clearAudio();active=false;muted=false;_wsRetried=false;setRing(false);setWave(false)
+    ws=null;stopMic();clearAudio();active=false;muted=false;setRing(false);setWave(false)
     pendingNavUrls=[]
     if(FM){
       var card=g('zvf-card');if(card)card.classList.remove('on')

@@ -460,22 +460,15 @@ export class VoicePipeline extends EventEmitter {
         baseURL: llmBaseUrl,
       })
 
-      // IMPORTANT: play the greeting TTS BEFORE emitting 'ready'.
-      // Render's reverse proxy closes the WebSocket if the first server text frame
-      // ({type:'ready'}) is not quickly followed by binary. By streaming TTS audio
-      // first, binary is established before any text frame is sent — the original
-      // working pattern. The widget handles {type:'state','speaking'} before ready,
-      // and the AudioWorklet is already initialized (initAudioWorklet() runs on
-      // button click before the WS connects).
+      // Speak greeting
       if (config.greeting) {
-        if (!this.stopped) {
-          this.isAgentSpeaking = true
-          this.emit('state', 'speaking')
-          await this.speakAndStreamAny(config.greeting)
-          this.isAgentSpeaking = false
-          this.emit('state', 'listening')
-        }
+        this.isAgentSpeaking = true
+        this.emit('state', 'speaking')
+        await this.speakAndStreamAny(config.greeting)
+        this.isAgentSpeaking = false
       }
+
+      this.emit('state', 'listening')
       this.emit('ready', { sessionId: this.snSessionId, greeting: config.greeting })
 
     } catch (err: any) {
@@ -829,10 +822,8 @@ export class VoicePipeline extends EventEmitter {
           if (this.isAgentSpeaking) {
             this.isBargingIn = true
             this.isAgentSpeaking = false
-            // Only one text frame here — barge_in. The widget's handler resets
-            // UI to listening state to avoid sending two consecutive text frames
-            // (barge_in + state:listening), which triggers Render's proxy close.
             this.emit('barge_in')
+            this.emit('state', 'listening')
           }
           this.utteranceBuffer += ' ' + transcript
           this.utteranceBuffer = this.utteranceBuffer.trim()

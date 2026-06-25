@@ -6,7 +6,6 @@ import { WebSocketServer, WebSocket, RawData } from 'ws'
 import { db } from './src/lib/db'
 import { addLog } from './src/lib/log-store'
 import { VoicePipeline } from './src/voice/pipeline'
-
 import { checkRateLimit, recordUsage, recordAgentUsage } from './src/lib/rate-limiter'
 import { notifyAdmins } from './src/lib/alerts'
 import { logAudit } from './src/lib/audit'
@@ -17,17 +16,7 @@ const app = next({ dev })
 const handle = app.getRequestHandler()
 const port = parseInt(process.env.PORT || '3000')
 
-// Cache resolved API tokens for 5 minutes so repeat WS connections skip the
-// Neon round-trip entirely. First connection on a cold Neon instance still
-// takes 2-4s and will hit Render's idle timeout; the widget auto-retries once
-// and the second attempt hits this cache and authenticates in <1ms.
-const apiTokenCache = new Map<string, { data: any; expiresAt: number }>()
-
 app.prepare().then(() => {
-  // Warm up the Prisma connection pool so the first WS auth query
-  // completes in <100ms instead of 3-5s (Neon cold-start penalty).
-  db.$connect().catch((e: any) => addLog('warn', 'server', 'DB warmup failed: ' + e.message))
-
   const server = createServer((req, res) => {
     if (req.url?.startsWith('/widget.js') || req.url?.startsWith('/voice-transcribe-widget.js') || req.url?.startsWith('/voice-agent-incident-widget.js')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -40,8 +29,6 @@ app.prepare().then(() => {
   //   /voice      — browser widget (linear16 @ 16kHz)
   //   /phone      — Twilio/Telnyx Media Streams (mulaw @ 8kHz)
   //   /transcribe — SN Voice Assistant transcription widget (linear16 @ 16kHz)
-  // perMessageDeflate disabled: PCM audio is incompressible and the compression
-  // context can corrupt on the first large binary frame, causing 1006 drops.
   const wssVoice = new WebSocketServer({ noServer: true })
   const wssPhone = new WebSocketServer({ noServer: true })
   const wssTranscribe = new WebSocketServer({ noServer: true })
@@ -92,7 +79,7 @@ app.prepare().then(() => {
         } catch (err: any) {
           addLog('warn', 'transcribe-ws', `Auth DB attempt ${attempt} failed: ${err.message?.split('\n')[0]}`)
           if (attempt === 2) { ws.close(4500, 'Auth error'); return }
-          await new Promise(r => setTimeout(r, 5000))
+          await new Promise(r => setTimeout(r, 3000))
         }
       }
       if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
@@ -212,7 +199,6 @@ app.prepare().then(() => {
 
     const buffer: { data: RawData; isBinary: boolean }[] = []
     let authed = false
-    let wsClosed = false
     let pipeline: VoicePipeline | null = null
     let tenantRef: any = null
     let instanceRef: any = null
@@ -231,8 +217,7 @@ app.prepare().then(() => {
     const connectionStartTime = Date.now()
 
     ws.on('close', (code) => {
-      wsClosed = true
-      addLog('info', 'ws', 'Closed code=' + code + ' after ' + (Date.now() - connectionStartTime) + 'ms', { tenantId: tenantRef?.id })
+      addLog('info', 'ws', 'Closed code=' + code, { tenantId: tenantRef?.id })
       if (tenantRef) {
         const durationMin = Math.round((Date.now() - connectionStartTime) / 60000 * 100) / 100
         if (durationMin > 0.01) {
@@ -250,12 +235,8 @@ app.prepare().then(() => {
     })
     ws.on('error', (err) => addLog('error', 'ws', 'Err: ' + err.message))
 
-    // Do NOT send any server-initiated frames during auth — Render's proxy
-    // closes the WS ~1ms after the second server frame if the client has not
-    // yet "responded" (empirically confirmed: 500ms ping → 501ms close,
-    // 200ms ping → 202ms close). Auth latency is handled by the token cache
-    // instead: cached tokens resolve in <1ms; the widget auto-retries once on
-    // a 1006 so a cold-Neon first connection succeeds on the second attempt.
+    const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); else clearInterval(ping) }, 30000)
+    ws.on('close', () => clearInterval(ping))
 
     let audioChunks = 0
     function processMessage(rawData: RawData, isBinary: boolean) {
@@ -293,44 +274,27 @@ app.prepare().then(() => {
     // Retry once on DB connection failure — Neon/Render free-tier DBs auto-pause
     // and the first connection attempt after a cold start often fails with ECONNREFUSED.
     ;(async () => {
-      if (!token) {
-        try { ws.send(JSON.stringify({ type: 'error', message: 'No token — paste the embed snippet from ZeVox Dashboard → Agents onto your portal page.' })) } catch {}
-        ws.close(4001, 'Token required'); return
-      }
-
+      if (!token) { ws.close(4001, 'Token required'); return }
       try {
         let apiToken: any = null
-        const cached = apiTokenCache.get(token)
-        if (cached && cached.expiresAt > Date.now()) {
-          apiToken = cached.data
-          addLog('info', 'ws', 'Token resolved from cache', { tenantId: cached.data?.instance?.tenant?.id || cached.data?.tenant?.id })
-        } else {
-          for (let attempt = 1; attempt <= 2; attempt++) {
-            try {
-              apiToken = await db.apiToken.findUnique({
-                where: { token },
-                include: {
-                  instance: { include: { tenant: true } },
-                  agent: { include: { instance: { include: { tenant: true } } } },
-                  tenant: true,
-                },
-              })
-              if (apiToken) apiTokenCache.set(token, { data: apiToken, expiresAt: Date.now() + 5 * 60 * 1000 })
-              break
-            } catch (dbErr: any) {
-              addLog('warn', 'ws', `Auth DB attempt ${attempt} failed: ${dbErr.message?.split('\n')[0]}`)
-              if (attempt === 2) {
-                try { ws.send(JSON.stringify({ type: 'error', message: 'Database error — the server is waking up. Please try again in 10 seconds.' })) } catch {}
-                ws.close(4500, 'Auth error'); return
-              }
-              await new Promise(r => setTimeout(r, 5000))
-            }
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            apiToken = await db.apiToken.findUnique({
+              where: { token },
+              include: {
+                instance: { include: { tenant: true } },
+                agent: { include: { instance: { include: { tenant: true } } } },
+                tenant: true,
+              },
+            })
+            break
+          } catch (dbErr: any) {
+            addLog('warn', 'ws', `Auth DB attempt ${attempt} failed: ${dbErr.message?.split('\n')[0]}`)
+            if (attempt === 2) { ws.close(4500, 'Auth error'); return }
+            await new Promise(r => setTimeout(r, 3000))
           }
         }
-        if (!apiToken?.active) {
-          try { ws.send(JSON.stringify({ type: 'error', message: 'Invalid token — open your Voice Agent in ServiceNow and click "Sync with SaaS", then update the embed snippet on your portal.' })) } catch {}
-          ws.close(4003, 'Invalid token'); return
-        }
+        if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
 
         // Resolution order: instance-token → agent-token → tenant-fallback
         if (apiToken.instance?.tenant) {
@@ -347,12 +311,8 @@ app.prepare().then(() => {
             where: { tenantId: tenantRef.id, active: true },
             orderBy: { createdAt: 'asc' },
           })
-          if (!instanceRef) {
-            try { ws.send(JSON.stringify({ type: 'error', message: 'No ServiceNow instance configured — go to ZeVox Dashboard → Connection and add your instance.' })) } catch {}
-            ws.close(4003, 'No instance configured'); return
-          }
+          if (!instanceRef) { ws.close(4003, 'No instance configured'); return }
         } else {
-          try { ws.send(JSON.stringify({ type: 'error', message: 'Token not linked to an instance — click "Sync with SaaS" on your Voice Agent record in ServiceNow.' })) } catch {}
           ws.close(4003, 'Invalid token'); return
         }
 
@@ -384,21 +344,9 @@ app.prepare().then(() => {
             data: { usage: gate.usage },
           }).catch(() => {})
         }
-      } catch (err: any) {
-        addLog('error', 'ws', 'Auth error: ' + err.message)
-        try { ws.send(JSON.stringify({ type: 'error', message: 'Auth error: ' + (err.message || 'Unknown') })) } catch {}
-        ws.close(4500, 'Error'); return
-      }
+      } catch (err: any) { addLog('error', 'ws', 'Auth error: ' + err.message); ws.close(4500, 'Error'); return }
 
-      addLog('info', 'ws', 'Authed after ' + (Date.now() - connectionStartTime) + 'ms. Tenant=' + tenantRef.id + ' Instance=' + instanceRef.id + ' SN=' + instanceRef.snInstanceUrl, { tenantId: tenantRef.id })
-
-      // Guard: browser may have closed the WS during the DB auth round-trip
-      // (cold Neon start can take 3-5 s). Bail out here so we don't create an
-      // orphaned pipeline that runs forever with no client to receive audio.
-      if (wsClosed) {
-        addLog('warn', 'ws', 'WS closed before auth completed — aborting pipeline creation', { tenantId: tenantRef.id })
-        return
-      }
+      addLog('info', 'ws', 'Authed. Tenant=' + tenantRef.id + ' Instance=' + instanceRef.id + ' SN=' + instanceRef.snInstanceUrl, { tenantId: tenantRef.id })
 
       // Pipeline uses Instance credentials
       pipeline = new VoicePipeline({
@@ -407,29 +355,13 @@ app.prepare().then(() => {
         snUsername: instanceRef.snUsername,
         snPassword: instanceRef.snPassword,
       })
-      pipeline.on('ready', (d: any) => {
-        addLog('info', 'pipeline', 'READY ' + d.sessionId, { tenantId: tenantRef.id })
-        send(ws, { type: 'ready', ...d })
-        // Send a small silence frame immediately after {type:'ready'} so Render's
-        // proxy sees server binary alongside the text frame. When a greeting is
-        // configured, TTS audio has already been streaming before this point so
-        // binary is already established; this covers the no-greeting case.
-        if (ws.readyState === WebSocket.OPEN) ws.send(Buffer.alloc(320, 0))
-      })
+      pipeline.on('ready', (d: any) => { addLog('info', 'pipeline', 'READY ' + d.sessionId, { tenantId: tenantRef.id }); send(ws, { type: 'ready', ...d }) })
       pipeline.on('state', (s: string) => send(ws, { type: 'state', state: s }))
       pipeline.on('transcript', (d: any) => send(ws, { type: 'transcript', ...d }))
       pipeline.on('user_message', (t: string) => { addLog('info', 'pipeline', 'USER: ' + t.substring(0, 80), { tenantId: tenantRef.id }); send(ws, { type: 'user_message', text: t }) })
       pipeline.on('agent_message', (t: string) => { addLog('info', 'pipeline', 'AGENT: ' + t.substring(0, 80), { tenantId: tenantRef.id }); send(ws, { type: 'agent_message', text: t }) })
       pipeline.on('audio', (b: Buffer) => { if (ws.readyState === WebSocket.OPEN) ws.send(b) })
-      pipeline.on('error', (e: any) => {
-        const errMsg = String(e.message || e)
-        addLog('error', 'pipeline', errMsg, { tenantId: tenantRef.id })
-        console.error('[WS] Pipeline error (will close 4500):', errMsg)
-        try { ws.send(JSON.stringify({ type: 'error', message: errMsg })) } catch {}
-        // Close with a non-1000 code so the client knows it was an error,
-        // and Render doesn't kill it with 1006 (abnormal closure).
-        try { ws.close(4500, errMsg.substring(0, 100)) } catch {}
-      })
+      pipeline.on('error', (e: any) => { addLog('error', 'pipeline', String(e.message || e), { tenantId: tenantRef.id }); send(ws, { type: 'error', message: e.message || 'Error' }) })
       pipeline.on('ended', () => { addLog('info', 'pipeline', 'ENDED', { tenantId: tenantRef.id }); send(ws, { type: 'ended' }) })
       pipeline.on('navigate', (d: any) => { addLog('info', 'pipeline', 'NAV ' + (d.urls?.length || 0) + ' url(s)', { tenantId: tenantRef.id }); send(ws, { type: 'navigate', urls: d.urls }) })
       pipeline.on('attachment_requested', (d: any) => { addLog('info', 'pipeline', 'Attachment requested: ' + d.reason, { tenantId: tenantRef.id }); send(ws, { type: 'attachment_requested', url: d.url, reason: d.reason }) })
