@@ -460,17 +460,13 @@ export class VoicePipeline extends EventEmitter {
         baseURL: llmBaseUrl,
       })
 
-      // NOTE: do NOT emit('state','listening') here — two consecutive server text
-      // frames without binary between them triggers Render's proxy to close the WS.
-      // The widget's {type:'ready'} handler already sets the visual "Listening" state.
-      // server.ts follows {type:'ready'} with a 640-byte silence binary immediately,
-      // so Render sees binary in the same TCP burst — no startup 1006 drop.
-      this.emit('ready', { sessionId: this.snSessionId, greeting: config.greeting })
-      addLog('info', 'pipeline', 'Started OK', { tenantId: this.tenant.id })
-
-      // Start TTS immediately — no delay needed. server.ts sends a silence binary
-      // frame alongside {type:'ready'}, and Deepgram TTS delivers the first audio
-      // chunk within ~200ms, well before Render's ~500ms binary-idle timeout.
+      // IMPORTANT: play the greeting TTS BEFORE emitting 'ready'.
+      // Render's reverse proxy closes the WebSocket if the first server text frame
+      // ({type:'ready'}) is not quickly followed by binary. By streaming TTS audio
+      // first, binary is established before any text frame is sent — the original
+      // working pattern. The widget handles {type:'state','speaking'} before ready,
+      // and the AudioWorklet is already initialized (initAudioWorklet() runs on
+      // button click before the WS connects).
       if (config.greeting) {
         if (!this.stopped) {
           this.isAgentSpeaking = true
@@ -480,6 +476,7 @@ export class VoicePipeline extends EventEmitter {
           this.emit('state', 'listening')
         }
       }
+      this.emit('ready', { sessionId: this.snSessionId, greeting: config.greeting })
 
     } catch (err: any) {
       const errorMsg = err.message || String(err)
