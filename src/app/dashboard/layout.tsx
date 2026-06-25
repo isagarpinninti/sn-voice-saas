@@ -113,7 +113,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
             workspaceName={workspaceName}
             userEmail={session.user.email}
             userImage={session.user.image}
-            isAdmin={adminUser}
             rightSlot={
               adminUser ? (
                 <Link
