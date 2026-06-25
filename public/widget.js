@@ -519,6 +519,9 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
     }
     setSt('Connecting...','')
     await initAudioWorklet()
+    // Acquire mic while still in user-gesture context (button click → startCall).
+    // getUserMedia can fail in ws.onopen if the gesture context has expired.
+    await startMic().catch(function(){})
     _connectWs()
   }
 
@@ -531,13 +534,16 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
       ws=new WebSocket(wsUrl);ws.binaryType='arraybuffer'
       ws.onopen=function(){
         console.log('[ZeVox] WS open')
-        // Send a tiny binary frame immediately to establish client→server binary
-        // traffic before the server sends any text frames. Render's reverse proxy
-        // closes the WS if no client binary is seen before server text arrives.
-        ws.send(new ArrayBuffer(1))
-        // Start mic immediately so PCM audio flows within ~300ms — well before
-        // the server's first text frame (state:speaking fires after SN init + TTS setup).
-        startMic().catch(function(){})
+        // Send silence every 100ms so Render's proxy always sees client binary,
+        // even if mic hasn't produced its first real PCM frame yet.
+        // Stops automatically once real mic audio starts flowing.
+        var _sil=setInterval(function(){
+          if(!ws||ws.readyState!==1){clearInterval(_sil);return}
+          if(micStr){clearInterval(_sil);return}
+          ws.send(new Int16Array(160).buffer)
+        },100)
+        // On retry attempts mic was stopped; restart it.  No-ops if already running.
+        startMic().then(function(){clearInterval(_sil)}).catch(function(){})
         var startMsg={type:'start',originPortal:detectOriginPortal()}
         var fc=getFormContext();if(fc)startMsg.formContext=fc
         ws.send(JSON.stringify(startMsg))
