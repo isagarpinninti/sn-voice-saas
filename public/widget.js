@@ -494,7 +494,7 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
     box.className='';box.innerHTML=''
   }
 
-  function startMic(){return navigator.mediaDevices.getUserMedia({audio:{channelCount:1,sampleRate:16000,echoCancellation:true,noiseSuppression:true}}).then(function(s){micCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});micStr=s;var src=micCtx.createMediaStreamSource(s);micP=micCtx.createScriptProcessor(4096,1,1);micP.onaudioprocess=function(e){if(ws&&ws.readyState===1&&!muted){var f=e.inputBuffer.getChannelData(0),i=new Int16Array(f.length);for(var j=0;j<f.length;j++)i[j]=Math.max(-32768,Math.min(32767,Math.round(f[j]*32767)));ws.send(i.buffer)}};src.connect(micP);micP.connect(micCtx.destination)})}
+  function startMic(){if(micStr)return Promise.resolve();return navigator.mediaDevices.getUserMedia({audio:{channelCount:1,sampleRate:16000,echoCancellation:true,noiseSuppression:true}}).then(function(s){micCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});micStr=s;var src=micCtx.createMediaStreamSource(s);micP=micCtx.createScriptProcessor(4096,1,1);micP.onaudioprocess=function(e){if(ws&&ws.readyState===1&&!muted){var f=e.inputBuffer.getChannelData(0),i=new Int16Array(f.length);for(var j=0;j<f.length;j++)i[j]=Math.max(-32768,Math.min(32767,Math.round(f[j]*32767)));ws.send(i.buffer)}};src.connect(micP);micP.connect(micCtx.destination)})}
   function stopMic(){if(micP){micP.disconnect();micP=null}if(micStr){micStr.getTracks().forEach(function(t){t.stop()});micStr=null}if(micCtx){micCtx.close();micCtx=null}}
 
   function toggleMute(){
@@ -531,6 +531,13 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
       ws=new WebSocket(wsUrl);ws.binaryType='arraybuffer'
       ws.onopen=function(){
         console.log('[ZeVox] WS open')
+        // Send a tiny binary frame immediately to establish client→server binary
+        // traffic before the server sends any text frames. Render's reverse proxy
+        // closes the WS if no client binary is seen before server text arrives.
+        ws.send(new ArrayBuffer(1))
+        // Start mic immediately so PCM audio flows within ~300ms — well before
+        // the server's first text frame (state:speaking fires after SN init + TTS setup).
+        startMic().catch(function(){})
         var startMsg={type:'start',originPortal:detectOriginPortal()}
         var fc=getFormContext();if(fc)startMsg.formContext=fc
         ws.send(JSON.stringify(startMsg))
@@ -541,6 +548,7 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
           if(m.type==='ready'){
             setSt('Listening...','Say something');setRing(true);setWave(true)
             _wsRetried=false
+            // Mic started in ws.onopen; startMic() no-ops if already running.
             startMic().catch(function(){setSt('Listening...','Mic unavailable')})
           }
           else if(m.type==='status'){
