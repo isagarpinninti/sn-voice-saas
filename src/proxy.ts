@@ -21,9 +21,6 @@ export function proxy(req: NextRequest) {
     return new NextResponse('Not found', { status: 404 })
   }
 
-  if (path.startsWith('/admin') || path.startsWith('/api/admin')) {
-    return new NextResponse('Not found', { status: 404 })
-  }
   return NextResponse.next()
 }
 
