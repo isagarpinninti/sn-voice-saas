@@ -29,9 +29,9 @@ app.prepare().then(() => {
   //   /voice      — browser widget (linear16 @ 16kHz)
   //   /phone      — Twilio/Telnyx Media Streams (mulaw @ 8kHz)
   //   /transcribe — SN Voice Assistant transcription widget (linear16 @ 16kHz)
-  const wssVoice = new WebSocketServer({ noServer: true, perMessageDeflate: false })
-  const wssPhone = new WebSocketServer({ noServer: true, perMessageDeflate: false })
-  const wssTranscribe = new WebSocketServer({ noServer: true, perMessageDeflate: false })
+  const wssVoice = new WebSocketServer({ noServer: true })
+  const wssPhone = new WebSocketServer({ noServer: true })
+  const wssTranscribe = new WebSocketServer({ noServer: true })
 
 
   server.on('upgrade', (req, socket, head) => {

@@ -41,19 +41,6 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const a = owned.agent
-  let token = a.tokens[0]?.token ?? null
-
-  if (!token) {
-    token =
-      'sk_live_' +
-      Array.from({ length: 32 }, () =>
-        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
-      ).join('')
-    await db.apiToken.create({
-      data: { tenantId: owned.tenant.id, agentId: a.id, name: 'Default', token },
-    })
-  }
-
   return NextResponse.json({
     id: a.id,
     name: a.name,
@@ -61,19 +48,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
     active: a.active,
     ttsVoice: a.ttsVoice,
     createdAt: a.createdAt,
-    token: token,
+    token: a.tokens[0]?.token ?? null,
     callerGroupSysId: a.callerGroupSysId ?? null,
     callerGroupName: a.callerGroupName ?? null,
-    // Widget customization
-    widgetColor: a.widgetColor || '#10b981',
-    widgetPosition: a.widgetPosition || 'right',
-    widgetVoiceOnly: a.widgetVoiceOnly,
-    widgetAutoOpen: a.widgetAutoOpen,
-    widgetGreeting: a.widgetGreeting || '',
-    widgetAgentName: a.widgetAgentName || '',
-    widgetShowBranding: a.widgetShowBranding,
-    widgetLogoUrl: a.widgetLogoUrl || '',
-    widgetBorderRadius: a.widgetBorderRadius || 'full',
   })
 }
 
@@ -100,17 +77,6 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   if (typeof body.name === 'string') data.name = body.name.trim() || 'Untitled Agent'
   if (typeof body.snAgentId === 'string') data.snAgentId = body.snAgentId.trim() || null
   if (typeof body.active === 'boolean') data.active = body.active
-
-  // Widget customization fields
-  if (typeof body.widgetColor === 'string') data.widgetColor = body.widgetColor || '#10b981'
-  if (typeof body.widgetPosition === 'string') data.widgetPosition = body.widgetPosition || 'right'
-  if (typeof body.widgetVoiceOnly === 'boolean') data.widgetVoiceOnly = body.widgetVoiceOnly
-  if (typeof body.widgetAutoOpen === 'boolean') data.widgetAutoOpen = body.widgetAutoOpen
-  if (typeof body.widgetGreeting === 'string') data.widgetGreeting = body.widgetGreeting || null
-  if (typeof body.widgetAgentName === 'string') data.widgetAgentName = body.widgetAgentName || null
-  if (typeof body.widgetShowBranding === 'boolean') data.widgetShowBranding = body.widgetShowBranding
-  if (typeof body.widgetLogoUrl === 'string') data.widgetLogoUrl = body.widgetLogoUrl || null
-  if (typeof body.widgetBorderRadius === 'string') data.widgetBorderRadius = body.widgetBorderRadius || 'full'
 
   const updated = await db.agent.update({
     where: { id: agent.id },

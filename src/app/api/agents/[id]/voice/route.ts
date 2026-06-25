@@ -67,7 +67,7 @@ export async function PUT(req: Request, ctx: RouteContext) {
   if (agent.snAgentId && agent.instance) {
     try {
       const res = await fetch(
-        `${agent.instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/voice_agent/admin/agents/${agent.snAgentId}`,
+        `${agent.instance.snInstanceUrl}/api/now/table/x_ztpas_ai_voice_a_voice_agent/${agent.snAgentId}`,
         {
           method: 'PATCH',
           headers: {

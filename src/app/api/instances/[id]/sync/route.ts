@@ -60,42 +60,18 @@ export async function POST(_req: Request, ctx: RouteContext) {
     return NextResponse.json({ synced: 0, message: 'No voice agents found in ServiceNow.' })
   }
 
-  const TOKEN_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  function generateEmbedToken() {
-    return (
-      'sk_live_' +
-      Array.from({ length: 32 }, () =>
-        TOKEN_ALPHABET[Math.floor(Math.random() * TOKEN_ALPHABET.length)]
-      ).join('')
-    )
-  }
-
   // Upsert each agent
   let created = 0
   let updated = 0
   for (const sn of snAgents) {
     const existing = await db.agent.findFirst({
       where: { tenantId: tenant.id, snAgentId: sn.sys_id },
-      include: { tokens: { where: { active: true }, take: 1 } },
     })
     if (existing) {
       await db.agent.update({
         where: { id: existing.id },
         data: { name: sn.name, active: sn.active, instanceId: instance.id },
       })
-      
-      // If the existing agent has no active token, generate one automatically
-      if (existing.tokens.length === 0) {
-        await db.apiToken.create({
-          data: {
-            tenantId: tenant.id,
-            agentId: existing.id,
-            name: 'Default',
-            token: generateEmbedToken(),
-          },
-        })
-      }
-      
       updated++
     } else {
       // Plan limit check
@@ -108,8 +84,6 @@ export async function POST(_req: Request, ctx: RouteContext) {
           error: `Plan limit reached (${tenant.max_agents} agents). Synced ${created + updated} of ${snAgents.length}.`,
         })
       }
-      
-      const token = generateEmbedToken()
       await db.agent.create({
         data: {
           tenantId: tenant.id,
@@ -117,9 +91,6 @@ export async function POST(_req: Request, ctx: RouteContext) {
           name: sn.name,
           snAgentId: sn.sys_id,
           active: sn.active,
-          tokens: {
-            create: { tenantId: tenant.id, name: 'Default', token },
-          },
         },
       })
       created++

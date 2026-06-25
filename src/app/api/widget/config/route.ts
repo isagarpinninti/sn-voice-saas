@@ -47,28 +47,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'No instance configured' }, { status: 404, headers: CORS_HEADERS })
   }
 
-  const agent = apiToken.agent
-  const color = agent?.widgetColor || instance.widgetColor || '#10b981'
-  const position = agent?.widgetPosition || instance.widgetPosition || 'right'
-  const voiceOnly = agent ? agent.widgetVoiceOnly : instance.widgetVoiceOnly
-  const autoOpen = agent ? agent.widgetAutoOpen : instance.widgetAutoOpen
-  const greeting = agent?.widgetGreeting || instance.widgetGreeting || null
-  const agentName = agent?.widgetAgentName || instance.widgetAgentName || null
-  const showBranding = agent ? agent.widgetShowBranding : instance.widgetShowBranding
-  const logoUrl = agent?.widgetLogoUrl || instance.widgetLogoUrl || null
-  const borderRadius = agent?.widgetBorderRadius || instance.widgetBorderRadius || 'full'
-
   return NextResponse.json(
     {
-      color,
-      position,
-      voiceOnly,
-      autoOpen,
-      greeting,
-      agentName,
-      showBranding,
-      logoUrl,
-      borderRadius,
+      color: instance.widgetColor || '#10b981',
+      position: instance.widgetPosition || 'right',
+      voiceOnly: instance.widgetVoiceOnly,
+      autoOpen: instance.widgetAutoOpen,
+      greeting: instance.widgetGreeting || null,
+      agentName: instance.widgetAgentName || null,
+      showBranding: instance.widgetShowBranding,
+      logoUrl: instance.widgetLogoUrl || null,
+      borderRadius: instance.widgetBorderRadius || 'full',
     },
     { headers: CORS_HEADERS }
   )

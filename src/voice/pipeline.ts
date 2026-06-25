@@ -159,7 +159,6 @@ export class VoicePipeline extends EventEmitter {
   private agentConfig: any = {}
   private isAgentSpeaking = false
   private isBargingIn = false
-  private _greetingFirstAudio = false  // defer state:speaking until first TTS binary arrives
   private utteranceBuffer = ''
   private processing = false
   private startedAt = Date.now()
@@ -461,14 +460,11 @@ export class VoicePipeline extends EventEmitter {
         baseURL: llmBaseUrl,
       })
 
-      // Speak greeting — emit state:speaking only when first TTS audio chunk
-      // actually arrives (not before), so Render's proxy sees binary immediately
-      // after the text frame rather than waiting 100-200ms for Deepgram TTS latency.
+      // Speak greeting
       if (config.greeting) {
         this.isAgentSpeaking = true
-        this._greetingFirstAudio = true
+        this.emit('state', 'speaking')
         await this.speakAndStreamAny(config.greeting)
-        this._greetingFirstAudio = false
         this.isAgentSpeaking = false
       }
 
@@ -1745,14 +1741,6 @@ export class VoicePipeline extends EventEmitter {
       })
       this.ttsWs.on('message', (data: any, isBinary: boolean) => {
         if (isBinary && Buffer.isBuffer(data) && data.length > 10 && !this.isBargingIn) {
-          // If this is the first greeting audio chunk, emit state:speaking TEXT
-          // immediately before the audio BINARY so both land in the same network
-          // flush. Render's proxy requires binary to follow a server text frame
-          // within ~100ms; delaying the text until audio is ready guarantees it.
-          if (this._greetingFirstAudio) {
-            this._greetingFirstAudio = false
-            this.emit('state', 'speaking')
-          }
           // Stream audio immediately to widget — AudioWorklet handles smooth playback
           this.emit('audio', data)
           this.ttsAudioBuffer.push(data) // Track for logging
