@@ -33,7 +33,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
 
   try {
     const res = await fetch(
-      `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/voice_agent/admin/agents`,
+      `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/admin/agents`,
       {
         headers: { Authorization: `Basic ${authHeader}`, Accept: 'application/json' },
         signal: AbortSignal.timeout(15000),
