@@ -1445,7 +1445,7 @@ export class VoicePipeline extends EventEmitter {
 
   // ── ServiceNow REST ──
   private async snFetch(method: string, path: string, body?: any): Promise<unknown> {
-    const baseUrl = `${this.tenant.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/voice_agent${path}`
+    const baseUrl = `${this.tenant.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1${path}`
     const auth = Buffer.from(`${this.tenant.snUsername}:${this.tenant.snPassword}`).toString('base64')
 
     // Circuit breaker — skip the call entirely if this tenant has been hammering SN failures.

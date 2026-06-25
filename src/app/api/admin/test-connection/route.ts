@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   const firstAgent = instance.agents[0] || null
   try {
     const authHeader = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
-    const res = await fetch(`${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/voice_agent/gateway/init`, {
+    const res = await fetch(`${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/init`, {
       method: 'POST',
       headers: { 'Authorization': `Basic ${authHeader}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(firstAgent?.snAgentId ? { agent_id: firstAgent.snAgentId } : {}),
