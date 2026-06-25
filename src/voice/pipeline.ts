@@ -460,21 +460,18 @@ export class VoicePipeline extends EventEmitter {
         baseURL: llmBaseUrl,
       })
 
-      // Emit ready BEFORE the greeting so the widget starts the mic immediately.
-      // This establishes bidirectional binary traffic (mic audio browser→server)
-      // before TTS audio flows server→browser. Without it the WS was one-sided
-      // binary at greeting start, which caused code-1006 drops on Render's proxy.
-      // NOTE: do NOT emit('state','listening') here — sending two consecutive server
-      // text frames (state then ready) without any binary between them triggers
-      // Render's proxy to close the WS ~31ms later (same pattern as server pings).
+      // NOTE: do NOT emit('state','listening') here — two consecutive server text
+      // frames without binary between them triggers Render's proxy to close the WS.
       // The widget's {type:'ready'} handler already sets the visual "Listening" state.
+      // server.ts follows {type:'ready'} with a 640-byte silence binary immediately,
+      // so Render sees binary in the same TCP burst — no startup 1006 drop.
       this.emit('ready', { sessionId: this.snSessionId, greeting: config.greeting })
       addLog('info', 'pipeline', 'Started OK', { tenantId: this.tenant.id })
 
-      // Small pause so getUserMedia resolves and mic binary frames start flowing
-      // before TTS audio arrives — gives Render's proxy bidirectional traffic.
+      // Start TTS immediately — no delay needed. server.ts sends a silence binary
+      // frame alongside {type:'ready'}, and Deepgram TTS delivers the first audio
+      // chunk within ~200ms, well before Render's ~500ms binary-idle timeout.
       if (config.greeting) {
-        await new Promise(r => setTimeout(r, 1200))
         if (!this.stopped) {
           this.isAgentSpeaking = true
           this.emit('state', 'speaking')

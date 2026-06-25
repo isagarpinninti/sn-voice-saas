@@ -407,7 +407,14 @@ app.prepare().then(() => {
         snUsername: instanceRef.snUsername,
         snPassword: instanceRef.snPassword,
       })
-      pipeline.on('ready', (d: any) => { addLog('info', 'pipeline', 'READY ' + d.sessionId, { tenantId: tenantRef.id }); send(ws, { type: 'ready', ...d }) })
+      pipeline.on('ready', (d: any) => {
+        addLog('info', 'pipeline', 'READY ' + d.sessionId, { tenantId: tenantRef.id })
+        send(ws, { type: 'ready', ...d })
+        // Render's reverse proxy closes the WS within ~500ms of a server text frame
+        // if no binary follows. Send PCM silence in the same TCP burst so Render sees
+        // binary immediately alongside {type:'ready'}.
+        if (ws.readyState === WebSocket.OPEN) ws.send(Buffer.alloc(640, 0))
+      })
       pipeline.on('state', (s: string) => send(ws, { type: 'state', state: s }))
       pipeline.on('transcript', (d: any) => send(ws, { type: 'transcript', ...d }))
       pipeline.on('user_message', (t: string) => { addLog('info', 'pipeline', 'USER: ' + t.substring(0, 80), { tenantId: tenantRef.id }); send(ws, { type: 'user_message', text: t }) })
