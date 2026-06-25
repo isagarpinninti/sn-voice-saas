@@ -5,8 +5,8 @@ import { db } from '@/lib/db'
 
 /**
  * Widget config endpoint.
- * Token resolves to Instance or Agent → instance-level widget config.
- * Agent tokens inherit their parent instance's widget settings.
+ * Token resolves to Instance → instance-level widget config.
+ * One widget per ServiceNow instance.
  */
 
 const CORS_HEADERS = {
@@ -28,15 +28,15 @@ export async function GET(req: Request) {
 
   const apiToken = await db.apiToken.findUnique({
     where: { token },
-    include: { instance: true, agent: { include: { instance: true } }, tenant: true },
+    include: { instance: true, tenant: true },
   })
 
   if (!apiToken?.active) {
     return NextResponse.json({ error: 'Invalid token' }, { status: 403, headers: CORS_HEADERS })
   }
 
-  // Resolution order: instance-token → agent-token (inherits instance config) → tenant-fallback
-  let instance = apiToken.instance ?? apiToken.agent?.instance ?? null
+  // Prefer instance-linked token, fallback to tenant's first instance
+  let instance = apiToken.instance
   if (!instance && apiToken.tenant) {
     instance = await db.instance.findFirst({
       where: { tenantId: apiToken.tenant.id, active: true },

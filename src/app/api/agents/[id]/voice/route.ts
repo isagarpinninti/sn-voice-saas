@@ -1,8 +1,8 @@
 /**
- * Agent voice API — read/write tts_voice bidirectionally.
+ * Agent voice API — read/write tts_voice on the ServiceNow voice agent record.
  *
- * GET  /api/agents/[id]/voice — return cached ttsVoice from SaaS DB (fast, no SN roundtrip)
- * PUT  /api/agents/[id]/voice — update SaaS DB + push to SN { voice: "aura-asteria-en" }
+ * GET  /api/agents/[id]/voice — fetch current voice from SN
+ * PUT  /api/agents/[id]/voice — update voice on SN { voice: "aura-asteria-en" }
  */
 export const dynamic = 'force-dynamic'
 
@@ -19,16 +19,6 @@ async function getAgentWithInstance(userId: string, agentId: string) {
     where: { id: agentId, tenantId: tenant.id },
     include: { instance: true },
   })
-  if (!agent) return null
-  // If the agent has no direct instance link, fall back to the tenant's primary instance
-  // (happens when the SN API key is a tenant-level key rather than an instance-level key)
-  if (!agent.instance) {
-    const fallbackInstance = await db.instance.findFirst({
-      where: { tenantId: agent.tenantId, active: true },
-      orderBy: { createdAt: 'asc' },
-    })
-    return { ...agent, instance: fallbackInstance }
-  }
   return agent
 }
 
@@ -42,10 +32,24 @@ export async function GET(_req: Request, ctx: RouteContext) {
   const { id } = await ctx.params
 
   const agent = await getAgentWithInstance(session.user.id, id)
-  if (!agent) return NextResponse.json({ voice: 'aura-asteria-en' })
+  if (!agent?.snAgentId || !agent.instance) {
+    return NextResponse.json({ voice: 'aura-asteria-en' })
+  }
 
-  // Return cached value from SaaS DB — kept in sync by the SN async BR
-  return NextResponse.json({ voice: agent.ttsVoice || 'aura-asteria-en' })
+  try {
+    const res = await fetch(
+      `${agent.instance.snInstanceUrl}/api/now/table/x_ztpas_ai_voice_a_voice_agent/${agent.snAgentId}?sysparm_fields=tts_voice&sysparm_display_value=false`,
+      {
+        headers: { Authorization: snAuth(agent.instance), Accept: 'application/json' },
+        signal: AbortSignal.timeout(10000),
+      },
+    )
+    if (!res.ok) return NextResponse.json({ voice: 'aura-asteria-en' })
+    const data = await res.json()
+    return NextResponse.json({ voice: data.result?.tts_voice || 'aura-asteria-en' })
+  } catch {
+    return NextResponse.json({ voice: 'aura-asteria-en' })
+  }
 }
 
 export async function PUT(req: Request, ctx: RouteContext) {
@@ -58,40 +62,29 @@ export async function PUT(req: Request, ctx: RouteContext) {
   if (!voice) return NextResponse.json({ error: 'voice is required' }, { status: 400 })
 
   const agent = await getAgentWithInstance(session.user.id, id)
-  if (!agent) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  // Always update SaaS DB so the cached value is current
-  await db.agent.update({ where: { id: agent.id }, data: { ttsVoice: voice } })
-
-  // Push to SN if the agent is linked to an instance
-  if (agent.snAgentId && agent.instance) {
-    try {
-      const res = await fetch(
-        `${agent.instance.snInstanceUrl}/api/now/table/x_ztpas_ai_voice_a_voice_agent/${agent.snAgentId}`,
-        {
-          method: 'PATCH',
-          headers: {
-            Authorization: snAuth(agent.instance),
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({ tts_voice: voice }),
-          signal: AbortSignal.timeout(10000),
-        },
-      )
-      if (!res.ok) {
-        const snBody = await res.text().catch(() => '')
-        const detail = snBody ? ` — ${snBody.slice(0, 200)}` : ''
-        return NextResponse.json(
-          { success: true, voice, snWarning: `Voice saved locally; SN update failed: HTTP ${res.status}${detail}` },
-        )
-      }
-    } catch (err: any) {
-      return NextResponse.json(
-        { success: true, voice, snWarning: 'Voice saved locally; SN unreachable: ' + err.message },
-      )
-    }
+  if (!agent?.snAgentId || !agent.instance) {
+    return NextResponse.json({ error: 'Agent not linked to SN or no instance configured' }, { status: 400 })
   }
 
-  return NextResponse.json({ success: true, voice })
+  try {
+    const res = await fetch(
+      `${agent.instance.snInstanceUrl}/api/now/table/x_ztpas_ai_voice_a_voice_agent/${agent.snAgentId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: snAuth(agent.instance),
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ tts_voice: voice }),
+        signal: AbortSignal.timeout(10000),
+      },
+    )
+    if (!res.ok) {
+      return NextResponse.json({ error: 'Failed to update SN: HTTP ' + res.status }, { status: 502 })
+    }
+    return NextResponse.json({ success: true, voice })
+  } catch (err: any) {
+    return NextResponse.json({ error: 'SN unreachable: ' + err.message }, { status: 502 })
+  }
 }

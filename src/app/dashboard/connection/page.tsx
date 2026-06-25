@@ -433,6 +433,39 @@ export default function ConnectionPage() {
                   </div>
                 )}
 
+                {/* Voice Transcribe snippet — for SN incident form UI Page */}
+                {inst.token && (
+                  <div className="mb-4">
+                    <Label className="text-[11px]">Voice Transcribe snippet <span className="text-muted-foreground font-normal">(paste into SN UI Page HTML field)</span></Label>
+                    <div className="flex items-start gap-2 mt-1">
+                      <pre className="flex-1 px-3 py-2 rounded-md bg-background border border-border text-[11px] text-foreground/80 font-mono overflow-x-auto whitespace-pre-wrap break-all">
+{`<div id="va-root"></div>
+<script>
+(function(){
+  window.VA_TOKEN="${inst.token}";
+  window.VA_GATEWAY="${APP_URL}";
+  var s=document.createElement('script');
+  s.src=window.VA_GATEWAY+'/voice-transcribe-widget.js';
+  document.head.appendChild(s);
+})();
+</script>`}
+                      </pre>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 mt-0.5"
+                        onClick={() => copyToken(`<div id="va-root"></div>\n<script>\n(function(){\n  window.VA_TOKEN="${inst.token}";\n  window.VA_GATEWAY="${APP_URL}";\n  var s=document.createElement('script');\n  s.src=window.VA_GATEWAY+'/voice-transcribe-widget.js';\n  document.head.appendChild(s);\n})();\n</script>`)}
+                      >
+                        {copied.startsWith('<div id="va-root">') ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/70 mt-1">
+                      In SN: open UI Page <code>x_ztpas_ai_voice_a_voice_transcribe</code> &rarr; paste into the <strong>HTML</strong> field &rarr; Update
+                    </p>
+                  </div>
+                )}
+
                 {/* SaaS API key for SN sync */}
                 {inst.token && (
                   <div className="mb-4">

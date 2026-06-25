@@ -6,7 +6,7 @@ import { WebSocketServer, WebSocket, RawData } from 'ws'
 import { db } from './src/lib/db'
 import { addLog } from './src/lib/log-store'
 import { VoicePipeline } from './src/voice/pipeline'
-import { checkRateLimit, recordUsage, recordAgentUsage } from './src/lib/rate-limiter'
+import { checkRateLimit, recordUsage } from './src/lib/rate-limiter'
 import { notifyAdmins } from './src/lib/alerts'
 import { logAudit } from './src/lib/audit'
 import { getTelephonyProvider } from './src/lib/telephony'
@@ -18,7 +18,7 @@ const port = parseInt(process.env.PORT || '3000')
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
-    if (req.url?.startsWith('/widget.js') || req.url?.startsWith('/voice-transcribe-widget.js') || req.url?.startsWith('/voice-agent-incident-widget.js')) {
+    if (req.url?.startsWith('/widget.js') || req.url?.startsWith('/voice-transcribe-widget.js')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
       res.setHeader('Access-Control-Allow-Origin', '*')
     }
@@ -32,7 +32,6 @@ app.prepare().then(() => {
   const wssVoice = new WebSocketServer({ noServer: true })
   const wssPhone = new WebSocketServer({ noServer: true })
   const wssTranscribe = new WebSocketServer({ noServer: true })
-
 
   server.on('upgrade', (req, socket, head) => {
     const { pathname } = parse(req.url || '', true)
@@ -202,8 +201,6 @@ app.prepare().then(() => {
     let pipeline: VoicePipeline | null = null
     let tenantRef: any = null
     let instanceRef: any = null
-    let pinnedAgentSnId: string | undefined = undefined
-    let pinnedAgentId: string | undefined = undefined
 
     ws.on('message', (data: RawData, isBinary: boolean) => {
       if (!authed) {
@@ -225,10 +222,6 @@ app.prepare().then(() => {
           addLog('info', 'pipeline', 'Usage: ' + durationMin + ' min', { tenantId: tenantRef.id })
           recordUsage(tenantRef.id, durationMin, stats.inputTokens, stats.outputTokens, stats.toolCalls)
             .catch((err: any) => addLog('error', 'pipeline', 'Usage record failed: ' + err.message, { tenantId: tenantRef.id }))
-          if (pinnedAgentId) {
-            recordAgentUsage(pinnedAgentId, durationMin)
-              .catch((err: any) => addLog('error', 'pipeline', 'Agent usage record failed: ' + err.message, { tenantId: tenantRef.id }))
-          }
         }
       }
       if (pipeline) pipeline.stop().catch(() => {})
@@ -254,12 +247,8 @@ app.prepare().then(() => {
       let msg: any
       try { msg = JSON.parse(str) } catch { return }
       if (msg.type === 'start') {
-        addLog('info', 'pipeline', pinnedAgentSnId ? 'STARTING (pinned agent: ' + pinnedAgentSnId.substring(0, 8) + '...)' : 'STARTING (orchestrator will pick agent)...', { tenantId: tenantRef.id })
-        const incidentCtx = (msg.incidentContext && typeof msg.incidentContext === 'object') ? msg.incidentContext : undefined
-        if (incidentCtx?.number) addLog('info', 'pipeline', 'Incident context: ' + incidentCtx.number, { tenantId: tenantRef.id })
-        const formCtx = (msg.formContext && typeof msg.formContext === 'object') ? msg.formContext : undefined
-        if (formCtx?.tableName) addLog('info', 'pipeline', 'Form context: table=' + formCtx.tableName + ' sysId=' + (formCtx.sysId || ''), { tenantId: tenantRef.id })
-        pipeline.start(pinnedAgentSnId, endUserSnId || undefined, msg.originPortal, incidentCtx, formCtx)
+        addLog('info', 'pipeline', 'STARTING (orchestrator will pick agent)...', { tenantId: tenantRef.id })
+        pipeline.start(undefined, endUserSnId || undefined, msg.originPortal)
           .then(() => addLog('info', 'pipeline', 'Started OK', { tenantId: tenantRef.id }))
           .catch((e: any) => {
             addLog('error', 'pipeline', 'FAIL: ' + e.message, { tenantId: tenantRef.id, data: { stack: e.stack?.substring(0, 500) } })
@@ -271,40 +260,19 @@ app.prepare().then(() => {
     }
 
     // Async auth — resolve token → Instance → Tenant
-    // Retry once on DB connection failure — Neon/Render free-tier DBs auto-pause
-    // and the first connection attempt after a cold start often fails with ECONNREFUSED.
     ;(async () => {
       if (!token) { ws.close(4001, 'Token required'); return }
       try {
-        let apiToken: any = null
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            apiToken = await db.apiToken.findUnique({
-              where: { token },
-              include: {
-                instance: { include: { tenant: true } },
-                agent: { include: { instance: { include: { tenant: true } } } },
-                tenant: true,
-              },
-            })
-            break
-          } catch (dbErr: any) {
-            addLog('warn', 'ws', `Auth DB attempt ${attempt} failed: ${dbErr.message?.split('\n')[0]}`)
-            if (attempt === 2) { ws.close(4500, 'Auth error'); return }
-            await new Promise(r => setTimeout(r, 3000))
-          }
-        }
+        const apiToken = await db.apiToken.findUnique({
+          where: { token },
+          include: { instance: { include: { tenant: true } }, tenant: true },
+        })
         if (!apiToken?.active) { ws.close(4003, 'Invalid token'); return }
 
-        // Resolution order: instance-token → agent-token → tenant-fallback
-        if (apiToken.instance?.tenant) {
+        // Prefer instance-linked token, fallback to tenant's first instance
+        if (apiToken.instance && apiToken.instance.tenant) {
           instanceRef = apiToken.instance
           tenantRef = apiToken.instance.tenant
-        } else if (apiToken.agent?.instance?.tenant) {
-          instanceRef = apiToken.agent.instance
-          tenantRef = apiToken.agent.instance.tenant
-          if (apiToken.agent.snAgentId) pinnedAgentSnId = apiToken.agent.snAgentId
-          pinnedAgentId = apiToken.agent.id
         } else if (apiToken.tenant) {
           tenantRef = apiToken.tenant
           instanceRef = await db.instance.findFirst({
@@ -365,8 +333,6 @@ app.prepare().then(() => {
       pipeline.on('ended', () => { addLog('info', 'pipeline', 'ENDED', { tenantId: tenantRef.id }); send(ws, { type: 'ended' }) })
       pipeline.on('navigate', (d: any) => { addLog('info', 'pipeline', 'NAV ' + (d.urls?.length || 0) + ' url(s)', { tenantId: tenantRef.id }); send(ws, { type: 'navigate', urls: d.urls }) })
       pipeline.on('attachment_requested', (d: any) => { addLog('info', 'pipeline', 'Attachment requested: ' + d.reason, { tenantId: tenantRef.id }); send(ws, { type: 'attachment_requested', url: d.url, reason: d.reason }) })
-      pipeline.on('form_update', (d: any) => { addLog('info', 'pipeline', 'Form update ' + (d.applyNow ? '(direct)' : '(suggestion)') + ': ' + d.field + ' → ' + d.valueLabel, { tenantId: tenantRef.id }); send(ws, { type: 'form_update', field: d.field, value: d.value, valueLabel: d.valueLabel, applyNow: d.applyNow }) })
-      pipeline.on('suggestion', (d: any) => { addLog('info', 'pipeline', 'Suggestion (' + d.sugType + '): ' + String(d.text).substring(0, 60), { tenantId: tenantRef.id }); send(ws, { type: 'suggestion', sugType: d.sugType, text: d.text }) })
 
       authed = true
       addLog('info', 'ws', 'Replaying ' + buffer.length + ' buffered msg(s)', { tenantId: tenantRef.id })
@@ -526,8 +492,6 @@ app.prepare().then(() => {
       }
     })
   })
-
-
 
   server.listen(port, () => {
     addLog('info', 'server', 'ZeVox on port ' + port)

@@ -57,21 +57,6 @@ export async function checkRateLimit(tenantId: string): Promise<{
 }
 
 /**
- * Increment per-agent aggregate stats on call close.
- * agentId is the SaaS Agent.id (cuid), not the SN sys_id.
- */
-export async function recordAgentUsage(agentId: string, minutes: number) {
-  await db.agent.update({
-    where: { id: agentId },
-    data: {
-      totalCalls: { increment: 1 },
-      totalMinutes: { increment: minutes },
-      lastCallAt: new Date(),
-    },
-  })
-}
-
-/**
  * Record usage after a call
  */
 export async function recordUsage(tenantId: string, minutes: number, inputTokens: number, outputTokens: number, toolCalls: number) {

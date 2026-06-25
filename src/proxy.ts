@@ -21,7 +21,9 @@ export function proxy(req: NextRequest) {
     return new NextResponse('Not found', { status: 404 })
   }
 
-  // Admin routes are protected by isUserAdmin() in the layout — no proxy block needed.
+  if (path.startsWith('/admin') || path.startsWith('/api/admin')) {
+    return new NextResponse('Not found', { status: 404 })
+  }
   return NextResponse.next()
 }
 

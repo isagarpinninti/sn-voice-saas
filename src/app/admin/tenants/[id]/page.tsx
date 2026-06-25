@@ -106,7 +106,6 @@ export default async function TenantDetailPage({ params }: Props) {
           userId={tenant.user.id}
           currentPlan={tenant.plan}
           currentMinutes={tenant.minutes_per_month}
-          currentExpiresAt={tenant.plan_expires_at?.toISOString() ?? null}
         />
       </div>
 

@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
-import { VOICES } from '@/lib/voices'
-import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Phone, UserPlus, UserMinus, RefreshCw, Users } from 'lucide-react'
+import { VOICES, findVoice } from '@/lib/voices'
+import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2 } from 'lucide-react'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
 
@@ -20,33 +20,7 @@ interface AgentConfig {
   name: string
   snAgentId: string | null
   active: boolean
-  ttsVoice: string
   token: string | null
-  callerGroupSysId: string | null
-  callerGroupName: string | null
-}
-
-interface AvailablePhone {
-  id: string
-  e164: string
-  friendly: string | null
-  agent: { id: string; name: string } | null
-}
-
-interface CallerRecord {
-  id: string
-  phoneE164: string
-  name: string | null
-  email: string | null
-  employeeId: string | null
-  snUserSysId: string | null
-  active: boolean
-}
-
-interface PhoneNumberInfo {
-  id: string
-  e164: string
-  friendly: string | null
 }
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -59,7 +33,6 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [copied, setCopied] = useState(false)
 
   // Voice state
   const [currentVoice, setCurrentVoice] = useState('aura-asteria-en')
@@ -67,26 +40,6 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const [playingVoice, setPlayingVoice] = useState<string | null>(null)
   const [loadingVoice, setLoadingVoice] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-
-  // Phone + caller group state
-  const [phoneNumber, setPhoneNumber] = useState<PhoneNumberInfo | null>(null)
-  const [callers, setCallers] = useState<CallerRecord[]>([])
-  const [callersLoading, setCallersLoading] = useState(true)
-  const [newCallerPhone, setNewCallerPhone] = useState('')
-  const [newCallerName, setNewCallerName] = useState('')
-  const [newCallerSysId, setNewCallerSysId] = useState('')
-  const [addingCaller, setAddingCaller] = useState(false)
-  const [removingCaller, setRemovingCaller] = useState<string | null>(null)
-
-  // Phone assignment state
-  const [availablePhones, setAvailablePhones] = useState<AvailablePhone[]>([])
-  const [phonesLoading, setPhonesLoading] = useState(true)
-  const [selectedPhoneId, setSelectedPhoneId] = useState('')
-  const [assigningPhone, setAssigningPhone] = useState(false)
-  const [unassigningPhone, setUnassigningPhone] = useState(false)
-
-  // Group sync state
-  const [syncingGroup, setSyncingGroup] = useState(false)
 
   useEffect(() => {
     fetch(`/api/agents/${id}`, { cache: 'no-store' })
@@ -98,25 +51,15 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           return
         }
         setAgent(d)
-        if (d.ttsVoice) setCurrentVoice(d.ttsVoice)
       })
       .catch(() => toast('Failed to load agent', 'error'))
       .finally(() => setLoading(false))
 
-    fetch(`/api/agents/${id}/callers`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => {
-        setCallers(d.callers || [])
-        setPhoneNumber(d.phoneNumber || null)
-      })
+    // Load current voice from SN
+    fetch(`/api/agents/${id}/voice`)
+      .then(r => r.json())
+      .then(d => { if (d.voice) setCurrentVoice(d.voice) })
       .catch(() => {})
-      .finally(() => setCallersLoading(false))
-
-    fetch('/api/phone-numbers', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => setAvailablePhones(d.phoneNumbers || []))
-      .catch(() => {})
-      .finally(() => setPhonesLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -162,7 +105,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
       })
       const data = await res.json()
       if (res.ok) {
-        toast(data.snWarning || 'Voice updated', 'success')
+        toast('Voice updated on ServiceNow', 'success')
       } else {
         toast(data.error || 'Failed to update voice', 'error')
       }
@@ -193,15 +136,6 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
-  function copySnippet() {
-    if (!agent?.token) return
-    const snippet = `<script>window.ZEVOX_TOKEN = "${agent.token}";</script>\n<script src="${APP_URL}/widget.js"></script>`
-    navigator.clipboard.writeText(snippet).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
   async function handleDelete() {
     setDeleting(true)
     try {
@@ -216,117 +150,6 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
       toast('Network error', 'error')
     }
     setDeleting(false)
-  }
-
-  async function handleAddCaller() {
-    if (!newCallerPhone.trim()) return
-    setAddingCaller(true)
-    try {
-      const res = await fetch(`/api/agents/${id}/callers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phoneE164: newCallerPhone.trim(),
-          name: newCallerName.trim() || null,
-          snUserSysId: newCallerSysId.trim() || null,
-        }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setCallers((prev) => [...prev, data.caller])
-        setNewCallerPhone('')
-        setNewCallerName('')
-        setNewCallerSysId('')
-        toast('Caller added to group', 'success')
-      } else {
-        toast(data.error || 'Failed to add caller', 'error')
-      }
-    } catch {
-      toast('Network error', 'error')
-    }
-    setAddingCaller(false)
-  }
-
-  async function handleRemoveCaller(callerId: string) {
-    setRemovingCaller(callerId)
-    try {
-      const res = await fetch(`/api/agents/${id}/callers/${callerId}`, { method: 'DELETE' })
-      if (res.ok) {
-        setCallers((prev) => prev.filter((c) => c.id !== callerId))
-        toast('Caller removed', 'success')
-      } else {
-        const data = await res.json()
-        toast(data.error || 'Failed to remove caller', 'error')
-      }
-    } catch {
-      toast('Network error', 'error')
-    }
-    setRemovingCaller(null)
-  }
-
-  async function handleAssignPhone() {
-    if (!selectedPhoneId) return
-    setAssigningPhone(true)
-    try {
-      const res = await fetch(`/api/agents/${id}/phone`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumberId: selectedPhoneId }),
-      })
-      if (res.ok) {
-        const phone = availablePhones.find((p) => p.id === selectedPhoneId)
-        if (phone) setPhoneNumber({ id: phone.id, e164: phone.e164, friendly: phone.friendly })
-        setAvailablePhones((prev) => prev.map((p) => ({
-          ...p,
-          agent: p.id === selectedPhoneId ? { id, name: agent?.name || '' } : (p.agent?.id === id ? null : p.agent),
-        })))
-        setSelectedPhoneId('')
-        toast('Phone number assigned', 'success')
-      } else {
-        const data = await res.json()
-        toast(data.error || 'Failed to assign phone', 'error')
-      }
-    } catch {
-      toast('Network error', 'error')
-    }
-    setAssigningPhone(false)
-  }
-
-  async function handleUnassignPhone() {
-    setUnassigningPhone(true)
-    try {
-      const res = await fetch(`/api/agents/${id}/phone`, { method: 'DELETE' })
-      if (res.ok) {
-        setPhoneNumber(null)
-        setCallers([])
-        toast('Phone number unassigned', 'success')
-      } else {
-        const data = await res.json()
-        toast(data.error || 'Failed to unassign phone', 'error')
-      }
-    } catch {
-      toast('Network error', 'error')
-    }
-    setUnassigningPhone(false)
-  }
-
-  async function handleSyncGroup() {
-    setSyncingGroup(true)
-    try {
-      const res = await fetch(`/api/agents/${id}/sync-group`, { method: 'POST' })
-      const data = await res.json()
-      if (res.ok) {
-        toast(`Synced: ${data.added} added, ${data.updated} updated, ${data.deactivated} deactivated`, 'success')
-        // Refresh caller list
-        const fresh = await fetch(`/api/agents/${id}/callers`, { cache: 'no-store' }).then((r) => r.json())
-        setCallers(fresh.callers || [])
-      } else {
-        toast(data.error || 'Group sync failed', 'error')
-      }
-    } catch {
-      toast('Network error', 'error')
-    }
-    setSyncingGroup(false)
   }
 
   if (loading || !agent) {
@@ -397,28 +220,6 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           </Card>
         </Section>
 
-        {/* Embed snippet */}
-        {agent.token && (
-          <Section title="Embed snippet" description="Paste into any SN UI Page, Workspace widget, or web page to load this specific agent.">
-            <Card>
-              <CardContent className="p-5 space-y-3">
-                <div className="flex items-start gap-2">
-                  <pre className="flex-1 px-3 py-2.5 rounded-md bg-background border border-border text-[11px] text-foreground/80 font-mono overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
-{`<script>window.ZEVOX_TOKEN = "${agent.token}";</script>
-<script src="${APP_URL}/widget.js"></script>`}
-                  </pre>
-                  <Button type="button" variant="outline" size="sm" className="shrink-0 mt-0.5" onClick={copySnippet}>
-                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  </Button>
-                </div>
-                <p className="text-[10px] text-muted-foreground/70">
-                  This token is scoped to <strong>{agent.name}</strong> — calls from this snippet always route to this agent, bypassing the orchestrator.
-                </p>
-              </CardContent>
-            </Card>
-          </Section>
-        )}
-
         {/* Voice Selection */}
         <Section title="Voice" description="Pick the voice this agent speaks with. Saved directly to ServiceNow. Click to preview.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -471,199 +272,6 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
               )
             })}
           </div>
-        </Section>
-
-        {/* Phone Number */}
-        <Section title="Phone Number" description="Twilio/Telnyx number assigned to this agent for inbound phone calls.">
-          <Card>
-            <CardContent className="p-5 space-y-4">
-              {callersLoading || phonesLoading ? (
-                <p className="text-[13px] text-muted-foreground">Loading...</p>
-              ) : phoneNumber ? (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <Phone className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-[14px] font-semibold text-foreground font-mono">{phoneNumber.e164}</p>
-                      {phoneNumber.friendly && (
-                        <p className="text-[11px] text-muted-foreground">{phoneNumber.friendly}</p>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleUnassignPhone}
-                    disabled={unassigningPhone}
-                    className="text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0"
-                  >
-                    {unassigningPhone ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : <X className="w-3 h-3 mr-1.5" />}
-                    Unassign
-                  </Button>
-                </div>
-              ) : availablePhones.length === 0 ? (
-                <div className="flex items-center gap-3 text-muted-foreground">
-                  <Phone className="w-4 h-4 shrink-0" />
-                  <p className="text-[13px]">No phone numbers provisioned. Contact your admin to provision one.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-[13px] text-muted-foreground">Select a phone number to assign to this agent.</p>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedPhoneId}
-                      onChange={(e) => setSelectedPhoneId(e.target.value)}
-                      className="flex-1 h-8 rounded-md border border-input bg-background px-3 text-[13px] text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    >
-                      <option value="">— Select a number —</option>
-                      {availablePhones.map((p) => (
-                        <option key={p.id} value={p.id} disabled={!!p.agent && p.agent.id !== id}>
-                          {p.e164}{p.friendly ? ` (${p.friendly})` : ''}{p.agent && p.agent.id !== id ? ` — used by ${p.agent.name}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      size="sm"
-                      onClick={handleAssignPhone}
-                      disabled={assigningPhone || !selectedPhoneId}
-                    >
-                      {assigningPhone ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : <Phone className="w-3 h-3 mr-1.5" />}
-                      Assign
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </Section>
-
-        {/* Caller Group */}
-        <Section
-          title="Caller Group"
-          description={phoneNumber
-            ? 'Only callers in this list can reach this agent by phone. Empty = open access. You can sync from the ServiceNow group set on this agent.'
-            : 'Assign a phone number first to configure a caller group.'}
-        >
-          {callersLoading ? (
-            <p className="text-[13px] text-muted-foreground">Loading...</p>
-          ) : !phoneNumber ? (
-            <Card className="border-dashed">
-              <CardContent className="p-5 text-center text-[13px] text-muted-foreground">
-                No phone number assigned — caller group unavailable.
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-5 space-y-4">
-                {/* ServiceNow group sync */}
-                {agent.callerGroupSysId && (
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Users className="w-4 h-4 text-primary shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-[12px] font-medium text-foreground truncate">
-                          {agent.callerGroupName || 'SN Group'}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground font-mono truncate">{agent.callerGroupSysId}</p>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleSyncGroup}
-                      disabled={syncingGroup || !phoneNumber}
-                      className="shrink-0 ml-3"
-                    >
-                      {syncingGroup ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : <RefreshCw className="w-3 h-3 mr-1.5" />}
-                      Sync group
-                    </Button>
-                  </div>
-                )}
-
-                {/* Existing callers */}
-                {callers.length === 0 ? (
-                  <p className="text-[13px] text-muted-foreground italic">
-                    No callers yet — all inbound calls are allowed (open access).
-                  </p>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {callers.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between py-2.5 gap-3">
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-medium text-foreground font-mono truncate">{c.phoneE164}</p>
-                          {(c.name || c.snUserSysId) && (
-                            <p className="text-[11px] text-muted-foreground truncate">
-                              {c.name}{c.name && c.snUserSysId ? ' · ' : ''}{c.snUserSysId ? <span className="font-mono">{c.snUserSysId}</span> : null}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {!c.active && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">inactive</span>
-                          )}
-                          <button
-                            onClick={() => handleRemoveCaller(c.id)}
-                            disabled={removingCaller === c.id}
-                            className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                            title="Remove caller"
-                          >
-                            {removingCaller === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserMinus className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add new caller */}
-                <div className="pt-2 border-t border-border space-y-3">
-                  <p className="text-[12px] font-medium text-foreground">Add caller</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-[11px]">Phone (E.164) *</Label>
-                      <Input
-                        value={newCallerPhone}
-                        onChange={(e) => setNewCallerPhone(e.target.value)}
-                        placeholder="+14155550123"
-                        className="font-mono text-[12px]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px]">Name (optional)</Label>
-                      <Input
-                        value={newCallerName}
-                        onChange={(e) => setNewCallerName(e.target.value)}
-                        placeholder="Jane Doe"
-                        className="text-[12px]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px]">SN sys_id (optional)</Label>
-                      <Input
-                        value={newCallerSysId}
-                        onChange={(e) => setNewCallerSysId(e.target.value)}
-                        placeholder="32-char sys_user sys_id"
-                        className="font-mono text-[11px]"
-                      />
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={handleAddCaller}
-                    disabled={addingCaller || !newCallerPhone.trim()}
-                  >
-                    {addingCaller ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : <UserPlus className="w-3 h-3 mr-1.5" />}
-                    Add to group
-                  </Button>
-                  <p className="text-[10px] text-muted-foreground/70">
-                    When the caller group has entries, only listed numbers can connect. The SN sys_id enables tool impersonation (the agent acts as that user in ServiceNow).
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </Section>
 
         {/* Delete */}

@@ -166,11 +166,6 @@ export class VoicePipeline extends EventEmitter {
   private totalTokens = 0
   public toolCallCount = 0  // Public so server can read it
 
-  // Language detected by Deepgram STT during the call (ISO 639-1 code, e.g. 'hi', 'en').
-  // Updated on every STT result when using multi-language mode. Used to route TTS to the
-  // correct provider — Deepgram for English, OpenAI for non-Latin scripts (Hindi etc.).
-  private detectedLanguage: string = ''
-
   // Voice-native confirmation state. When a tool returns requires_confirmation,
   // we speak the prompt and stash the pending action here. The next user utterance
   // is intercepted by processUserMessage and routed to handleConfirmation.
@@ -208,19 +203,9 @@ export class VoicePipeline extends EventEmitter {
     this.audioFormat = opts.audioFormat || 'widget'
   }
 
-  // Incident context optionally passed when starting a session from an incident form.
-  // Stored so it can be injected into the system prompt and referenced by built-in tools.
-  private incidentContext: Record<string, string> = {}
-
-  // Generic form context — any SN table record opened in form mode.
-  // Injected into the system prompt so the agent knows the record and never asks for it.
-  private formContext: { tableName?: string; sysId?: string; fields?: Record<string, string> } = {}
-
-  async start(agentId?: string, endUserSnId?: string, originPortal?: string, incidentContext?: Record<string, string>, formContext?: { tableName?: string; sysId?: string; fields?: Record<string, string> }) {
+  async start(agentId?: string, endUserSnId?: string, originPortal?: string) {
     this.originPortal = (originPortal || '').toString().toLowerCase()
-    this.incidentContext = incidentContext && typeof incidentContext === 'object' ? incidentContext : {}
-    this.formContext = formContext && typeof formContext === 'object' ? formContext : {}
-    console.log(`[Pipeline] Starting. Instance: ${this.tenant.snInstanceUrl}` + (agentId ? `, Agent: ${agentId}` : ', orchestrator mode') + (endUserSnId ? `, EndUser: ${endUserSnId}` : '') + (this.originPortal ? `, Portal: ${this.originPortal}` : '') + (this.incidentContext.number ? `, Incident: ${this.incidentContext.number}` : ''))
+    console.log(`[Pipeline] Starting. Instance: ${this.tenant.snInstanceUrl}` + (agentId ? `, Agent: ${agentId}` : ', orchestrator mode') + (endUserSnId ? `, EndUser: ${endUserSnId}` : '') + (this.originPortal ? `, Portal: ${this.originPortal}` : ''))
 
     if (!this.tenant.snInstanceUrl || !this.tenant.snUsername) {
       const msg = 'ServiceNow not connected. Go to ZeVox Dashboard → Connection and enter your instance details.'
@@ -235,14 +220,9 @@ export class VoicePipeline extends EventEmitter {
       // When agent_id is omitted, the SN orchestrator picks the best agent.
       // `caller_user_id` is the SN sys_id of the actual end-user talking to the
       // widget (extracted client-side from g_user.userID when embedded in SN).
-      const initPayload: { agent_id?: string; caller_user_id?: string; form_table?: string; form_sys_id?: string } = {}
+      const initPayload: { agent_id?: string; caller_user_id?: string } = {}
       if (agentId) initPayload.agent_id = agentId
       if (endUserSnId) initPayload.caller_user_id = endUserSnId
-      // Pass form record identity so SN can do a server-side GlideRecord lookup and
-      // inject authoritative record data into the system prompt — more reliable than
-      // reading from g_form client-side, especially in Workspace where g_form is absent.
-      if (this.formContext?.tableName) initPayload.form_table = this.formContext.tableName
-      if (this.formContext?.sysId) initPayload.form_sys_id = this.formContext.sysId
       const config = await this.snFetch('POST', '/gateway/init', initPayload) as SNConfig & { selected_agent_id?: string }
 
       console.log('[Pipeline] SN init response success:', config.success, 'session:', config.session_id)
@@ -250,7 +230,6 @@ export class VoicePipeline extends EventEmitter {
 
       this.snSessionId = config.session_id
       this.selectedAgentId = config.selected_agent_id || agentId || ''
-      addLog('info', 'pipeline', 'Init OK — session=' + this.snSessionId.substring(0, 8) + '... agentId=' + (this.selectedAgentId || '(empty!)'), { tenantId: this.tenant.id })
       this.tools = config.tools || []
 
       // Widget-only built-in: lets the agent ask the user to upload a file.
@@ -285,57 +264,6 @@ export class VoicePipeline extends EventEmitter {
             },
           },
         })
-
-        // Incident form built-ins — only active when incident context was supplied.
-        // These tools never call ServiceNow; they emit widget events so the user can
-        // confirm changes client-side via g_form.setValue without a server round-trip.
-        if (this.incidentContext && this.incidentContext.number) {
-          this.tools.push({
-            type: 'function',
-            function: {
-              name: 'suggest_form_update',
-              description: 'Update or propose an update to a field on the currently open incident form. Set apply_now=true when the user has explicitly commanded the change (e.g. "update state to In Progress", "set priority to high") — the widget applies it immediately. Set apply_now=false (default) when you are proactively suggesting a change without an explicit user command — it appears as a one-click confirmation button. Use for fields: state, priority, urgency, assignment_group, assigned_to, category, subcategory.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  field: { type: 'string', description: 'ServiceNow field name, e.g. "state", "priority", "assignment_group".' },
-                  value: { type: 'string', description: 'The new value to set on the field (e.g. "2" for state In Progress).' },
-                  value_label: { type: 'string', description: 'Human-readable label for the value, e.g. "In Progress" for state=2.' },
-                  apply_now: { type: 'boolean', description: 'Set true when the user explicitly commanded this change. Set false when proactively suggesting.' },
-                },
-                required: ['field', 'value', 'value_label'],
-              },
-            },
-          })
-          this.tools.push({
-            type: 'function',
-            function: {
-              name: 'suggest_resolution_note',
-              description: 'Propose resolution notes text to fill into the incident close_notes field. The suggestion appears as a clickable button in the widget for the user to confirm.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  text: { type: 'string', description: 'The resolution note text to suggest.' },
-                },
-                required: ['text'],
-              },
-            },
-          })
-          this.tools.push({
-            type: 'function',
-            function: {
-              name: 'suggest_reply',
-              description: 'Propose a reply message to the caller that will be placed in the incident comments field. Use when the user asks how to respond to the caller or wants a reply suggestion.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  text: { type: 'string', description: 'The reply text to suggest.' },
-                },
-                required: ['text'],
-              },
-            },
-          })
-        }
       }
 
       // Sanitize tool schemas before they ever reach Groq. Admin-authored SN
@@ -357,53 +285,8 @@ export class VoicePipeline extends EventEmitter {
       // KB-first triage, confirmation policy) lives in the customer's ServiceNow
       // Voice Agent record so it can be customized per use case.
       let prompt = config.system_prompt
-      prompt += '\n\nVOICE: Live voice call. 1-2 sentences max. No markdown/lists. Lead with the answer, then offer next step. Sound confident and helpful. Use the caller\'s name once. Don\'t over-apologize.'
-      prompt += '\n\nLANGUAGE: Always respond in the same language the user is speaking. Supported languages include Hindi, Spanish, French, German, Portuguese, Italian, Arabic, Japanese, Korean, Chinese (Mandarin), Russian, Turkish, Dutch, Polish, and Swedish — respond natively in whichever one the user uses. If they speak English, respond in English. If the user explicitly asks you to switch language, comply immediately and maintain that language for the rest of the call. Never mix languages unless the user does.'
-
-      // Inject generic form context when widget is embedded in a SN form (portal or form mode)
-      if (this.formContext && (this.formContext.tableName || this.formContext.sysId) && !this.incidentContext?.number) {
-        const fc = this.formContext
-        const lines: string[] = []
-        if (fc.tableName) lines.push(`  Table: ${fc.tableName}`)
-        if (fc.sysId) lines.push(`  Record sys_id: ${fc.sysId}`)
-        const fieldLabelMap: Record<string, string> = {
-          number: 'Record Number', short_description: 'Summary', description: 'Description',
-          state: 'State', priority: 'Priority', urgency: 'Urgency', category: 'Category',
-          subcategory: 'Subcategory', assignment_group: 'Assignment Group', assigned_to: 'Assigned To',
-          caller_id: 'Caller', opened_by: 'Opened By', opened_at: 'Opened At', cmdb_ci: 'Configuration Item',
-          location: 'Location', impact: 'Impact', u_work_order: 'Work Order', work_order_task: 'Work Order Task',
-          parent: 'Parent Record', requested_for: 'Requested For',
-        }
-        if (fc.fields) {
-          for (const [k, v] of Object.entries(fc.fields)) {
-            if (v) lines.push(`  ${fieldLabelMap[k] || k}: ${v}`)
-          }
-        }
-        if (lines.length > 0) {
-          prompt += '\n\nFORM CONTEXT (OVERRIDE — takes precedence over all earlier instructions): The user has opened this voice session directly from a ServiceNow record form. You already have the record information below. NEVER ask the user for the record number, work order number, ticket number, or any other identifying information that is already listed here — use it directly. If your instructions say to ask for this information, skip that step entirely.\n' + lines.join('\n')
-        }
-      }
-
-      // Inject incident context when the widget is opened from an incident form
-      if (this.incidentContext && Object.keys(this.incidentContext).length > 0) {
-        const ic = this.incidentContext
-        const lines: string[] = []
-        const labelMap: Record<string, string> = {
-          number: 'Incident Number', short_description: 'Short Description', description: 'Description',
-          state: 'State', priority: 'Priority', urgency: 'Urgency', category: 'Category',
-          subcategory: 'Subcategory', assignment_group: 'Assignment Group', assigned_to: 'Assigned To',
-          caller_id: 'Caller', comments: 'Comments', work_notes: 'Work Notes',
-          close_notes: 'Resolution Notes', impact: 'Impact', opened_at: 'Opened At', opened_by: 'Opened By',
-        }
-        for (const [k, v] of Object.entries(ic)) {
-          if (v && labelMap[k]) lines.push(`  ${labelMap[k]}: ${v}`)
-        }
-        if (lines.length) {
-          prompt += '\n\nINCIDENT CONTEXT: The user has opened this voice session from an incident form. Current incident details:\n' + lines.join('\n')
-          prompt += '\n\nYou can use suggest_form_update to propose field changes, suggest_resolution_note to propose resolution text, and suggest_reply to propose a caller reply. These appear as one-click buttons in the widget for the user to confirm before applying.'
-        }
-      }
-
+      prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
+      prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately after — do not fake progress. The ORDER of clarifying questions, KB search, and ticket creation is driven by the agent instructions above, not by this rule.'
       this.messages.push({ role: 'system', content: prompt })
 
       // Init STT — use our SaaS Deepgram key by default, customer's key only if they provide their own
@@ -411,33 +294,30 @@ export class VoicePipeline extends EventEmitter {
       const deepgramKey = (!sttKey || sttKey === 'PROVIDED_BY_ZEVOX') ? process.env.DEEPGRAM_API_KEY : sttKey
       if (!deepgramKey) throw new Error('No Deepgram API key configured')
 
-      // Raw WebSocket to Deepgram STT — same approach as TTS (connectTtsWs).
-      // The Deepgram SDK v5 listen.v1 wraps ReconnectingWebSocket which silently
-      // fails to fire the 'open' event on Render, leaving STT dead for the call.
-      const WebSocket = require('ws')
-      // Seed detectedLanguage from the agent's STT config when it's pinned to a specific
-      // non-English language — ensures TTS uses OpenAI from the very first greeting.
-      const sttLangConfig = (config.stt_config?.language || 'multi').toLowerCase()
-      if (sttLangConfig !== 'multi' && !sttLangConfig.startsWith('en')) {
-        this.detectedLanguage = sttLangConfig.split('-')[0]
-      }
+      const { DeepgramClient } = require('@deepgram/sdk')
+      const dgClient = new DeepgramClient(deepgramKey)
 
-      const sttParams = new URLSearchParams({
+      addLog('info', 'stt', 'Connecting to Deepgram...', { tenantId: this.tenant.id })
+
+      this.stt = await dgClient.listen.v1.connect({
         model: config.stt_config?.model || 'nova-3',
-        language: sttLangConfig,
-        smart_format: 'true',
-        punctuate: 'true',
-        interim_results: 'true',
-        utterance_end_ms: '1500',
-        endpointing: String(config.stt_config?.endpointing_ms || 800),
+        language: config.stt_config?.language || 'en-US',
+        smart_format: true,
+        punctuate: true,
+        interim_results: true,
+        utterance_end_ms: 1500,
+        endpointing: config.stt_config?.endpointing_ms || 800,
         encoding: this.audioFormat === 'phone' ? 'mulaw' : 'linear16',
-        sample_rate: String(this.audioFormat === 'phone' ? 8000 : 16000),
-        channels: '1',
+        sample_rate: this.audioFormat === 'phone' ? 8000 : 16000,
+        channels: 1,
       })
-      const sttUrl = `wss://api.deepgram.com/v1/listen?${sttParams}`
-      addLog('info', 'stt', 'Connecting to Deepgram STT...', { tenantId: this.tenant.id })
-      this.stt = new WebSocket(sttUrl, { headers: { 'Authorization': `Token ${deepgramKey}` } })
+
       this.setupSTT()
+      // v5 SDK: need to call connect() to actually open the WebSocket
+      if (typeof this.stt.connect === 'function') {
+        await this.stt.connect()
+      }
+      addLog('info', 'stt', 'Deepgram connected and ready', { tenantId: this.tenant.id })
 
       // Init TTS WebSocket — persistent connection for streaming audio
       const ttsConfigKey = config.tts_config?.api_key
@@ -464,7 +344,7 @@ export class VoicePipeline extends EventEmitter {
       if (config.greeting) {
         this.isAgentSpeaking = true
         this.emit('state', 'speaking')
-        await this.speakAndStreamAny(config.greeting)
+        await this.speakAndStream(config.greeting)
         this.isAgentSpeaking = false
       }
 
@@ -480,8 +360,13 @@ export class VoicePipeline extends EventEmitter {
   }
 
   feedAudio(buffer: Buffer) {
-    if (this.stt && this.stt.readyState === 1) {
-      try { this.stt.send(buffer) } catch {}
+    if (this.stt) {
+      try {
+        // Deepgram SDK v5: use sendMedia() to send audio bytes
+        if (typeof this.stt.sendMedia === 'function') this.stt.sendMedia(buffer)
+        else if (typeof this.stt.send === 'function') this.stt.send(buffer)
+        else if (typeof this.stt.sendBinary === 'function') this.stt.sendBinary(buffer)
+      } catch {}
     }
   }
 
@@ -595,57 +480,6 @@ export class VoicePipeline extends EventEmitter {
     }
   }
 
-  private handleSuggestFormUpdate(args: any) {
-    const field = String(args?.field || '').trim()
-    const value = String(args?.value || '').trim()
-    const valueLabel = String(args?.value_label || value).trim()
-    const applyNow = args?.apply_now === true
-    if (!field || !value) {
-      return { success: false, tool_name: 'suggest_form_update', tool_sys_id: 'builtin:suggest_form_update', output: {}, error: 'field and value are required' }
-    }
-    addLog('info', 'pipeline', `Form update ${applyNow ? '(direct)' : '(suggestion)'}: ${field} → ${valueLabel}`, { tenantId: this.tenant.id })
-    this.emit('form_update', { field, value, valueLabel, applyNow })
-    const msg = applyNow
-      ? `I've updated ${field} to "${valueLabel}" on the incident form.`
-      : `I've added a suggestion to update ${field} to "${valueLabel}". The user will see a button to apply it.`
-    return {
-      success: true,
-      tool_name: 'suggest_form_update',
-      tool_sys_id: 'builtin:suggest_form_update',
-      output: { message: msg },
-    }
-  }
-
-  private handleSuggestResolution(args: any) {
-    const text = String(args?.text || '').trim()
-    if (!text) {
-      return { success: false, tool_name: 'suggest_resolution_note', tool_sys_id: 'builtin:suggest_resolution_note', output: {}, error: 'text is required' }
-    }
-    addLog('info', 'pipeline', 'Resolution note suggestion: ' + text.substring(0, 80), { tenantId: this.tenant.id })
-    this.emit('suggestion', { sugType: 'resolution', text })
-    return {
-      success: true,
-      tool_name: 'suggest_resolution_note',
-      tool_sys_id: 'builtin:suggest_resolution_note',
-      output: { message: 'Resolution note suggestion added. The user can click it to populate the close_notes field.' },
-    }
-  }
-
-  private handleSuggestReply(args: any) {
-    const text = String(args?.text || '').trim()
-    if (!text) {
-      return { success: false, tool_name: 'suggest_reply', tool_sys_id: 'builtin:suggest_reply', output: {}, error: 'text is required' }
-    }
-    addLog('info', 'pipeline', 'Reply suggestion: ' + text.substring(0, 80), { tenantId: this.tenant.id })
-    this.emit('suggestion', { sugType: 'reply', text })
-    return {
-      success: true,
-      tool_name: 'suggest_reply',
-      tool_sys_id: 'builtin:suggest_reply',
-      output: { message: 'Reply suggestion added. The user can click it to place it in the comments field.' },
-    }
-  }
-
   private notifyUploadArrived(meta: UploadMeta) {
     const kb = (meta.sizeBytes / 1024).toFixed(1)
     const landedOn =
@@ -710,7 +544,6 @@ export class VoicePipeline extends EventEmitter {
         else if (typeof this.stt.requestClose === 'function') this.stt.requestClose()
       } catch {}
     }
-    if (this.ttsKeepAlive) { clearInterval(this.ttsKeepAlive); this.ttsKeepAlive = null }
     if (this.ttsWs) {
       try { this.ttsWs.close() } catch {}
       this.ttsWs = null
@@ -755,16 +588,14 @@ export class VoicePipeline extends EventEmitter {
         this.emit('navigate', { urls: confirmedOutput.navigation_urls })
       }
 
-      // Get LLM to formulate response. The confirmation nudge is transient — pass it
-      // directly to callLLMWithTools instead of storing it in this.messages to prevent
-      // accumulation across turns.
+      // Get LLM to formulate response
       this.messages.push({ role: 'tool', tool_call_id: 'confirm', content: JSON.stringify((result as any).output || {}) })
-      const confirmNudge = confirmed ? 'User confirmed. Communicate the result naturally.' : 'User declined. Acknowledge and ask how else to help.'
+      this.messages.push({ role: 'system', content: confirmed ? 'User confirmed. Communicate the result naturally.' : 'User declined. Acknowledge and ask how else to help.' })
 
       // Use streaming LLM — it speaks directly via TTS
       const savedTools = this.tools
       this.tools = [] // No tools for confirmation response
-      const llmResp = await this.callLLMWithTools(false, confirmNudge)
+      const llmResp = await this.callLLMWithTools()
       this.tools = savedTools
       if (llmResp.text) {
         this.messages.push({ role: 'assistant', content: llmResp.text })
@@ -778,7 +609,7 @@ export class VoicePipeline extends EventEmitter {
       const fallback = this.agentConfig.fallback_message || "Sorry, I am having trouble right now. Please try again in a few minutes."
       try {
         this.emit('agent_message', fallback)
-        await this.speakAndStreamAny(fallback)
+        await this.speakAndStream(fallback)
       } catch (speakErr: any) {
         addLog('error', 'pipeline', 'Fallback speak failed: ' + speakErr.message, { tenantId: this.tenant.id })
       }
@@ -790,33 +621,15 @@ export class VoicePipeline extends EventEmitter {
   // ── STT Setup (Deepgram SDK v5 — uses 'message' event with parsed JSON) ──
   private setupSTT() {
     // v5 SDK uses simple string events: 'open', 'message', 'close', 'error'
-    this.stt.on('open', () => {
-      addLog('info', 'stt', 'Deepgram connected and ready', { tenantId: this.tenant.id })
-    })
-
     this.stt.on('message', (data: any) => {
-      // Raw WebSocket delivers data as Buffer — parse to JSON
-      let parsed: any
-      try {
-        const raw = Buffer.isBuffer(data) ? data.toString('utf8') : String(data)
-        parsed = JSON.parse(raw)
-      } catch { return }
+      // data is already parsed JSON from Deepgram
+      const parsed = typeof data === 'string' ? JSON.parse(data) : data
       addLog('debug', 'stt', 'DG event type=' + parsed.type + ' transcript=' + (parsed.channel?.alternatives?.[0]?.transcript || '').substring(0, 50), { tenantId: this.tenant.id })
 
       // Handle transcript results
       if (parsed.type === 'Results') {
         const transcript = parsed.channel?.alternatives?.[0]?.transcript
         if (!transcript) return
-
-        // Track language detected by Deepgram (available in multi-language mode).
-        // Used by speakAndStreamAny to route Hindi/non-Latin speech to the correct TTS.
-        if (parsed.channel?.detected_language) {
-          const lang = (parsed.channel.detected_language as string).split('-')[0].toLowerCase()
-          if (lang && lang !== this.detectedLanguage) {
-            this.detectedLanguage = lang
-            addLog('info', 'stt', 'Language detected: ' + lang, { tenantId: this.tenant.id })
-          }
-        }
 
         if (parsed.is_final) {
           if (this.isAgentSpeaking) {
@@ -857,13 +670,6 @@ export class VoicePipeline extends EventEmitter {
 
     this.stt.on('close', () => {
       addLog('info', 'stt', 'STT connection closed', { tenantId: this.tenant.id })
-      // Flush any accumulated final transcript — ensures the utterance is processed
-      // even if speech_final or UtteranceEnd doesn't arrive before the connection cycles.
-      if (this.utteranceBuffer && !this.processing) {
-        const msg = this.utteranceBuffer
-        this.utteranceBuffer = ''
-        this.processUserMessage(msg).catch(() => {})
-      }
     })
   }
 
@@ -924,7 +730,7 @@ export class VoicePipeline extends EventEmitter {
   private messageQueue: string[] = []
 
   private async processUserMessage(message: string) {
-    if (!message.trim() || this.stopped) return
+    if (!message.trim()) return
 
     // If already processing, queue the message for later
     if (this.processing) {
@@ -976,7 +782,8 @@ export class VoicePipeline extends EventEmitter {
     if (this.isGoodbye(message)) {
       this.isAgentSpeaking = true
       this.emit('state', 'speaking')
-      // Message already pushed above — do not push again
+      this.messages.push({ role: 'user', content: message })
+      this.messageCount++
 
       // Disable tools for the closing turn (the agent shouldn't be calling any
       // record-create or KB-search tools while saying goodbye).
@@ -993,7 +800,7 @@ export class VoicePipeline extends EventEmitter {
         // call itself errors. Uses the SN agent's own fallback_message (also from
         // the agent record), not a SaaS string.
         const failsafe = this.agentConfig.fallback_message || 'Goodbye.'
-        await this.speakAndStreamAny(failsafe)
+        await this.speakAndStream(failsafe)
       } finally {
         this.tools = savedTools
       }
@@ -1013,10 +820,6 @@ export class VoicePipeline extends EventEmitter {
       let iteration = 0
       let finalResponse = ''
 
-      // Nudge only injected if the LLM returned empty before calling the tool
-      const TOOL_NUDGE = 'Speak the answer to the user.'
-      let pendingNudge: string | undefined
-
       while (iteration < maxToolCalls) {
         iteration++
         // After a tool result, force a text response unless the agent is
@@ -1024,8 +827,7 @@ export class VoicePipeline extends EventEmitter {
         // frequently returns empty text + no tool call, forcing the pipeline
         // into its generic "I found 3 articles..." fallback.
         const forceText = iteration > 1 && !this.agentConfig.supports_tool_chaining
-        const result = await this.callLLMWithTools(forceText, pendingNudge)
-        pendingNudge = undefined
+        const result = await this.callLLMWithTools(forceText)
 
         if (!result.toolCalls?.length) {
           finalResponse = result.text
@@ -1039,7 +841,6 @@ export class VoicePipeline extends EventEmitter {
 
         // Tool call — speak a natural filler while executing
         for (const tc of result.toolCalls) {
-          if (this.stopped) break  // Pipeline stopped mid-turn — abort tool dispatch
           this.toolCallCount++
           addLog('info', 'pipeline', 'Tool call: ' + tc.name + ' (#' + this.toolCallCount + ')', { tenantId: this.tenant.id })
 
@@ -1054,15 +855,8 @@ export class VoicePipeline extends EventEmitter {
           let toolResult: any
           if (tc.name === 'request_attachment' && this.audioFormat === 'widget') {
             toolResult = this.handleRequestAttachment(tc.arguments)
-          } else if (tc.name === 'suggest_form_update' && this.audioFormat === 'widget') {
-            toolResult = this.handleSuggestFormUpdate(tc.arguments)
-          } else if (tc.name === 'suggest_resolution_note' && this.audioFormat === 'widget') {
-            toolResult = this.handleSuggestResolution(tc.arguments)
-          } else if (tc.name === 'suggest_reply' && this.audioFormat === 'widget') {
-            toolResult = this.handleSuggestReply(tc.arguments)
           } else {
             // Execute tool (no extra filler — the initial ack covers the wait)
-            addLog('debug', 'pipeline', 'Tool call body: session=' + (this.snSessionId || '(empty!)') + ' agent=' + (this.selectedAgentId || '(empty!)') + ' tool=' + tc.name, { tenantId: this.tenant.id })
             toolResult = await this.snFetch('POST', '/gateway/tool', {
               session_id: this.snSessionId,
               agent_id: this.selectedAgentId,
@@ -1087,7 +881,7 @@ export class VoicePipeline extends EventEmitter {
             if (confirmMsg && !this.isBargingIn) {
               this.emit('state', 'speaking')
               this.emit('agent_message', confirmMsg)
-              await this.speakAndStreamAny(confirmMsg)
+              await this.speakAndStream(confirmMsg)
               this.messages.push({ role: 'assistant', content: confirmMsg })
             }
 
@@ -1120,16 +914,21 @@ export class VoicePipeline extends EventEmitter {
             tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.arguments) } }],
           })
           savedNarration = true
-          // Truncate large tool results (e.g. KB articles with full text) to
-          // keep input tokens in check across multi-turn conversations.
-          const toolOutputStr = JSON.stringify(toolOutput)
           this.messages.push({
             role: 'tool', tool_call_id: tc.id,
-            content: toolOutputStr.length > 800 ? toolOutputStr.slice(0, 799) + '…' : toolOutputStr,
+            content: JSON.stringify(toolOutput),
           })
         }
-        // Nudge the model to speak if it was silent before the tool call
-        if (!savedNarration) pendingNudge = TOOL_NUDGE
+        // Nudge the LLM to speak the tool result immediately. Without this,
+        // weaker models (llama-3.3) often see their own pre-tool narration
+        // ("Let me search...") + the tool result and conclude they already
+        // responded — so they go silent until the user prompts "did you find it?".
+        // This system message forces a fresh spoken summary.
+        this.messages.push({
+          role: 'system',
+          content: 'The tool just returned. Speak the answer to the user now in 1-2 sentences. Do NOT stay silent. Do NOT wait for the user to ask. If the result has a `message` field, that is your spoken answer; otherwise summarize the result naturally.',
+        })
+        // Loop back so the LLM can read the tool result(s) and produce a natural response
         addLog('info', 'pipeline', 'Loop iteration ' + iteration + ', calling LLM again with tool results', { tenantId: this.tenant.id })
       }
 
@@ -1148,7 +947,7 @@ export class VoicePipeline extends EventEmitter {
             if (clean) {
               this.emit('state', 'speaking')
               this.emit('agent_message', clean)
-              await this.speakAndStreamAny(clean)
+              await this.speakAndStream(clean)
               this.messages.push({ role: 'assistant', content: clean })
             }
           } catch {}
@@ -1168,7 +967,7 @@ export class VoicePipeline extends EventEmitter {
       const fallback = this.agentConfig.fallback_message || "Sorry, I am having trouble right now. Please try again in a few minutes."
       try {
         this.emit('agent_message', fallback)
-        await this.speakAndStreamAny(fallback)
+        await this.speakAndStream(fallback)
       } catch (speakErr: any) {
         addLog('error', 'pipeline', 'Fallback speak failed: ' + speakErr.message, { tenantId: this.tenant.id })
       }
@@ -1246,7 +1045,7 @@ export class VoicePipeline extends EventEmitter {
               if (clean) {
                 this.emit('state', 'speaking')
                 this.emit('agent_message', clean)
-                await this.speakAndStreamAny(clean)
+                await this.speakAndStream(clean)
               }
             }
             return { text: fbText, toolCalls: fbToolCalls }
@@ -1262,7 +1061,7 @@ export class VoicePipeline extends EventEmitter {
         if (clean) {
           this.emit('state', 'speaking')
           this.emit('agent_message', clean)
-          await this.speakAndStreamAny(clean)
+          await this.speakAndStream(clean)
         }
       }
       return { text: fbText, toolCalls: fbToolCalls }
@@ -1272,58 +1071,6 @@ export class VoicePipeline extends EventEmitter {
     }
   }
 
-  // ── Token-efficient tool selection ──
-
-  private trimToolDescriptions(tools: any[]): any[] {
-    return tools.map(t => {
-      const desc: string = t.function?.description || ''
-      if (desc.length <= 150) return t
-      return { ...t, function: { ...t.function, description: desc.slice(0, 149) + '…' } }
-    })
-  }
-
-  private selectRelevantTools(maxTools = 3): any[] {
-    const all = this.tools
-    if (all.length <= maxTools) return this.trimToolDescriptions(all)
-
-    // Score every tool against recent conversation context.
-    // Looking at user + assistant messages (not raw tool results, which are noisy JSON)
-    // gives the strongest intent signal: e.g. agent asked "what service type?" → the
-    // word "service" in the conversation boosts create_service_order appropriately.
-    const recent = this.messages
-      .filter(m => m.role !== 'system' && m.role !== 'tool')
-      .slice(-6)
-
-    const contextText = recent.map(m => {
-      const c = m.content
-      if (typeof c === 'string') return c
-      if (Array.isArray(c)) return c.map((x: any) => x.text || '').join(' ')
-      return ''
-    }).join(' ').toLowerCase()
-
-    // Boost tools that were recently called — still relevant to the ongoing flow
-    const recentCalled = new Set<string>()
-    for (const m of this.messages.slice(-8)) {
-      if (m.role === 'assistant' && Array.isArray((m as any).tool_calls)) {
-        for (const tc of (m as any).tool_calls) {
-          if (tc.function?.name) recentCalled.add(tc.function.name)
-        }
-      }
-    }
-
-    const keywords = contextText.split(/\s+/).filter(w => w.length > 3)
-    const scored = all.map(tool => {
-      const name = (tool.function?.name || '').replace(/_/g, ' ')
-      const desc = (tool.function?.description || '').slice(0, 300).toLowerCase()
-      let score = keywords.filter(w => (name + ' ' + desc).includes(w)).length
-      if (recentCalled.has(tool.function?.name)) score += 10
-      return { tool, score }
-    })
-
-    scored.sort((a, b) => b.score - a.score)
-    return this.trimToolDescriptions(scored.slice(0, maxTools).map(s => s.tool))
-  }
-
   /**
    * Call LLM with STREAMING — pipe completed sentences directly to TTS
    * This is the key to ElevenLabs-like latency:
@@ -1331,48 +1078,31 @@ export class VoicePipeline extends EventEmitter {
    *   Meanwhile tokens 2-N continue arriving → next sentence → TTS queues it
    * User hears first words ~800ms after LLM starts generating
    */
-  private async callLLMWithTools(forceText = false, nudge?: string): Promise<{ text: string; toolCalls: any[] }> {
+  private async callLLMWithTools(forceText = false): Promise<{ text: string; toolCalls: any[] }> {
     const contextWindow = this.agentConfig.context_window || 6
-    // Only include the initial system prompt (index 0). Post-turn system messages
-    // like "speak the answer now" nudges and confirmation acks are transient —
-    // if included here they accumulate across turns and cause the LLM to re-trigger
-    // on old nudges, producing repeated or doubled responses.
-    const system = this.messages.filter(m => m.role === 'system').slice(0, 1)
-    
-    // Compress history: omit raw tool outputs from messages older than the last turn
-    // to save tokens, since the LLM already summarized them in its assistant reply.
-    const rawConv = this.messages.filter(m => m.role !== 'system').slice(-contextWindow)
-    const conv = rawConv.map((m, i) => {
-      // Keep everything in the most recent turn (last 2 messages)
-      if (i >= rawConv.length - 2) return m
-      // Compress old raw tool JSON — the API needs the tool message to match the tool_call, but the content can be tiny
-      if (m.role === 'tool') return { ...m, content: '{"omitted":true}' }
-      return m
-    })
-    const extra = nudge ? [{ role: 'system', content: nudge }] : []
+    const system = this.messages.filter(m => m.role === 'system')
+    const conv = this.messages.filter(m => m.role !== 'system').slice(-contextWindow)
 
     const params: any = {
       model: this.agentConfig.llm_model || 'llama-3.3-70b-versatile',
-      messages: [...system, ...conv, ...extra],
-      temperature: 0.35,
-      max_tokens: 150,
+      messages: [...system, ...conv],
+      temperature: 0.6,
+      max_tokens: 300,
       stream: true, // STREAMING — tokens arrive one by one
     }
-    if (this.tools.length && !forceText) {
-      // Select only the tools most relevant to the current conversation turn —
-      // sending all tools every call wastes hundreds of input tokens and hits
-      // Groq's daily token cap faster. On post-tool iterations (forceText=true)
-      // we skip tools entirely: the model only needs to narrate the result.
-      const selectedTools = this.selectRelevantTools(3)
-      params.tools = selectedTools
-      params.tool_choice = 'auto'
-      // Force serial execution — parallel tool calls cause schema validation
-      // errors on Groq with llama-3.3 and are worse UX on voice anyway.
+    if (this.tools.length) {
+      params.tools = this.tools
+      // forceText=true on post-tool iterations guarantees the model speaks
+      // about the tool result instead of returning empty text (a common
+      // llama-3.3 failure mode that falls through to the generic fallback).
+      params.tool_choice = forceText ? 'none' : 'auto'
+      // Force serial tool execution. Llama / Groq frequently fail on parallel
+      // tool calls with schema validation errors — serial is also a better UX
+      // for voice (one tool per turn, narrated).
       params.parallel_tool_calls = false
-      addLog('info', 'llm', 'Streaming LLM with ' + selectedTools.length + '/' + this.tools.length + ' tools', { tenantId: this.tenant.id })
-    } else {
-      addLog('info', 'llm', 'Streaming LLM text-only', { tenantId: this.tenant.id })
     }
+
+    addLog('info', 'llm', 'Streaming LLM with ' + this.tools.length + ' tools', { tenantId: this.tenant.id })
 
     let fullText = ''
     let sentenceBuffer = ''
@@ -1404,8 +1134,8 @@ export class VoicePipeline extends EventEmitter {
                 this.emit('state', 'speaking')
               }
               this.emit('agent_message', sentence)
-              // Send to TTS — Deepgram for Latin script, OpenAI for non-Latin (Hindi etc.)
-              await this.speakAndStreamAny(sentence)
+              // Send to TTS WebSocket — audio streams back immediately
+              await this.speakAndStream(sentence)
             }
           }
         }
@@ -1429,7 +1159,7 @@ export class VoicePipeline extends EventEmitter {
         if (remaining) {
           if (!hasStartedSpeaking) this.emit('state', 'speaking')
           this.emit('agent_message', remaining)
-          await this.speakAndStreamAny(remaining)
+          await this.speakAndStream(remaining)
         }
       }
     } catch (err: any) {
@@ -1512,26 +1242,9 @@ export class VoicePipeline extends EventEmitter {
         if (!this.isBargingIn) {
           this.emit('state', 'speaking')
           this.emit('agent_message', safe)
-          await this.speakAndStreamAny(safe)
+          await this.speakAndStream(safe)
         }
         return { text: safe, toolCalls: [] }
-      }
-
-      // Recovery 3: Groq server-side JSON Schema validation rejected the tool call
-      // (e.g. enum mismatch, wrong type). This is recoverable — the LLM chose to
-      // call the tool before collecting enough info. Ask the user to clarify
-      // rather than ending the call.
-      if (/tool call validation failed|did not match schema/i.test(msg)) {
-        const toolMatch = msg.match(/parameters for tool ([a-z_]+)/i)
-        const toolName = toolMatch ? toolMatch[1] : 'that action'
-        addLog('warn', 'llm', 'Schema validation rejected ' + toolName + ' — asking user to clarify', { tenantId: this.tenant.id })
-        const clarify = "I'm sorry, I need a bit more information to complete that. Could you clarify your request?"
-        if (!this.isBargingIn) {
-          this.emit('state', 'speaking')
-          this.emit('agent_message', clarify)
-          await this.speakAndStreamAny(clarify)
-        }
-        return { text: clarify, toolCalls: [] }
       }
 
       addLog('error', 'llm', 'Stream error: ' + msg, { tenantId: this.tenant.id })
@@ -1666,57 +1379,10 @@ export class VoicePipeline extends EventEmitter {
     return clean
   }
 
-  // ── Multilingual TTS routing ──
-  // Routes to OpenAI TTS for any non-English language:
-  //   • Latin-script languages (Spanish, French, German, Portuguese, Italian, Dutch,
-  //     Polish, Swedish, Turkish…) — detected via detectedLanguage from STT.
-  //   • Non-Latin scripts (Hindi/Devanagari, Arabic, Chinese, Japanese, Korean, Russian…)
-  //     — detected from text characters, works even before STT fires.
-  // Falls back to Deepgram for English (lower latency streaming).
-  private async speakAndStreamAny(text: string): Promise<void> {
-    if (!text || this.isBargingIn) return
-    const isNonEnglish = !!this.detectedLanguage && this.detectedLanguage !== 'en'
-    const hasNonLatinScript = /[\u0250-\uFFFF]/.test(text)
-    if ((isNonEnglish || hasNonLatinScript) && process.env.OPENAI_API_KEY) {
-      await this.speakWithOpenAI(text)
-    } else {
-      await this.speakAndStream(text)
-    }
-  }
-
-  // OpenAI TTS — multilingual, supports Devanagari/Hindi natively.
-  // Returns raw PCM at 24kHz 16-bit, matching the widget's AudioWorklet sample rate.
-  private async speakWithOpenAI(text: string): Promise<void> {
-    if (!text || this.isBargingIn) return
-    addLog('info', 'tts', 'OpenAI TTS (multilingual): "' + text.substring(0, 60) + '"', { tenantId: this.tenant.id })
-    try {
-      const OpenAI = require('openai')
-      const oai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-      const response = await oai.audio.speech.create({
-        model: 'tts-1',
-        voice: 'alloy',           // multilingual, gender-neutral
-        input: text,
-        response_format: 'pcm',   // raw 24kHz 16-bit mono — matches widget AudioWorklet
-      })
-      if (this.isBargingIn) return
-      const buf = Buffer.from(await response.arrayBuffer())
-      // Emit in chunks to simulate Deepgram's streaming behaviour
-      const CHUNK = 4096
-      for (let i = 0; i < buf.length; i += CHUNK) {
-        if (this.isBargingIn) break
-        this.emit('audio', buf.slice(i, i + CHUNK))
-      }
-    } catch (e: any) {
-      addLog('error', 'tts', 'OpenAI TTS failed, falling back to Deepgram: ' + e.message, { tenantId: this.tenant.id })
-      await this.speakAndStream(text)
-    }
-  }
-
   // ── TTS WebSocket with proper buffering ──
   private ttsAudioBuffer: Buffer[] = []
   private ttsResolve: (() => void) | null = null
   private ttsWs: any = null
-  private ttsKeepAlive: ReturnType<typeof setInterval> | null = null
 
   private async connectTtsWs(): Promise<void> {
     const WebSocket = require('ws')
@@ -1726,19 +1392,7 @@ export class VoicePipeline extends EventEmitter {
       const url = `wss://api.deepgram.com/v1/speak?model=${this.ttsVoice}&encoding=${ttsEncoding}&sample_rate=${ttsSampleRate}`
       this.ttsWs = new WebSocket(url, { headers: { 'Authorization': `Token ${this.ttsKey}` } })
 
-      this.ttsWs.on('open', () => {
-        // Deepgram TTS closes after ~10s of inactivity. Send KeepAlive every 8s
-        // so the connection stays alive between the greeting and the first response.
-        if (this.ttsKeepAlive) clearInterval(this.ttsKeepAlive)
-        this.ttsKeepAlive = setInterval(() => {
-          if (this.ttsWs && this.ttsWs.readyState === 1) {
-            try { this.ttsWs.send(JSON.stringify({ type: 'KeepAlive' })) } catch {}
-          } else {
-            if (this.ttsKeepAlive) { clearInterval(this.ttsKeepAlive); this.ttsKeepAlive = null }
-          }
-        }, 8000)
-        resolve()
-      })
+      this.ttsWs.on('open', () => resolve())
       this.ttsWs.on('message', (data: any, isBinary: boolean) => {
         if (isBinary && Buffer.isBuffer(data) && data.length > 10 && !this.isBargingIn) {
           // Stream audio immediately to widget — AudioWorklet handles smooth playback
@@ -1757,10 +1411,7 @@ export class VoicePipeline extends EventEmitter {
         }
       })
       this.ttsWs.on('error', (e: any) => reject(e))
-      this.ttsWs.on('close', () => {
-        if (this.ttsKeepAlive) { clearInterval(this.ttsKeepAlive); this.ttsKeepAlive = null }
-        this.ttsWs = null
-      })
+      this.ttsWs.on('close', () => { this.ttsWs = null })
       setTimeout(() => reject(new Error('TTS timeout')), 5000)
     })
   }

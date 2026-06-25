@@ -84,7 +84,6 @@ model Tenant {
   phoneNumbers      PhoneNumber[]
   allowedCallers    AllowedCaller[]
   attachmentUploads AttachmentUpload[]
-  incidentAgentConfig IncidentAgentConfig?
 
   company           String?
 
@@ -156,19 +155,6 @@ model Agent {
   active     Boolean  @default(true)
   tokens     ApiToken[]
   phoneNumbers PhoneNumber[]
-
-  // Voice — cached from SN; authoritative copy lives on the SN voice agent record
-  ttsVoice   String   @default("aura-asteria-en")
-  showOn     String   @default("portal")
-
-  // Caller group — SN sys_user_group synced from ServiceNow
-  callerGroupSysId String?
-  callerGroupName  String?
-
-  // Per-agent usage aggregates (incremented on call close, synced back to SN)
-  totalCalls   Int      @default(0)
-  totalMinutes Float    @default(0)
-  lastCallAt   DateTime?
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -278,8 +264,7 @@ model PhoneNumber {
   instanceId String?
   instance   Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
 
-  active         Boolean        @default(true)
-  allowedCallers AllowedCaller[]
+  active     Boolean   @default(true)
 
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -289,11 +274,11 @@ model PhoneNumber {
 }
 
 // =====================================================
-// Allowed Callers (per-phone-number or per-tenant allowlist)
-// Empty list = open access. Non-empty = strict; only listed callers connect.
-// phoneNumberId scopes the entry to a specific phone number/agent (per-agent
-// caller group). Entries without phoneNumberId fall back to tenant-wide.
-// The gate checks phone-scoped first; tenant-wide is the backward-compat fallback.
+// Allowed Callers (per-tenant phone number allowlist)
+// Empty list = open access (allow everyone). Non-empty list = strict allowlist;
+// only listed callers connect, others hear a polite hangup. Optional fields
+// (name/email/employeeId/snUserSysId) are passed to the voice pipeline so the
+// agent can greet by name and SN tools can impersonate the right user.
 // =====================================================
 
 model AllowedCaller {
@@ -301,12 +286,7 @@ model AllowedCaller {
   tenantId     String
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  // When set, this caller is scoped to a specific phone number (per-agent group).
-  // When null, this caller is tenant-wide (backward-compat).
-  phoneNumberId String?
-  phoneNumber   PhoneNumber? @relation(fields: [phoneNumberId], references: [id], onDelete: Cascade)
-
-  phoneE164    String   // e.g. +14155550123 — match key (caller's phone number)
+  phoneE164    String   // e.g. +14155550123 — match key
   name         String?
   email        String?
   employeeId   String?
@@ -316,9 +296,8 @@ model AllowedCaller {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@unique([tenantId, phoneNumberId, phoneE164])
+  @@unique([tenantId, phoneE164])
   @@index([tenantId, active])
-  @@index([phoneNumberId, active])
 }
 
 // =====================================================
@@ -362,48 +341,6 @@ model AttachmentUpload {
 
   @@index([token])
   @@index([tenantId, status])
-}
-
-// =====================================================
-// Incident Agent Configuration (per-tenant, all configurable fields)
-// =====================================================
-
-model IncidentAgentConfig {
-  id        String @id @default(cuid())
-  tenantId  String @unique
-  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  // LLM
-  llmModel       String @default("llama-3.3-70b-versatile")
-  llmTemperature Float  @default(0.4)
-  llmMaxTokens   Int    @default(600)
-
-  // STT
-  sttModel    String @default("nova-3")
-  sttLanguage String @default("multi")
-
-  // TTS
-  ttsVoice String @default("aura-asteria-en")
-
-  // Agent identity
-  agentName     String @default("AI Voice Agent")
-  agentSubtitle String @default("Incident Co-Agent • Powered by AI")
-
-  // Prompts — null means "use built-in default"
-  // Supports placeholders: {{incident_fields}}, {{enriched_context}}
-  systemPrompt     String? @db.Text
-  // Supports: {{number}}, {{short_description}}, {{priority}}, {{state}}, {{sla_summary}}, {{attachment_summary}}
-  greetingTemplate String? @db.Text
-
-  // Tools
-  toolUpdateField       Boolean @default(true)
-  toolSuggestResolution Boolean @default(true)
-  toolSuggestReply      Boolean @default(true)
-  toolSearchIncidents   Boolean @default(true)
-  toolSearchKb          Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 // =====================================================

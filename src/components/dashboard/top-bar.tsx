@@ -7,7 +7,6 @@
  */
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import Link from 'next/link'
 import { signOut } from 'next-auth/react'
 import { ChevronDown } from 'lucide-react'
 
@@ -18,7 +17,6 @@ const PAGE_LABELS: Record<string, string> = {
   '/dashboard/agents': 'Agents',
   '/dashboard/usage': 'Usage',
   '/dashboard/billing': 'Billing',
-  '/dashboard/incident-agent': 'Incident AI Agent',
   '/dashboard/settings': 'Settings',
   '/admin': 'Overview',
   '/admin/health': 'System Health',
@@ -42,11 +40,9 @@ type TopBarProps = {
   variant?: 'dashboard' | 'admin'
   /** Optional node rendered on the right of the top bar (before the user menu). */
   rightSlot?: React.ReactNode
-  /** Show the Admin Console link in the user dropdown. */
-  isAdmin?: boolean
 }
 
-export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboard', rightSlot, isAdmin }: TopBarProps) {
+export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboard', rightSlot }: TopBarProps) {
   const pathname = usePathname()
   const [connected, setConnected] = useState<boolean | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -139,18 +135,6 @@ export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboa
                   <p className="text-[12px] font-medium text-foreground truncate">{userEmail || 'Account'}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">Signed in</p>
                 </div>
-                {isAdmin && (
-                  <Link
-                    href="/admin"
-                    onClick={() => setMenuOpen(false)}
-                    className="w-full px-3 py-2.5 text-[12px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2 border-b border-border"
-                  >
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                    </svg>
-                    Admin Console
-                  </Link>
-                )}
                 <button
                   type="button"
                   onClick={() => signOut({ callbackUrl: '/' })}

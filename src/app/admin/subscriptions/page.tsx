@@ -7,15 +7,9 @@ import { StatCard } from '@/components/ui/stat-card'
 import { Section } from '@/components/ui/section'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
-import { DollarSign, Users, AlertCircle, Gift, CreditCard, ExternalLink } from 'lucide-react'
-import Link from 'next/link'
-import { auth } from '@/lib/auth'
-import { isUserAdmin } from '@/lib/admin'
-import { redirect } from 'next/navigation'
+import { DollarSign, Users, AlertCircle, Gift, CreditCard } from 'lucide-react'
 
 export default async function SubscriptionsPage() {
-  const session = await auth()
-  if (!isUserAdmin(session)) redirect('/dashboard')
   const tenants = await db.tenant.findMany({
     include: {
       user: { select: { name: true, email: true } },
@@ -70,7 +64,7 @@ export default async function SubscriptionsPage() {
     <div>
       <PageHeader
         title="Subscriptions"
-        description="Manage user plan assignments without payment. Click Edit on any tenant to change their plan, minutes, or access expiry."
+        description="Plan distribution, billing state, and usage across all tenants. Read-only — manual plan changes happen via Razorpay/RevenueCat."
       />
 
       {/* Stat row */}
@@ -89,54 +83,6 @@ export default async function SubscriptionsPage() {
         />
       ) : (
         <div className="space-y-10">
-          {/* Legacy / uncategorised tenants */}
-          {(() => {
-            const categorised = new Set(groups.flatMap((g) => g.tenants.map((t) => t.id)))
-            const others = tenants.filter((t) => !categorised.has(t.id))
-            if (others.length === 0) return null
-            return (
-              <Section title="Other / Legacy" description={`${others.length} tenant${others.length === 1 ? '' : 's'} on non-standard plans`}>
-                <Card className="overflow-hidden">
-                  <table className="w-full text-[12px]">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Tenant</th>
-                        <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Plan</th>
-                        <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Expires</th>
-                        <th className="px-4 py-2.5 text-right text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {others.map((t) => (
-                        <tr key={t.id} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
-                          <td className="px-4 py-3">
-                            <p className="text-[12px] font-medium text-foreground">{t.user.name || 'Unnamed'}</p>
-                            <p className="text-[11px] text-muted-foreground">{t.user.email}</p>
-                          </td>
-                          <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{t.plan}</td>
-                          <td className="px-4 py-3 text-muted-foreground tabular-nums">
-                            {t.plan_expires_at
-                              ? new Date(t.plan_expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                              : <span className="text-emerald-400/80">No expiry</span>}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Link
-                              href={`/admin/tenants/${t.id}`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border text-[11px] font-medium text-foreground hover:bg-accent/40 transition-colors"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              Edit
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </Card>
-              </Section>
-            )
-          })()}
-
           {groups.map((group) => (
             <Section
               key={group.plan}
@@ -149,15 +95,16 @@ export default async function SubscriptionsPage() {
                     <tr className="border-b border-border">
                       <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Tenant</th>
                       <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Status</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Provider ID</th>
                       <th className="px-4 py-2.5 text-right text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Minutes (mo)</th>
                       <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Expires</th>
-                      <th className="px-4 py-2.5 text-right text-[10px] uppercase tracking-widest font-medium text-muted-foreground/80">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {group.tenants.map((t) => {
                       const minutes = t.usageLogs.reduce((s, l) => s + l.minutes, 0)
                       const expired = t.plan_expires_at && new Date(t.plan_expires_at) < new Date()
+                      const providerId = t.subscription_id || t.revenuecat_id || null
                       return (
                         <tr
                           key={t.id}
@@ -187,6 +134,9 @@ export default async function SubscriptionsPage() {
                               </span>
                             )}
                           </td>
+                          <td className="px-4 py-3 text-muted-foreground font-mono text-[11px]">
+                            {providerId ? providerId.substring(0, 24) + (providerId.length > 24 ? '…' : '') : '—'}
+                          </td>
                           <td className="px-4 py-3 text-right text-foreground tabular-nums">
                             {minutes.toFixed(1)}
                           </td>
@@ -197,16 +147,7 @@ export default async function SubscriptionsPage() {
                                   day: 'numeric',
                                   year: 'numeric',
                                 })
-                              : <span className="text-emerald-400/80">No expiry</span>}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Link
-                              href={`/admin/tenants/${t.id}`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border text-[11px] font-medium text-foreground hover:bg-accent/40 transition-colors"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              Edit
-                            </Link>
+                              : '—'}
                           </td>
                         </tr>
                       )
