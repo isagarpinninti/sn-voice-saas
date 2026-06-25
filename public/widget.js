@@ -551,7 +551,7 @@ ${C.brand?'<div id="zvf-br">Powered by <a href="https://zevox.onrender.com" targ
             else if(m.state==='speaking'){setSt('Speaking...','Talk to interrupt');setRing(true);setWave(true)}
             else if(m.state==='processing'){setSt('Thinking...','');setRing(false);setWave(false)}
           }
-          else if(m.type==='barge_in')clearAudio()
+          else if(m.type==='barge_in'){clearAudio();setSt('Listening...','Talk to interrupt');setRing(true);setWave(true)}
           else if(m.type==='navigate')openNavUrls(m.urls)
           else if(m.type==='attachment_requested')showAttachmentRequest(m.url,m.reason)
           else if(m.type==='error'){setSt('Error',m.message);endCallGraceful()}

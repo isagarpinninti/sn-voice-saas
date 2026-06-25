@@ -464,7 +464,10 @@ export class VoicePipeline extends EventEmitter {
       // This establishes bidirectional binary traffic (mic audio browser→server)
       // before TTS audio flows server→browser. Without it the WS was one-sided
       // binary at greeting start, which caused code-1006 drops on Render's proxy.
-      this.emit('state', 'listening')
+      // NOTE: do NOT emit('state','listening') here — sending two consecutive server
+      // text frames (state then ready) without any binary between them triggers
+      // Render's proxy to close the WS ~31ms later (same pattern as server pings).
+      // The widget's {type:'ready'} handler already sets the visual "Listening" state.
       this.emit('ready', { sessionId: this.snSessionId, greeting: config.greeting })
       addLog('info', 'pipeline', 'Started OK', { tenantId: this.tenant.id })
 
@@ -832,8 +835,10 @@ export class VoicePipeline extends EventEmitter {
           if (this.isAgentSpeaking) {
             this.isBargingIn = true
             this.isAgentSpeaking = false
+            // Only one text frame here — barge_in. The widget's handler resets
+            // UI to listening state to avoid sending two consecutive text frames
+            // (barge_in + state:listening), which triggers Render's proxy close.
             this.emit('barge_in')
-            this.emit('state', 'listening')
           }
           this.utteranceBuffer += ' ' + transcript
           this.utteranceBuffer = this.utteranceBuffer.trim()
