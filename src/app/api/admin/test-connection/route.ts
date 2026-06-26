@@ -54,12 +54,22 @@ export async function POST(req: Request) {
     const res = await fetch(`${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/init`, {
       method: 'POST',
       headers: { 'Authorization': `Basic ${authHeader}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(firstAgent?.snAgentId ? { agent_id: firstAgent.snAgentId } : {}),
+      body: JSON.stringify(firstAgent?.snAgentId ? { preferred_agent_id: firstAgent.snAgentId } : {}),
       signal: AbortSignal.timeout(15000),
     })
-    const data = await res.json()
-    const result = data.result || data
-    results.push({ step: 'Gateway Init', status: result.success ? 'pass' : 'fail', detail: result.success ? 'Agent: ' + (result.agent?.name || 'OK') : (result.error || 'Error') })
+    if (!res.ok) {
+      results.push({ step: 'Gateway Init', status: 'fail', detail: 'HTTP ' + res.status + ' — check app is installed and REST API is active' })
+    } else {
+      const data = await res.json()
+      const result = data.result || data
+      if (result.error || result.message) {
+        results.push({ step: 'Gateway Init', status: 'fail', detail: result.message || result.error || 'No active agent found' })
+      } else if (result.session_sys_id || result.agent_sys_id) {
+        results.push({ step: 'Gateway Init', status: 'pass', detail: 'Gateway OK' + (result.agent_sys_id ? ' — agent: ' + result.agent_sys_id.slice(0, 8) + '…' : '') })
+      } else {
+        results.push({ step: 'Gateway Init', status: 'fail', detail: 'Unexpected response from gateway' })
+      }
+    }
   } catch (err: any) {
     results.push({ step: 'Gateway Init', status: 'fail', detail: err.message })
   }

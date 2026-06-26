@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useToast } from '@/components/ui/toast'
-import { Bot, Plus, ChevronRight } from 'lucide-react'
+import { Bot, Plus, ChevronRight, RefreshCw, Loader2 } from 'lucide-react'
 
 interface Agent {
   id: string
@@ -36,10 +36,31 @@ export default function AgentsListPage() {
   const [creating, setCreating] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ name: '', snAgentId: '' })
+  const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
     fetchAgents()
   }, [])
+
+  async function handleSync() {
+    setSyncing(true)
+    try {
+      // Sync all instances
+      const instRes = await fetch('/api/instances').then(r => r.json())
+      const instances: { id: string }[] = instRes.instances || []
+      let totalSynced = 0
+      for (const inst of instances) {
+        const res = await fetch(`/api/instances/${inst.id}/sync`, { method: 'POST' })
+        const d = await res.json()
+        totalSynced += d.synced || 0
+      }
+      toast(totalSynced > 0 ? `Synced ${totalSynced} agent(s) from ServiceNow` : 'Already up to date', 'success')
+      await fetchAgents()
+    } catch {
+      toast('Sync failed', 'error')
+    }
+    setSyncing(false)
+  }
 
   async function fetchAgents() {
     try {
@@ -99,17 +120,23 @@ export default function AgentsListPage() {
     <div>
       <PageHeader
         title="Agents"
-        description="Each agent maps to a ServiceNow Voice Agent. The orchestrator automatically picks the best agent for each conversation."
+        description="Each agent maps to a ServiceNow Voice Agent. Sync to pull the latest agents from your ServiceNow instance."
         actions={
-          <Button
-            size="sm"
-            onClick={() => setShowCreate(true)}
-            disabled={!!atLimit}
-            title={atLimit ? `Limit reached on your current plan` : undefined}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New agent
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing}>
+              {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              {syncing ? 'Syncing...' : 'Sync from SN'}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setShowCreate(true)}
+              disabled={!!atLimit}
+              title={atLimit ? `Limit reached on your current plan` : undefined}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New agent
+            </Button>
+          </div>
         }
       />
 

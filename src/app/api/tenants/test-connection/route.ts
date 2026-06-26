@@ -61,27 +61,29 @@ export async function POST(req: Request) {
 
   // Voice Agent API
   const firstAgent = instance.agents[0] || null
-  if (firstAgent?.snAgentId) {
-    try {
-      const authHeader = Buffer.from(instance.snUsername + ':' + instance.snPassword).toString('base64')
-      const res = await fetch(instance.snInstanceUrl + '/api/x_ztpas_ai_voice_a/v1/gateway/init', {
-        method: 'POST',
-        headers: { 'Authorization': 'Basic ' + authHeader, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ agent_id: firstAgent.snAgentId }),
-        signal: AbortSignal.timeout(15000),
-      })
+  try {
+    const authHeader = Buffer.from(instance.snUsername + ':' + instance.snPassword).toString('base64')
+    const res = await fetch(instance.snInstanceUrl + '/api/x_ztpas_ai_voice_a/v1/gateway/init', {
+      method: 'POST',
+      headers: { 'Authorization': 'Basic ' + authHeader, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(firstAgent?.snAgentId ? { preferred_agent_id: firstAgent.snAgentId } : {}),
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!res.ok) {
+      results.push({ step: 'Voice Agent API', status: 'fail', detail: 'HTTP ' + res.status + ' — check app is installed and REST API is active' })
+    } else {
       const data = await res.json()
       const result = data.result || data
-      if (result.success) {
-        results.push({ step: 'Voice Agent', status: 'pass', detail: 'Agent: ' + (result.agent?.name || 'OK') })
+      if (result.error || result.message) {
+        results.push({ step: 'Voice Agent API', status: 'fail', detail: result.message || result.error || 'No active agent found' })
+      } else if (result.session_sys_id || result.agent_sys_id) {
+        results.push({ step: 'Voice Agent API', status: 'pass', detail: 'Gateway OK' + (result.agent_sys_id ? ' — agent: ' + result.agent_sys_id.slice(0, 8) + '…' : '') })
       } else {
-        results.push({ step: 'Voice Agent', status: 'fail', detail: result.error || 'Check agent sys_id' })
+        results.push({ step: 'Voice Agent API', status: 'fail', detail: 'Unexpected response from gateway' })
       }
-    } catch (err: any) {
-      results.push({ step: 'Voice Agent', status: 'fail', detail: err.message })
     }
-  } else {
-    results.push({ step: 'Voice Agent', status: 'fail', detail: 'No agent linked to this instance yet. Create one in ServiceNow (auto-syncs if SaaS sync is configured).' })
+  } catch (err: any) {
+    results.push({ step: 'Voice Agent API', status: 'fail', detail: err.message })
   }
 
   return NextResponse.json({ results })

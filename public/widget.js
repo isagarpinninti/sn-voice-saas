@@ -218,6 +218,12 @@
 .zv-msg.user .zv-msg-bubble{background:${C.color};color:#fff;border-bottom-right-radius:4px}
 .zv-msg.agent .zv-msg-bubble{background:#f1f5f9;color:#0d1117;border-bottom-left-radius:4px}
 .zv-msg-time{font-size:10px;color:#9ca3af;padding:0 4px}
+.zv-msg-upload{display:flex;flex-direction:column;gap:6px;min-width:200px}
+.zv-upload-label{font-size:12px;font-weight:600;color:#374151}
+.zv-upload-reason{font-size:12.5px;color:#6b7280;line-height:1.4}
+.zv-upload-btn{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:8px 14px;background:${C.color};color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;transition:opacity .15s}
+.zv-upload-btn:hover{opacity:.85}
+.zv-upload-btn svg{width:14px;height:14px;flex-shrink:0}
 
 /* Typing indicator */
 #zv-typing{display:none;align-self:flex-start;padding:10px 14px;background:#f1f5f9;border-radius:16px;border-bottom-left-radius:4px;gap:4px}
@@ -419,6 +425,7 @@ ${isChat?buildChatCardHTML(isBoth):''}
       showTyping(false)
       if(d.message)appendMsg('agent',d.message)
       else if(d.error)appendMsg('agent','Sorry, something went wrong.')
+      if(d.attachment_url)appendChatUpload(d.attachment_url,d.attachment_reason)
     }).catch(function(){
       showTyping(false)
       appendMsg('agent','Sorry, I couldn\'t connect. Please try again.')
@@ -448,6 +455,16 @@ ${isChat?buildChatCardHTML(isBoth):''}
     var msgs=g('zv-chat-msgs');if(msgs)setTimeout(function(){msgs.scrollTop=msgs.scrollHeight},50)}
   function showTyping(on){var t=g('zv-typing');if(t)t.className=on?'show':'';scrollMsgs()}
   function setChatSendEnabled(on){var b=g('zv-chat-send');if(b)b.disabled=!on}
+
+  function appendChatUpload(url,reason){
+    var msgs=g('zv-chat-msgs');if(!msgs)return
+    var safe=(reason||'a file').replace(/[<>&"']/g,'')
+    var d=document.createElement('div')
+    d.className='zv-msg agent'
+    d.innerHTML='<div class="zv-msg-bubble zv-msg-upload"><div class="zv-upload-label">📎 File upload requested</div><div class="zv-upload-reason">'+safe+'</div><a class="zv-upload-btn" href="'+url+'" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Open upload page</a></div>'
+    var typing=g('zv-typing');if(typing)msgs.insertBefore(d,typing);else msgs.appendChild(d)
+    scrollMsgs()
+  }
 
   // ── Both mode — tabs ────────────────────────────────────────────────────
   var voiceTabActive=false

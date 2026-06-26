@@ -12,6 +12,8 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { signUploadToken } from '@/lib/upload-tokens'
+import { createPendingUpload } from '@/lib/upload-registry'
 
 const CORS: HeadersInit = {
   'Access-Control-Allow-Origin': '*',
@@ -122,14 +124,31 @@ export async function POST(req: Request) {
 
   // ── Build LLM tools list ──────────────────────────────────────────────
   const activeTools = (agentCfg?.tools ?? []).filter((t: any) => t.active !== false)
-  const llmTools = activeTools.map((t: any) => ({
-    type: 'function',
-    function: {
-      name:        t.name,
-      description: t.description || t.name,
-      parameters:  t.input_schema ?? { type: 'object', properties: {} },
+  const llmTools = [
+    // Built-in: request a file attachment from the user
+    {
+      type: 'function',
+      function: {
+        name: 'request_attachment',
+        description: 'Ask the user to upload a file (image, PDF, document, spreadsheet). Use this when the conversation requires the user to provide supporting documentation.',
+        parameters: {
+          type: 'object',
+          properties: {
+            reason: { type: 'string', description: 'Brief description of what file is needed and why' },
+          },
+          required: ['reason'],
+        },
+      },
     },
-  }))
+    ...activeTools.map((t: any) => ({
+      type: 'function',
+      function: {
+        name:        t.name,
+        description: t.description || t.name,
+        parameters:  t.input_schema ?? { type: 'object', properties: {} },
+      },
+    })),
+  ]
 
   // ── Append user message ───────────────────────────────────────────────
   sess.history.push({ role: 'user', content: userMsg })
@@ -165,30 +184,63 @@ export async function POST(req: Request) {
   // ── Tool call loop ────────────────────────────────────────────────────
   if (choice?.finish_reason === 'tool_calls' && choice?.message?.tool_calls?.length) {
     const toolMsgs: any[] = [choice.message]
+    let attachmentUrl: string | null = null
+    let attachmentReason: string | null = null
 
     for (const tc of choice.message.tool_calls) {
       let toolOutput = 'Tool executed'
       try {
         const input = JSON.parse(tc.function.arguments)
-        const snR = await fetch(
-          `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/tool`,
-          {
-            method: 'POST',
-            headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              session_id:  sessionId,
-              tool_name:   tc.function.name,
-              tool_input:  input,
-              sn_user_id:  snUserId,
-            }),
-            signal: AbortSignal.timeout(15_000),
-          }
-        )
-        if (snR.ok) { const d = await snR.json(); toolOutput = JSON.stringify(d.result ?? d) }
+
+        // Built-in: request_attachment — generate signed upload URL
+        if (tc.function.name === 'request_attachment') {
+          const uploadToken = signUploadToken({
+            tenantId:  apiToken.tenantId,
+            sessionId,
+            agentId:   agentId || '',
+          })
+          await createPendingUpload({
+            token:      uploadToken,
+            tenantId:   apiToken.tenantId,
+            sessionId,
+            agentId:    agentId || '',
+          })
+          const baseUrl = process.env.NEXTAUTH_URL || 'https://zevox.onrender.com'
+          attachmentUrl    = `${baseUrl}/upload/${uploadToken}`
+          attachmentReason = input.reason || 'a file'
+          toolOutput = JSON.stringify({ status: 'upload_requested', url: attachmentUrl })
+        } else {
+          const snR = await fetch(
+            `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/tool`,
+            {
+              method: 'POST',
+              headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                session_id:  sessionId,
+                tool_name:   tc.function.name,
+                tool_input:  input,
+                sn_user_id:  snUserId,
+              }),
+              signal: AbortSignal.timeout(15_000),
+            }
+          )
+          if (snR.ok) { const d = await snR.json(); toolOutput = JSON.stringify(d.result ?? d) }
+        }
       } catch (e: any) {
         toolOutput = `Tool error: ${e.message}`
       }
       toolMsgs.push({ role: 'tool', tool_call_id: tc.id, content: toolOutput })
+    }
+
+    // If attachment was requested, return immediately with the upload URL
+    // (no second LLM call needed — the LLM's message already explains what's needed)
+    if (attachmentUrl) {
+      const agentMsg = choice.message?.content?.trim() || `Please upload ${attachmentReason || 'a file'} using the link below.`
+      sess.history.push({ role: 'assistant', content: agentMsg })
+      return NextResponse.json(
+        { session_id: sessionId, message: agentMsg, attachment_url: attachmentUrl, attachment_reason: attachmentReason },
+        { headers: CORS }
+      )
     }
 
     // Second LLM call with tool results

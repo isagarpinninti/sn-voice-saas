@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
 import { useConfirm } from '@/components/ui/confirm-dialog'
-import { CheckCircle2, XCircle, Loader2, Copy, Check, Plus, Server, Trash2, RefreshCw, Phone, Bot, Link2, Sparkles } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, Copy, Check, Plus, Server, Trash2, Phone, Bot, Link2, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
@@ -25,15 +25,6 @@ interface Instance {
   active: boolean
   agentCount: number
   token: string | null
-  widgetColor: string
-  widgetPosition: string
-  widgetVoiceOnly: boolean
-  widgetAutoOpen: boolean
-  widgetGreeting: string
-  widgetAgentName: string
-  widgetShowBranding: boolean
-  widgetLogoUrl: string
-  widgetBorderRadius: string
   createdAt: string
 }
 
@@ -55,13 +46,11 @@ export default function ConnectionPage() {
   const [maxInstances, setMaxInstances] = useState(1)
   const [testing, setTesting] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<TestResult[]>([])
+  const [testedInstanceId, setTestedInstanceId] = useState<string | null>(null)
   const [copied, setCopied] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState<string | null>(null)
-  const [savingWidget, setSavingWidget] = useState<string | null>(null)
-  const [expandedWidget, setExpandedWidget] = useState<string | null>(null)
   const [createForm, setCreateForm] = useState({ name: '', snInstanceUrl: '', snUsername: '', snPassword: '' })
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
   const [phonePlanEligible, setPhonePlanEligible] = useState(false)
@@ -72,7 +61,6 @@ export default function ConnectionPage() {
       setMaxInstances(data.maxInstances || 1)
       setLoading(false)
     }).catch(() => setLoading(false))
-
     fetch('/api/phone-numbers').then(r => r.json()).then(data => {
       setPhoneNumbers(data.phoneNumbers || [])
       setPhonePlanEligible(!!data.planEligible)
@@ -121,6 +109,7 @@ export default function ConnectionPage() {
 
   async function handleTest(instanceId: string) {
     setTesting(instanceId)
+    setTestedInstanceId(instanceId)
     setTestResults([])
     try {
       const res = await fetch('/api/tenants/test-connection', {
@@ -156,53 +145,6 @@ export default function ConnectionPage() {
       }
     } catch { toast('Network error', 'error') }
     setDeleting(null)
-  }
-
-  function updateWidget(instanceId: string, field: string, value: any) {
-    setInstances(prev => prev.map(i => i.id === instanceId ? { ...i, [field]: value } : i))
-  }
-
-  async function handleSaveWidget(instanceId: string) {
-    setSavingWidget(instanceId)
-    const inst = instances.find(i => i.id === instanceId)
-    if (!inst) return
-    try {
-      const res = await fetch(`/api/instances/${instanceId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          widgetColor: inst.widgetColor,
-          widgetPosition: inst.widgetPosition,
-          widgetVoiceOnly: inst.widgetVoiceOnly,
-          widgetAutoOpen: inst.widgetAutoOpen,
-          widgetGreeting: inst.widgetGreeting,
-          widgetAgentName: inst.widgetAgentName,
-          widgetShowBranding: inst.widgetShowBranding,
-          widgetLogoUrl: inst.widgetLogoUrl,
-          widgetBorderRadius: inst.widgetBorderRadius,
-        }),
-      })
-      if (res.ok) toast('Widget saved', 'success')
-      else toast('Failed to save', 'error')
-    } catch { toast('Network error', 'error') }
-    setSavingWidget(null)
-  }
-
-  async function handleSync(instanceId: string) {
-    setSyncing(instanceId)
-    try {
-      const res = await fetch(`/api/instances/${instanceId}/sync`, { method: 'POST' })
-      const data = await res.json()
-      if (data.error && !data.synced) {
-        toast(data.error, 'error')
-      } else {
-        toast(data.message || `Synced ${data.synced} agent(s)`, 'success')
-        // Reload instances to update agent count
-        const r = await fetch('/api/instances').then(r => r.json())
-        setInstances(r.instances || [])
-      }
-    } catch { toast('Network error', 'error') }
-    setSyncing(null)
   }
 
   function copyToken(token: string) {
@@ -393,11 +335,8 @@ export default function ConnectionPage() {
                     <p className="text-[11px] text-muted-foreground mt-1">{inst.agentCount} agent{inst.agentCount !== 1 ? 's' : ''} · {inst.snUsername}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => handleSync(inst.id)} disabled={syncing === inst.id}>
-                      {syncing === inst.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <><RefreshCw className="w-3 h-3" /> Sync</>}
-                    </Button>
                     <Button size="sm" variant="outline" onClick={() => handleTest(inst.id)} disabled={testing === inst.id}>
-                      {testing === inst.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Test'}
+                      {testing === inst.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Test connection'}
                     </Button>
                     <Button
                       size="sm"
@@ -483,8 +422,8 @@ export default function ConnectionPage() {
                 )}
 
                 {/* Test results */}
-                {testResults.length > 0 && testing === null && (
-                  <div className="rounded-lg border border-border bg-background overflow-hidden mb-4">
+                {testResults.length > 0 && testing === null && testedInstanceId === inst.id && (
+                  <div className="rounded-lg border border-border bg-background overflow-hidden mt-4">
                     {testResults.map((r, i) => (
                       <div key={i} className="flex items-start gap-2.5 px-3 py-2 border-b border-border last:border-b-0">
                         {r.status === 'pass' ? (
@@ -500,127 +439,6 @@ export default function ConnectionPage() {
                     ))}
                   </div>
                 )}
-
-                {/* Widget customization toggle */}
-                <div className="border-t border-border pt-4">
-                  <button
-                    onClick={() => setExpandedWidget(expandedWidget === inst.id ? null : inst.id)}
-                    className="text-[12px] text-primary hover:text-primary/80 transition-colors"
-                  >
-                    {expandedWidget === inst.id ? 'Hide widget settings' : 'Widget customization'}
-                  </button>
-
-                  {expandedWidget === inst.id && (
-                    <div className="mt-4 space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px]">Brand color</Label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="color"
-                              value={inst.widgetColor}
-                              onChange={e => updateWidget(inst.id, 'widgetColor', e.target.value)}
-                              className="w-8 h-8 rounded border border-border cursor-pointer"
-                            />
-                            <Input
-                              value={inst.widgetColor}
-                              onChange={e => updateWidget(inst.id, 'widgetColor', e.target.value)}
-                              className="font-mono text-[11px]"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px]">Position</Label>
-                          <div className="flex gap-2">
-                            {['left', 'right'].map(pos => (
-                              <Button
-                                key={pos}
-                                type="button"
-                                size="sm"
-                                variant={inst.widgetPosition === pos ? 'default' : 'outline'}
-                                onClick={() => updateWidget(inst.id, 'widgetPosition', pos)}
-                                className="flex-1 capitalize text-[11px]"
-                              >
-                                {pos}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px]">Agent display name</Label>
-                          <Input
-                            value={inst.widgetAgentName}
-                            onChange={e => updateWidget(inst.id, 'widgetAgentName', e.target.value)}
-                            placeholder="e.g. Nova"
-                            className="text-[12px]"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px]">Greeting text</Label>
-                          <Input
-                            value={inst.widgetGreeting}
-                            onChange={e => updateWidget(inst.id, 'widgetGreeting', e.target.value)}
-                            placeholder="Hi! How can I help?"
-                            className="text-[12px]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px]">Logo URL</Label>
-                          <Input
-                            value={inst.widgetLogoUrl}
-                            onChange={e => updateWidget(inst.id, 'widgetLogoUrl', e.target.value)}
-                            placeholder="https://..."
-                            className="text-[12px]"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px]">Border radius</Label>
-                          <div className="flex gap-2">
-                            {['full', 'lg', 'md', 'none'].map(r => (
-                              <Button
-                                key={r}
-                                type="button"
-                                size="sm"
-                                variant={inst.widgetBorderRadius === r ? 'default' : 'outline'}
-                                onClick={() => updateWidget(inst.id, 'widgetBorderRadius', r)}
-                                className="flex-1 capitalize text-[10px]"
-                              >
-                                {r}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-6">
-                        <label className="flex items-center gap-2 text-[11px] text-foreground cursor-pointer">
-                          <input type="checkbox" checked={inst.widgetVoiceOnly} onChange={e => updateWidget(inst.id, 'widgetVoiceOnly', e.target.checked)} className="accent-primary" />
-                          Voice only
-                        </label>
-                        <label className="flex items-center gap-2 text-[11px] text-foreground cursor-pointer">
-                          <input type="checkbox" checked={inst.widgetAutoOpen} onChange={e => updateWidget(inst.id, 'widgetAutoOpen', e.target.checked)} className="accent-primary" />
-                          Auto open
-                        </label>
-                        <label className="flex items-center gap-2 text-[11px] text-foreground cursor-pointer">
-                          <input type="checkbox" checked={inst.widgetShowBranding} onChange={e => updateWidget(inst.id, 'widgetShowBranding', e.target.checked)} className="accent-primary" />
-                          Show branding
-                        </label>
-                      </div>
-
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => handleSaveWidget(inst.id)} disabled={savingWidget === inst.id}>
-                          {savingWidget === inst.id ? 'Saving...' : 'Save widget'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </CardContent>
             </Card>
           ))}
