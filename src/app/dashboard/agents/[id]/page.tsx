@@ -123,7 +123,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
       const res = await fetch(`/api/agents/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(agent),
+        body: JSON.stringify({ name: agent.name, active: agent.active }),
       })
       if (res.ok) {
         const fresh = await fetch(`/api/agents/${id}`, { cache: 'no-store' }).then((r) => r.json())

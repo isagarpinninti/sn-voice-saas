@@ -76,7 +76,6 @@ export async function PATCH(req: Request, ctx: RouteContext) {
 
   const data: Record<string, unknown> = {}
   if (typeof body.name === 'string') data.name = body.name.trim() || 'Untitled Agent'
-  if (typeof body.snAgentId === 'string') data.snAgentId = body.snAgentId.trim() || null
   if (typeof body.active === 'boolean') data.active = body.active
 
   const updated = await db.agent.update({
