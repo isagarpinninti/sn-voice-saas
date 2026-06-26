@@ -2,11 +2,8 @@
  * Text chat endpoint — used by the widget in chat_only / both mode.
  *
  * POST /api/chat
- * Body: { token, agent, message, session_id?, sn_user_id? }
+ * Body: { token, agent, message, session_id?, sn_user_id?, user_email? }
  * Response: { session_id, message }
- *
- * Fetches agent config from SN at runtime, calls the LLM, handles
- * tool calls via the SN gateway tool endpoint, returns text response.
  */
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { signUploadToken } from '@/lib/upload-tokens'
 import { createPendingUpload } from '@/lib/upload-registry'
+import { sendEmail } from '@/lib/send-email'
 
 const CORS: HeadersInit = {
   'Access-Control-Allow-Origin': '*',
@@ -24,13 +22,14 @@ const CORS: HeadersInit = {
 
 // ── In-memory session store (30-min TTL) ──────────────────────────────────
 type ChatSession = {
-  history:      { role: 'user' | 'assistant'; content: string }[]
-  instanceId:   string
-  tenantId:     string
+  history:       { role: 'user' | 'assistant'; content: string }[]
+  instanceId:    string
+  tenantId:      string
   snInstanceUrl: string
-  snAuth:       string
-  agentSnToken: string
-  createdAt:    number
+  snAuth:        string
+  agentSnToken:  string
+  userEmail:     string
+  createdAt:     number
 }
 const sessions = new Map<string, ChatSession>()
 
@@ -39,17 +38,59 @@ function gcSessions() {
   for (const [id, s] of sessions) if (s.createdAt < cut) sessions.delete(id)
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// ── System prompt builder ─────────────────────────────────────────────────
 function buildSystemPrompt(cfg: any): string {
-  const parts: string[] = []
-  if (cfg?.agent_identity)    parts.push(cfg.agent_identity)
-  if (cfg?.agent_instructions) parts.push('\n' + cfg.agent_instructions)
-  if (cfg?.guardrails?.length) {
-    parts.push('\n## Rules')
-    cfg.guardrails.forEach((g: any) => { if (g.description) parts.push('- ' + g.description) })
-  }
-  parts.push('\nYou are responding via text chat. Be concise and helpful. Do not use excessive markdown.')
-  return parts.join('\n') || 'You are a helpful ServiceNow assistant.'
+  const agentName = cfg?.agent_identity || 'Service Desk Agent'
+  const org       = cfg?.org_name || ''
+  const orgLine   = org ? ` for ${org}` : ''
+
+  const base = `You are ${agentName}${orgLine}, a professional IT Service Desk Agent. You handle IT incidents, service requests, password resets, access requests, software issues, and general IT questions with expertise and empathy.
+
+## Core Responsibilities
+- Diagnose and resolve IT issues on first contact where possible
+- Create and update ServiceNow tickets using available tools
+- Escalate complex issues clearly, explaining next steps to the user
+- Provide accurate ETAs and follow-ups when resolution requires time
+
+## How to Handle Requests
+1. **Greet** the user professionally and acknowledge their issue
+2. **Gather context**: affected system/app, error messages, when it started, steps already tried
+3. **Diagnose**: ask targeted clarifying questions — no more than 2-3 at a time
+4. **Resolve**: provide clear step-by-step guidance or use tools to take action
+5. **Confirm**: always confirm the issue is resolved before closing
+
+## Communication Style
+- Professional, calm, and empathetic — even with frustrated users
+- Use plain language; avoid acronyms unless the user uses them first
+- Keep responses concise and structured (use numbered steps for instructions)
+- Never make promises you cannot keep (e.g., "I'll escalate and someone will call within the hour" only if you can guarantee it)
+- Do not repeat the user's words back unnecessarily
+
+## File Uploads — STRICT RULE
+- **NEVER** proactively suggest or mention file uploads
+- **ONLY** use the \`request_attachment\` tool if the user explicitly says they have a screenshot, log file, or document to share (e.g. "I have a screenshot", "can I share an error log?")
+- If the user says they have no file or declines, **never bring it up again**
+- Do not offer "you can upload a screenshot" as a troubleshooting step
+
+## Email — STRICT RULE
+- **ONLY** use the \`send_email\` tool if the user explicitly asks you to send them an email (e.g. "send me an email with the steps", "email me the ticket number")
+- Ask for their email address first if it is not already known
+- Format the email body clearly with a subject that matches the conversation topic
+
+## Tools Usage
+- Use ServiceNow tools (create ticket, look up records, etc.) only when they add value — don't call tools unnecessarily
+- Always inform the user when you take an action ("I've created a ticket for you — number INC0001234")
+- If a tool fails, tell the user and offer an alternative`
+
+  const agentInstructions = cfg?.agent_instructions
+    ? `\n\n## Agent-Specific Instructions\n${cfg.agent_instructions}`
+    : ''
+
+  const guardrailsBlock = cfg?.guardrails?.length
+    ? `\n\n## Rules\n${cfg.guardrails.map((g: any) => `- ${g.description}`).filter(Boolean).join('\n')}`
+    : ''
+
+  return base + agentInstructions + guardrailsBlock + '\n\nYou are responding via text chat. Be concise and actionable.'
 }
 
 // ── Route handlers ─────────────────────────────────────────────────────────
@@ -60,11 +101,12 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   gcSessions()
 
-  const body = await req.json().catch(() => null)
-  const token       = (body?.token   || '').trim()
-  const agentId     = (body?.agent   || '').trim() // SaaS Agent.id = SN saas_token
-  const userMsg     = (body?.message || '').trim()
-  const snUserId    = (body?.sn_user_id || '').trim()
+  const body      = await req.json().catch(() => null)
+  const token     = (body?.token      || '').trim()
+  const agentId   = (body?.agent      || '').trim()
+  const userMsg   = (body?.message    || '').trim()
+  const snUserId  = (body?.sn_user_id || '').trim()
+  const userEmail = (body?.user_email || '').trim()
   const sessionId: string = body?.session_id || crypto.randomUUID()
 
   if (!token || !userMsg) {
@@ -93,16 +135,19 @@ export async function POST(req: Request) {
   let sess = sessions.get(sessionId)
   if (!sess) {
     sess = {
-      history:      [],
-      instanceId:   instance.id,
-      tenantId:     apiToken.tenantId,
+      history:       [],
+      instanceId:    instance.id,
+      tenantId:      apiToken.tenantId,
       snInstanceUrl: instance.snInstanceUrl,
       snAuth,
-      agentSnToken: agentId,
-      createdAt:    Date.now(),
+      agentSnToken:  agentId,
+      userEmail,
+      createdAt:     Date.now(),
     }
     sessions.set(sessionId, sess)
   }
+  // Update user email if provided in this turn
+  if (userEmail) sess.userEmail = userEmail
 
   // ── Fetch agent config from SN ────────────────────────────────────────
   let agentCfg: any = null
@@ -114,23 +159,25 @@ export async function POST(req: Request) {
           signal: AbortSignal.timeout(10_000) }
       )
       if (r.ok) { const d = await r.json(); agentCfg = d.result ?? d }
-    } catch { /* fall back to minimal config */ }
+    } catch { /* fall back to base prompt */ }
   }
 
-  const llmEndpoint = agentCfg?.llm?.api_endpoint || 'https://api.groq.com/openai/v1/chat/completions'
-  const llmKey      = agentCfg?.llm?.api_key      || ''
-  const llmModel    = agentCfg?.llm?.model_name   || 'llama-3.3-70b-versatile'
+  const llmEndpoint  = agentCfg?.llm?.api_endpoint || 'https://api.groq.com/openai/v1/chat/completions'
+  const llmKey       = agentCfg?.llm?.api_key      || ''
+  const llmModel     = agentCfg?.llm?.model_name   || 'llama-3.3-70b-versatile'
   const systemPrompt = buildSystemPrompt(agentCfg)
 
-  // ── Build LLM tools list ──────────────────────────────────────────────
-  const activeTools = (agentCfg?.tools ?? []).filter((t: any) => t.active !== false)
-  const llmTools = [
-    // Built-in: request a file attachment from the user
+  // ── Built-in tools ────────────────────────────────────────────────────
+  const builtInTools = [
     {
       type: 'function',
       function: {
         name: 'request_attachment',
-        description: 'Ask the user to upload a file (image, PDF, document, spreadsheet). Use this when the conversation requires the user to provide supporting documentation.',
+        description:
+          'Request a file upload from the user. ' +
+          'Use ONLY when the user has explicitly stated they have a screenshot, log file, error dump, or document to share. ' +
+          'NEVER call this proactively or suggest uploading unless the user brings it up first. ' +
+          'If the user declines or says they have no file, do not call this tool.',
         parameters: {
           type: 'object',
           properties: {
@@ -140,15 +187,40 @@ export async function POST(req: Request) {
         },
       },
     },
-    ...activeTools.map((t: any) => ({
+    {
       type: 'function',
       function: {
-        name:        t.name,
-        description: t.description || t.name,
-        parameters:  t.input_schema ?? { type: 'object', properties: {} },
+        name: 'send_email',
+        description:
+          'Send a professional HTML email to the user. ' +
+          'Use ONLY when the user explicitly asks you to send them an email. ' +
+          'If their email address is unknown, ask for it before calling this tool. ' +
+          'The body should be clear and complete — written as a standalone email the user can reference later.',
+        parameters: {
+          type: 'object',
+          properties: {
+            to:      { type: 'string',  description: 'Recipient email address' },
+            subject: { type: 'string',  description: 'Email subject line — concise and descriptive' },
+            body:    { type: 'string',  description: 'Full email body. Use \\n\\n between paragraphs. Include greeting, content, and sign-off.' },
+          },
+          required: ['to', 'subject', 'body'],
+        },
       },
-    })),
+    },
   ]
+
+  // ── SN-defined tools ──────────────────────────────────────────────────
+  const activeSnTools = (agentCfg?.tools ?? []).filter((t: any) => t.active !== false)
+  const snLlmTools = activeSnTools.map((t: any) => ({
+    type: 'function',
+    function: {
+      name:        t.name,
+      description: t.description || t.name,
+      parameters:  t.input_schema ?? { type: 'object', properties: {} },
+    },
+  }))
+
+  const llmTools = [...builtInTools, ...snLlmTools]
 
   // ── Append user message ───────────────────────────────────────────────
   sess.history.push({ role: 'user', content: userMsg })
@@ -162,16 +234,16 @@ export async function POST(req: Request) {
   const llmBody: any = {
     model:       llmModel,
     messages,
-    temperature: agentCfg?.llm?.temperature ?? 0.7,
+    temperature: agentCfg?.llm?.temperature ?? 0.3,
     max_tokens:  agentCfg?.llm?.max_tokens  ?? 1024,
   }
   if (llmTools.length) { llmBody.tools = llmTools; llmBody.tool_choice = 'auto' }
 
   let llmRes = await fetch(llmEndpoint, {
-    method: 'POST',
+    method:  'POST',
     headers: { Authorization: `Bearer ${llmKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(llmBody),
-    signal: AbortSignal.timeout(30_000),
+    body:    JSON.stringify(llmBody),
+    signal:  AbortSignal.timeout(30_000),
   })
   if (!llmRes.ok) {
     const err = await llmRes.text()
@@ -179,11 +251,11 @@ export async function POST(req: Request) {
   }
 
   let llmData = await llmRes.json()
-  let choice = llmData.choices?.[0]
+  let choice  = llmData.choices?.[0]
 
   // ── Tool call loop ────────────────────────────────────────────────────
   if (choice?.finish_reason === 'tool_calls' && choice?.message?.tool_calls?.length) {
-    const toolMsgs: any[] = [choice.message]
+    const toolMsgs: any[]  = [choice.message]
     let attachmentUrl: string | null = null
     let attachmentReason: string | null = null
 
@@ -192,34 +264,52 @@ export async function POST(req: Request) {
       try {
         const input = JSON.parse(tc.function.arguments)
 
-        // Built-in: request_attachment — generate signed upload URL
+        // ── Built-in: request_attachment ──────────────────────────────
         if (tc.function.name === 'request_attachment') {
           const uploadToken = signUploadToken({
-            tenantId:  apiToken.tenantId,
+            tenantId: apiToken.tenantId,
             sessionId,
-            agentId:   agentId || '',
+            agentId:  agentId || '',
           })
           await createPendingUpload({
-            token:      uploadToken,
-            tenantId:   apiToken.tenantId,
+            token:    uploadToken,
+            tenantId: apiToken.tenantId,
             sessionId,
-            agentId:    agentId || '',
+            agentId:  agentId || '',
           })
-          const baseUrl = process.env.NEXTAUTH_URL || 'https://zevox.onrender.com'
-          attachmentUrl    = `${baseUrl}/upload/${uploadToken}`
-          attachmentReason = input.reason || 'a file'
+          const baseUrl     = process.env.NEXTAUTH_URL || 'https://zevox.onrender.com'
+          attachmentUrl     = `${baseUrl}/upload/${uploadToken}`
+          attachmentReason  = input.reason || 'a file'
           toolOutput = JSON.stringify({ status: 'upload_requested', url: attachmentUrl })
+
+        // ── Built-in: send_email ──────────────────────────────────────
+        } else if (tc.function.name === 'send_email') {
+          const recipientEmail = input.to || sess.userEmail
+          if (!recipientEmail) {
+            toolOutput = JSON.stringify({ success: false, error: 'No recipient email address available. Ask the user for their email.' })
+          } else {
+            const agentName = agentCfg?.agent_identity || 'Service Desk Agent'
+            const result = await sendEmail({
+              to:       recipientEmail,
+              subject:  input.subject,
+              bodyText: input.body,
+              fromName: agentName,
+            })
+            toolOutput = JSON.stringify(result)
+          }
+
+        // ── SN tool ───────────────────────────────────────────────────
         } else {
           const snR = await fetch(
             `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/tool`,
             {
-              method: 'POST',
+              method:  'POST',
               headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                session_id:  sessionId,
-                tool_name:   tc.function.name,
-                tool_input:  input,
-                sn_user_id:  snUserId,
+              body:    JSON.stringify({
+                session_id: sessionId,
+                tool_name:  tc.function.name,
+                tool_input: input,
+                sn_user_id: snUserId,
               }),
               signal: AbortSignal.timeout(15_000),
             }
@@ -233,9 +323,9 @@ export async function POST(req: Request) {
     }
 
     // If attachment was requested, return immediately with the upload URL
-    // (no second LLM call needed — the LLM's message already explains what's needed)
     if (attachmentUrl) {
-      const agentMsg = choice.message?.content?.trim() || `Please upload ${attachmentReason || 'a file'} using the link below.`
+      const agentMsg = choice.message?.content?.trim() ||
+        `Please upload ${attachmentReason || 'a file'} using the link below.`
       sess.history.push({ role: 'assistant', content: agentMsg })
       return NextResponse.json(
         { session_id: sessionId, message: agentMsg, attachment_url: attachmentUrl, attachment_reason: attachmentReason },
@@ -245,10 +335,10 @@ export async function POST(req: Request) {
 
     // Second LLM call with tool results
     const secondRes = await fetch(llmEndpoint, {
-      method: 'POST',
+      method:  'POST',
       headers: { Authorization: `Bearer ${llmKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...llmBody, messages: [...messages, ...toolMsgs] }),
-      signal: AbortSignal.timeout(30_000),
+      body:    JSON.stringify({ ...llmBody, messages: [...messages, ...toolMsgs] }),
+      signal:  AbortSignal.timeout(30_000),
     })
     if (secondRes.ok) { llmData = await secondRes.json(); choice = llmData.choices?.[0] }
   }
