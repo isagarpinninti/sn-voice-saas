@@ -8,7 +8,7 @@ import { Section } from '@/components/ui/section'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table'
-import { Users, Building2, CheckCircle2, DollarSign, PhoneCall, FileText, CreditCard } from 'lucide-react'
+import { Users, Building2, CheckCircle2, DollarSign, PhoneCall, FileText, CreditCard, Paintbrush } from 'lucide-react'
 
 export default async function AdminPage() {
   const totalTenants = await db.tenant.count()
@@ -140,6 +140,17 @@ export default async function AdminPage() {
                   </div>
                   <p className="text-[13px] font-semibold text-foreground mb-0.5">Live Logs</p>
                   <p className="text-[12px] text-muted-foreground">Real-time pipeline + SN events.</p>
+                </CardContent>
+              </Card>
+            </Link>
+            <Link href="/admin/config" className="block group">
+              <Card className="h-full hover:border-border/80 transition-colors">
+                <CardContent className="p-5">
+                  <div className="w-8 h-8 rounded-md bg-muted/60 border border-border flex items-center justify-center mb-3 group-hover:border-destructive/40 transition-colors">
+                    <Paintbrush className="w-4 h-4 text-muted-foreground group-hover:text-destructive transition-colors" />
+                  </div>
+                  <p className="text-[13px] font-semibold text-foreground mb-0.5">Platform Config</p>
+                  <p className="text-[12px] text-muted-foreground">Logo, favicon, name, and theme colors.</p>
                 </CardContent>
               </Card>
             </Link>

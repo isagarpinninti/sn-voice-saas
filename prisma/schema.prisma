@@ -397,3 +397,20 @@ model PlanDefinition {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
+
+
+// =====================================================
+// SaaS Platform Configuration (singleton, id="default")
+// =====================================================
+
+model SaasConfig {
+  id           String   @id @default("default")
+  saasName     String   @default("ZeVox")
+  tagline      String   @default("AI Voice Agents for ServiceNow")
+  logoUrl      String?
+  faviconUrl   String?
+  primaryColor String   @default("#10b981")
+  darkBg       String   @default("#000000")
+  supportEmail String   @default("support@zevox.com")
+  updatedAt    DateTime @updatedAt
+}
