@@ -11,7 +11,6 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { signUploadToken } from '@/lib/upload-tokens'
 import { createPendingUpload } from '@/lib/upload-registry'
-import { sendEmail } from '@/lib/send-email'
 
 const CORS: HeadersInit = {
   'Access-Control-Allow-Origin': '*',
@@ -282,20 +281,32 @@ export async function POST(req: Request) {
           attachmentReason  = input.reason || 'a file'
           toolOutput = JSON.stringify({ status: 'upload_requested', url: attachmentUrl })
 
-        // ── Built-in: send_email ──────────────────────────────────────
+        // ── Built-in: send_email (via ServiceNow) ────────────────────
         } else if (tc.function.name === 'send_email') {
           const recipientEmail = input.to || sess.userEmail
           if (!recipientEmail) {
             toolOutput = JSON.stringify({ success: false, error: 'No recipient email address available. Ask the user for their email.' })
           } else {
-            const agentName = agentCfg?.agent_identity || 'Service Desk Agent'
-            const result = await sendEmail({
-              to:       recipientEmail,
-              subject:  input.subject,
-              bodyText: input.body,
-              fromName: agentName,
-            })
-            toolOutput = JSON.stringify(result)
+            try {
+              const snR = await fetch(
+                `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/send-email`,
+                {
+                  method:  'POST',
+                  headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json' },
+                  body:    JSON.stringify({
+                    to:        recipientEmail,
+                    subject:   input.subject,
+                    body:      input.body,
+                    from_name: agentCfg?.agent_identity || 'Service Desk',
+                  }),
+                  signal: AbortSignal.timeout(15_000),
+                }
+              )
+              const d = await snR.json().catch(() => ({}))
+              toolOutput = JSON.stringify(snR.ok ? (d.result ?? d) : { success: false, error: `SN returned ${snR.status}` })
+            } catch (e: any) {
+              toolOutput = JSON.stringify({ success: false, error: e.message })
+            }
           }
 
         // ── SN tool ───────────────────────────────────────────────────
