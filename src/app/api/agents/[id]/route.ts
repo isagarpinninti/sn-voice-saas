@@ -36,14 +36,29 @@ export async function GET(_req: Request, ctx: RouteContext) {
   const owned = await loadOwnedAgent(session.user.id, id)
   if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const a = owned.agent
+  const { tenant, agent: a } = owned
+
+  // Auto-create a token if the agent has none (e.g. created via SN sync)
+  let tokenValue = a.tokens[0]?.token ?? null
+  if (!tokenValue) {
+    const newToken =
+      'sk_live_' +
+      Array.from({ length: 32 }, () =>
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
+      ).join('')
+    const created = await db.apiToken.create({
+      data: { tenantId: tenant.id, agentId: a.id, name: 'Default', token: newToken },
+    })
+    tokenValue = created.token
+  }
+
   return NextResponse.json({
     id: a.id,
     name: a.name,
     snAgentId: a.snAgentId,
     active: a.active,
     createdAt: a.createdAt,
-    token: a.tokens[0]?.token ?? null,
+    token: tokenValue,
   })
 }
 
