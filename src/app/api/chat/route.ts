@@ -189,6 +189,28 @@ export async function POST(req: Request) {
     {
       type: 'function',
       function: {
+        name: 'search_knowledge_base',
+        description:
+          'Search ServiceNow knowledge articles for a solution. ' +
+          'ALWAYS call this first before creating an incident or service request — it is mandatory triage. ' +
+          'Call it as soon as you understand the user\'s issue. ' +
+          'If articles are found, present the solution steps one at a time and ask if they resolved the issue. ' +
+          'Only create an incident if the user confirms the KB steps did not work or no relevant articles were found.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Search terms describing the issue. Be specific — e.g. "VPN not connecting Windows 11" or "Outlook cannot send emails".',
+            },
+          },
+          required: ['query'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
         name: 'send_email',
         description:
           'Send a professional HTML email to the user. ' +
@@ -263,8 +285,26 @@ export async function POST(req: Request) {
       try {
         const input = JSON.parse(tc.function.arguments)
 
+        // ── Built-in: search_knowledge_base ───────────────────────────
+        if (tc.function.name === 'search_knowledge_base') {
+          try {
+            const snR = await fetch(
+              `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/search-kb`,
+              {
+                method:  'POST',
+                headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ query: input.query, limit: 3 }),
+                signal:  AbortSignal.timeout(15_000),
+              }
+            )
+            const d = await snR.json().catch(() => ({}))
+            toolOutput = JSON.stringify(snR.ok ? (d.result ?? d) : { success: false, error: `SN returned ${snR.status}` })
+          } catch (e: any) {
+            toolOutput = JSON.stringify({ success: false, error: e.message })
+          }
+
         // ── Built-in: request_attachment ──────────────────────────────
-        if (tc.function.name === 'request_attachment') {
+        } else if (tc.function.name === 'request_attachment') {
           const uploadToken = signUploadToken({
             tenantId: apiToken.tenantId,
             sessionId,

@@ -266,6 +266,30 @@ export class VoicePipeline extends EventEmitter {
         })
       }
 
+      // Built-in: search_knowledge_base — available on all channels
+      this.tools.push({
+        type: 'function',
+        function: {
+          name: 'search_knowledge_base',
+          description:
+            'Search ServiceNow knowledge articles for a solution. ' +
+            'ALWAYS call this first before creating an incident or service request — it is mandatory triage. ' +
+            'Call it as soon as you understand the user\'s issue. ' +
+            'If articles are found, present the solution steps one at a time and ask if they resolved the issue. ' +
+            'Only create an incident if the user confirms the KB steps did not work or no relevant articles were found.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'Search terms describing the issue. Be specific — e.g. "VPN not connecting Windows 11" or "Outlook cannot send emails".',
+              },
+            },
+            required: ['query'],
+          },
+        },
+      })
+
       // Sanitize tool schemas before they ever reach Groq. Admin-authored SN
       // tool rows frequently produce JSON Schema that Groq's guided decoder
       // rejects with a 400 "Failed to call a function" — which tanks the whole
@@ -856,6 +880,22 @@ export class VoicePipeline extends EventEmitter {
           let toolResult: any
           if (tc.name === 'request_attachment' && this.audioFormat === 'widget') {
             toolResult = this.handleRequestAttachment(tc.arguments)
+          } else if (tc.name === 'search_knowledge_base') {
+            try {
+              const snR = await fetch(
+                `${this.snConfig.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/search-kb`,
+                {
+                  method: 'POST',
+                  headers: { Authorization: `Basic ${this.snAuth}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ query: tc.arguments.query, limit: 3 }),
+                  signal: AbortSignal.timeout(15_000),
+                }
+              )
+              const d = await snR.json().catch(() => ({}))
+              toolResult = { tool_name: tc.name, tool_sys_id: 'builtin:search_knowledge_base', success: true, output: snR.ok ? (d.result ?? d) : { success: false, error: `SN returned ${snR.status}` } }
+            } catch (e: any) {
+              toolResult = { tool_name: tc.name, tool_sys_id: 'builtin:search_knowledge_base', success: true, output: { success: false, error: e.message } }
+            }
           } else {
             // Execute tool (no extra filler — the initial ack covers the wait)
             toolResult = await this.snFetch('POST', '/gateway/tool', {
