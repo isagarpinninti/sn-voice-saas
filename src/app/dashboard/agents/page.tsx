@@ -19,6 +19,7 @@ interface Agent {
   active: boolean
   createdAt: string
   token: string | null
+  widgetMode: string
 }
 
 interface AgentsResponse {
@@ -228,10 +229,16 @@ export default function AgentsListPage() {
                       <p className="text-[11px] text-muted-foreground font-mono truncate mb-2">
                         {a.snAgentId ? `sys_id: ${a.snAgentId.substring(0, 16)}...` : 'No SN agent linked'}
                       </p>
-                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground/80">
-                        <span className="inline-flex items-center gap-1">
+                      <div className="flex items-center gap-2 flex-wrap mt-1">
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${a.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-muted/60 text-muted-foreground'}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${a.active ? 'bg-emerald-400' : 'bg-muted-foreground/40'}`} />
                           {a.active ? 'Active' : 'Inactive'}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium">
+                          {a.widgetMode === 'voice_only' ? '🎙 Voice' : a.widgetMode === 'chat_only' ? '💬 Chat' : '🎙+💬 Both'}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/60 ml-auto">
+                          {new Date(a.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       </div>
                     </div>

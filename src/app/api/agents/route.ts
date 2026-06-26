@@ -42,6 +42,7 @@ export async function GET() {
       active: a.active,
       createdAt: a.createdAt,
       token: a.tokens[0]?.token ?? null,
+      widgetMode: (a as any).widgetMode ?? 'voice_only',
     })),
   })
 }
