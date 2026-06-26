@@ -39,57 +39,15 @@ function gcSessions() {
 
 // ── System prompt builder ─────────────────────────────────────────────────
 function buildSystemPrompt(cfg: any): string {
-  const agentName = cfg?.agent_identity || 'Service Desk Agent'
-  const org       = cfg?.org_name || ''
-  const orgLine   = org ? ` for ${org}` : ''
-
-  const base = `You are ${agentName}${orgLine}, a professional IT Service Desk Agent. You handle IT incidents, service requests, password resets, access requests, software issues, and general IT questions with expertise and empathy.
-
-## Core Responsibilities
-- Diagnose and resolve IT issues on first contact where possible
-- Create and update ServiceNow tickets using available tools
-- Escalate complex issues clearly, explaining next steps to the user
-- Provide accurate ETAs and follow-ups when resolution requires time
-
-## How to Handle Requests
-1. **Greet** the user professionally and acknowledge their issue
-2. **Gather context**: affected system/app, error messages, when it started, steps already tried
-3. **Diagnose**: ask targeted clarifying questions — no more than 2-3 at a time
-4. **Resolve**: provide clear step-by-step guidance or use tools to take action
-5. **Confirm**: always confirm the issue is resolved before closing
-
-## Communication Style
-- Professional, calm, and empathetic — even with frustrated users
-- Use plain language; avoid acronyms unless the user uses them first
-- Keep responses concise and structured (use numbered steps for instructions)
-- Never make promises you cannot keep (e.g., "I'll escalate and someone will call within the hour" only if you can guarantee it)
-- Do not repeat the user's words back unnecessarily
-
-## File Uploads — STRICT RULE
-- **NEVER** proactively suggest or mention file uploads
-- **ONLY** use the \`request_attachment\` tool if the user explicitly says they have a screenshot, log file, or document to share (e.g. "I have a screenshot", "can I share an error log?")
-- If the user says they have no file or declines, **never bring it up again**
-- Do not offer "you can upload a screenshot" as a troubleshooting step
-
-## Email — STRICT RULE
-- **ONLY** use the \`send_email\` tool if the user explicitly asks you to send them an email (e.g. "send me an email with the steps", "email me the ticket number")
-- Ask for their email address first if it is not already known
-- Format the email body clearly with a subject that matches the conversation topic
-
-## Tools Usage
-- Use ServiceNow tools (create ticket, look up records, etc.) only when they add value — don't call tools unnecessarily
-- Always inform the user when you take an action ("I've created a ticket for you — number INC0001234")
-- If a tool fails, tell the user and offer an alternative`
-
-  const agentInstructions = cfg?.agent_instructions
-    ? `\n\n## Agent-Specific Instructions\n${cfg.agent_instructions}`
+  const identity     = cfg?.agent_identity     ? `You are ${cfg.agent_identity}.\n\n` : ''
+  const instructions = cfg?.agent_instructions ? cfg.agent_instructions + '\n\n' : ''
+  const guardrails   = cfg?.guardrails?.length
+    ? cfg.guardrails.map((g: any) => `- ${g.description}`).filter(Boolean).join('\n') + '\n\n'
     : ''
 
-  const guardrailsBlock = cfg?.guardrails?.length
-    ? `\n\n## Rules\n${cfg.guardrails.map((g: any) => `- ${g.description}`).filter(Boolean).join('\n')}`
-    : ''
-
-  return base + agentInstructions + guardrailsBlock + '\n\nYou are responding via text chat. Be concise and actionable.'
+  return (identity + instructions + guardrails +
+    'FILE UPLOAD RULE: NEVER call request_attachment unless the user explicitly says they have a file, screenshot, or document to share.\n\n' +
+    'You are responding via text chat. Be concise and actionable.').trim()
 }
 
 // ── Route handlers ─────────────────────────────────────────────────────────
@@ -186,48 +144,6 @@ export async function POST(req: Request) {
         },
       },
     },
-    {
-      type: 'function',
-      function: {
-        name: 'search_knowledge_base',
-        description:
-          'Search ServiceNow knowledge articles for a solution. ' +
-          'ALWAYS call this first before creating an incident or service request — it is mandatory triage. ' +
-          'Call it as soon as you understand the user\'s issue. ' +
-          'If articles are found, present the solution steps one at a time and ask if they resolved the issue. ' +
-          'Only create an incident if the user confirms the KB steps did not work or no relevant articles were found.',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'Search terms describing the issue. Be specific — e.g. "VPN not connecting Windows 11" or "Outlook cannot send emails".',
-            },
-          },
-          required: ['query'],
-        },
-      },
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'send_email',
-        description:
-          'Send a professional HTML email to the user. ' +
-          'Use ONLY when the user explicitly asks you to send them an email. ' +
-          'If their email address is unknown, ask for it before calling this tool. ' +
-          'The body should be clear and complete — written as a standalone email the user can reference later.',
-        parameters: {
-          type: 'object',
-          properties: {
-            to:      { type: 'string',  description: 'Recipient email address' },
-            subject: { type: 'string',  description: 'Email subject line — concise and descriptive' },
-            body:    { type: 'string',  description: 'Full email body. Use \\n\\n between paragraphs. Include greeting, content, and sign-off.' },
-          },
-          required: ['to', 'subject', 'body'],
-        },
-      },
-    },
   ]
 
   // ── SN-defined tools ──────────────────────────────────────────────────
@@ -285,26 +201,8 @@ export async function POST(req: Request) {
       try {
         const input = JSON.parse(tc.function.arguments)
 
-        // ── Built-in: search_knowledge_base ───────────────────────────
-        if (tc.function.name === 'search_knowledge_base') {
-          try {
-            const snR = await fetch(
-              `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/search-kb`,
-              {
-                method:  'POST',
-                headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ query: input.query, limit: 3 }),
-                signal:  AbortSignal.timeout(15_000),
-              }
-            )
-            const d = await snR.json().catch(() => ({}))
-            toolOutput = JSON.stringify(snR.ok ? (d.result ?? d) : { success: false, error: `SN returned ${snR.status}` })
-          } catch (e: any) {
-            toolOutput = JSON.stringify({ success: false, error: e.message })
-          }
-
-        // ── Built-in: request_attachment ──────────────────────────────
-        } else if (tc.function.name === 'request_attachment') {
+        // ── Built-in: request_attachment (SaaS-side — mints a signed upload URL) ──
+        if (tc.function.name === 'request_attachment') {
           const uploadToken = signUploadToken({
             tenantId: apiToken.tenantId,
             sessionId,
@@ -321,35 +219,7 @@ export async function POST(req: Request) {
           attachmentReason  = input.reason || 'a file'
           toolOutput = JSON.stringify({ status: 'upload_requested', url: attachmentUrl })
 
-        // ── Built-in: send_email (via ServiceNow) ────────────────────
-        } else if (tc.function.name === 'send_email') {
-          const recipientEmail = input.to || sess.userEmail
-          if (!recipientEmail) {
-            toolOutput = JSON.stringify({ success: false, error: 'No recipient email address available. Ask the user for their email.' })
-          } else {
-            try {
-              const snR = await fetch(
-                `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/send-email`,
-                {
-                  method:  'POST',
-                  headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json' },
-                  body:    JSON.stringify({
-                    to:        recipientEmail,
-                    subject:   input.subject,
-                    body:      input.body,
-                    from_name: agentCfg?.agent_identity || 'Service Desk',
-                  }),
-                  signal: AbortSignal.timeout(15_000),
-                }
-              )
-              const d = await snR.json().catch(() => ({}))
-              toolOutput = JSON.stringify(snR.ok ? (d.result ?? d) : { success: false, error: `SN returned ${snR.status}` })
-            } catch (e: any) {
-              toolOutput = JSON.stringify({ success: false, error: e.message })
-            }
-          }
-
-        // ── SN tool ───────────────────────────────────────────────────
+        // ── SN tool — forward everything else to gateway/tool ─────────
         } else {
           const snR = await fetch(
             `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/tool`,
