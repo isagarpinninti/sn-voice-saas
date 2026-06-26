@@ -10,10 +10,12 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { LogOut, Trash2, ArrowRight } from 'lucide-react'
 
 export default function SettingsPage() {
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [saving, setSaving] = useState(false)
   const [company, setCompany] = useState('')
 
@@ -118,6 +120,15 @@ export default function SettingsPage() {
                   variant="outline"
                   size="sm"
                   className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Delete account?',
+                      description: 'To permanently delete your account and all data, email support@zevox.com with the subject "Delete my account". We will process it within 1 business day.',
+                      confirmLabel: 'Email support',
+                      destructive: true,
+                    })
+                    if (ok) window.location.href = 'mailto:support@zevox.com?subject=Delete%20my%20account'
+                  }}
                 >
                   <Trash2 className="w-3 h-3" />
                   Delete
