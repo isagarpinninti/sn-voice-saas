@@ -240,7 +240,7 @@ export class VoicePipeline extends EventEmitter {
           function: {
             name: 'request_attachment',
             description:
-              "Ask the user to upload a file (PDF, image, Excel sheet, or PowerPoint). Returns a secure upload URL that the widget will display to the user. Use this when the user offers to share a document, when seeing a file would help you answer, or when a process requires an attachment. You'll be notified with the file name (and extracted text for PDF/XLSX) once it arrives. If the user wants the file attached to a specific ServiceNow record (e.g. 'attach to INC0010001'), pass target_table and target_record_number so the file lands on that record. Otherwise it lands on the current voice session. Only call once per request; wait for the upload before calling again.",
+              "Request a file upload from the user. STRICT RULE: ONLY call this tool when the user explicitly says they have a file, screenshot, log, or document they want to share — for example 'I have a screenshot', 'can I send you a log file?', or 'I want to attach this to the ticket'. NEVER call this proactively, never suggest uploading as a troubleshooting step, and never call it just because a file might be useful. If the user says they have no file or declines, do not call this again. You'll be notified with the file name (and extracted text for PDF/XLSX) once it arrives. If the user wants the file attached to a specific ServiceNow record (e.g. 'attach to INC0010001'), pass target_table and target_record_number.",
             parameters: {
               type: 'object',
               properties: {
@@ -287,6 +287,7 @@ export class VoicePipeline extends EventEmitter {
       let prompt = config.system_prompt
       prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
       prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately after — do not fake progress. The ORDER of clarifying questions, KB search, and ticket creation is driven by the agent instructions above, not by this rule.'
+      prompt += '\n\nFILE UPLOAD RULE: NEVER call request_attachment unless the user explicitly says they have a file, screenshot, or document to share. Do not suggest uploading as a troubleshooting step. Do not call it because a file might be useful. Only call it when the user volunteers they have something to upload.'
       this.messages.push({ role: 'system', content: prompt })
 
       // Init STT — use our SaaS Deepgram key by default, customer's key only if they provide their own
@@ -1334,11 +1335,15 @@ export class VoicePipeline extends EventEmitter {
           const forcedParams: any = { ...params, tool_choice: 'required', stream: false }
           const forcedRes: any = await this.llm.chat.completions.create(forcedParams)
           const forcedMsg = forcedRes?.choices?.[0]?.message
+          // Never force-call built-in utility tools — they must only be called
+          // when the user explicitly asks. Only SN-defined tools (from the agent
+          // record) are eligible for narrate-recovery forcing.
+          const BUILTIN_TOOLS = new Set(['request_attachment', 'send_email'])
           const forcedCalls = (forcedMsg?.tool_calls || []).map((tc: any) => ({
             id: tc.id || 'forced_' + Date.now(),
             name: tc.function?.name,
             arguments: (() => { try { return JSON.parse(tc.function?.arguments || '{}') } catch { return {} } })(),
-          })).filter((t: any) => t.name && this.tools.some(td => td.function?.name === t.name))
+          })).filter((t: any) => t.name && !BUILTIN_TOOLS.has(t.name) && this.tools.some(td => td.function?.name === t.name))
           if (forcedCalls.length > 0) {
             addLog('info', 'llm', 'Narrate-recovery: forced ' + forcedCalls.length + ' tool call(s)', { tenantId: this.tenant.id })
             // Narration was already streamed to TTS — keep it; attach the forced tool call(s).
