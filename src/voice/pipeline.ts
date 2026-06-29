@@ -232,6 +232,32 @@ export class VoicePipeline extends EventEmitter {
       this.selectedAgentId = config.selected_agent_id || agentId || ''
       this.tools = config.tools || []
 
+      // Built-in: search_knowledge_base — always available on all channels.
+      // Mandatory first step before creating any incident or service request.
+      // Calls SN /gateway/search-kb so the KB logic stays in ServiceNow.
+      this.tools.push({
+        type: 'function',
+        function: {
+          name: 'search_knowledge_base',
+          description:
+            'Search ServiceNow knowledge articles for a solution. ' +
+            'ALWAYS call this FIRST before creating an incident or service request — it is mandatory triage. ' +
+            'Call it as soon as you understand the user\'s issue (after collecting enough context). ' +
+            'If articles are found, present the top solution steps in 1-2 sentences and ask if they resolved the issue. ' +
+            'Only create an incident if (a) no articles were found, (b) the user tried the steps and they failed, or (c) the issue requires IT intervention regardless.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'Plain-English description of the issue to search for. Be specific.',
+              },
+            },
+            required: ['query'],
+          },
+        },
+      })
+
       // Widget-only built-in: lets the agent ask the user to upload a file.
       // Skipped on the phone channel because the caller can't click a link.
       if (this.audioFormat === 'widget') {
@@ -286,7 +312,7 @@ export class VoicePipeline extends EventEmitter {
       // Voice Agent record so it can be customized per use case.
       let prompt = config.system_prompt
       prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
-      prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately after — do not fake progress. The ORDER of clarifying questions, KB search, and ticket creation is driven by the agent instructions above, not by this rule.'
+      prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately — do not fake progress. CRITICAL: NEVER invent, fabricate, or assume the result of a tool call. Never say "I have created incident INC0012345" unless the tool actually returned that number. The tool result will appear in the conversation — report ONLY what it contains. If no tool result is present, DO NOT claim the action was completed.'
       prompt += '\n\nFILE UPLOAD RULE: NEVER call request_attachment unless the user explicitly says they have a file, screenshot, or document to share. Do not suggest uploading as a troubleshooting step. Do not call it because a file might be useful. Only call it when the user volunteers they have something to upload.'
       this.messages.push({ role: 'system', content: prompt })
 
@@ -856,8 +882,20 @@ export class VoicePipeline extends EventEmitter {
           let toolResult: any
           if (tc.name === 'request_attachment' && this.audioFormat === 'widget') {
             toolResult = this.handleRequestAttachment(tc.arguments)
+          } else if (tc.name === 'search_knowledge_base') {
+            // Built-in KB search — calls SN endpoint, KB logic stays in ServiceNow
+            try {
+              const kbRes = await this.snFetch('POST', '/gateway/search-kb', {
+                query: tc.arguments?.query || '',
+                limit: 3,
+                session_id: this.snSessionId,
+              })
+              toolResult = { tool_name: tc.name, tool_sys_id: 'builtin:search_knowledge_base', success: true, output: kbRes }
+            } catch (e: any) {
+              toolResult = { tool_name: tc.name, tool_sys_id: 'builtin:search_knowledge_base', success: false, output: { error: e.message } }
+            }
           } else {
-            // Execute tool (no extra filler — the initial ack covers the wait)
+            // Execute SN-defined tool via gateway
             toolResult = await this.snFetch('POST', '/gateway/tool', {
               session_id: this.snSessionId,
               agent_id: this.selectedAgentId,
@@ -1332,21 +1370,26 @@ export class VoicePipeline extends EventEmitter {
       if (narrationPattern.test(fullText)) {
         addLog('warn', 'llm', 'Narrate-without-tool detected — forcing tool call via retry', { tenantId: this.tenant.id })
         try {
-          const forcedParams: any = { ...params, tool_choice: 'required', stream: false }
+          // Inject a strong system nudge so the retry doesn't narrate again
+          const nudgedMessages = [
+            ...params.messages,
+            { role: 'assistant', content: fullText },
+            { role: 'system', content: 'You just narrated an action without calling the tool. You MUST call the tool NOW. Do NOT produce any text — only a tool call.' },
+          ]
+          const forcedParams: any = { ...params, messages: nudgedMessages, tool_choice: 'required', stream: false }
           const forcedRes: any = await this.llm.chat.completions.create(forcedParams)
           const forcedMsg = forcedRes?.choices?.[0]?.message
-          // Never force-call built-in utility tools — they must only be called
-          // when the user explicitly asks. Only SN-defined tools (from the agent
-          // record) are eligible for narrate-recovery forcing.
+          addLog('info', 'llm', 'Narrate-retry raw: finish=' + forcedRes?.choices?.[0]?.finish_reason + ' tool_calls=' + (forcedMsg?.tool_calls?.length ?? 0) + ' names=' + (forcedMsg?.tool_calls?.map((t: any) => t.function?.name).join(',') || 'none'), { tenantId: this.tenant.id })
+          // request_attachment must never be force-called — only on explicit user offer
           const BUILTIN_TOOLS = new Set(['request_attachment'])
           const forcedCalls = (forcedMsg?.tool_calls || []).map((tc: any) => ({
             id: tc.id || 'forced_' + Date.now(),
             name: tc.function?.name,
             arguments: (() => { try { return JSON.parse(tc.function?.arguments || '{}') } catch { return {} } })(),
           })).filter((t: any) => t.name && !BUILTIN_TOOLS.has(t.name) && this.tools.some(td => td.function?.name === t.name))
+          addLog('info', 'llm', 'Narrate-retry eligible calls: ' + forcedCalls.length + ' [' + forcedCalls.map((t: any) => t.name).join(',') + ']', { tenantId: this.tenant.id })
           if (forcedCalls.length > 0) {
             addLog('info', 'llm', 'Narrate-recovery: forced ' + forcedCalls.length + ' tool call(s)', { tenantId: this.tenant.id })
-            // Narration was already streamed to TTS — keep it; attach the forced tool call(s).
             return { text: fullText, toolCalls: forcedCalls }
           }
         } catch (forceErr: any) {
