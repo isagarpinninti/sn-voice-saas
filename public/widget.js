@@ -1,8 +1,7 @@
 /**
- * ZeVox Widget — Voice + Chat
- * Embed:
- *   <script>window.ZEVOX_TOKEN="sk_live_...";</script>
- *   <script src="https://zevox.onrender.com/widget.js"></script>
+ * ZeVox Widget
+ * <script>window.ZEVOX_TOKEN="sk_live_...";</script>
+ * <script src="https://zevox.onrender.com/widget.js"></script>
  */
 (function(){
   var sc=document.currentScript||document.querySelector('script[data-token]')
@@ -24,7 +23,7 @@
   }
   var SN_USER_ID=getSnUserId()
 
-  var C={color:'#10b981',pos:'right',name:'',brand:true,logo:'',radius:'full',mode:'voice_only',greeting:''}
+  var C={color:'#059669',pos:'right',name:'',brand:true,logo:'',radius:'full',mode:'voice_only',greeting:''}
   var pendingNavUrls=[]
 
   function detectOriginPortal(){
@@ -55,7 +54,6 @@
     q.forEach(function(u){try{window.open(resolveUrl(u.url),'_blank','noopener')}catch(e){}})
   }
 
-  /* ── AudioWorklet ── */
   var playCtx,workletNode,workletReady=false
   var WORKLET_CODE='class ZeVoxPlayer extends AudioWorkletProcessor{constructor(){super();this.queue=[];this.currentChunk=null;this.currentPos=0;this.port.onmessage=(e)=>{if(e.data.type==="audio")this.queue.push(e.data.samples);else if(e.data.type==="clear"){this.queue=[];this.currentChunk=null;this.currentPos=0}}}process(inputs,outputs){const out=outputs[0][0];for(let i=0;i<out.length;i++){if(!this.currentChunk||this.currentPos>=this.currentChunk.length){if(this.queue.length>0){this.currentChunk=this.queue.shift();this.currentPos=0}else{out[i]=0;continue}}out[i]=this.currentChunk[this.currentPos++]}return true}}registerProcessor("zevox-player",ZeVoxPlayer)'
   async function initAudioWorklet(){
@@ -80,7 +78,6 @@
   }
   function clearAudio(){if(workletNode)workletNode.port.postMessage({type:'clear'})}
 
-  /* ── Load config ── */
   var configUrl=GW+'/api/widget/config?token='+TK+'&_t='+Date.now()
   if(AGENT)configUrl+='&agent='+encodeURIComponent(AGENT)
   fetch(configUrl).then(function(r){return r.json()}).then(function(c){
@@ -94,156 +91,383 @@
     if(c.greeting)C.greeting=c.greeting
   }).catch(function(){}).finally(build)
 
-  /* ── CSS ── */
+  /* ── STYLES ── */
   function injectCSS(){
     var s=document.createElement('style')
-    s.textContent=[
-      '#zv{position:fixed;bottom:24px;z-index:999999;font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}',
-      '#zv *{box-sizing:border-box;margin:0;padding:0}',
+    s.textContent=`
+#zv{position:fixed;bottom:24px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;align-items:flex-end;gap:12px}
+#zv *{box-sizing:border-box;margin:0;padding:0;font-family:inherit}
 
-      /* Iridescent orb */
-      '.zvorb{background:radial-gradient(circle at 33% 28%,rgba(255,255,255,.85) 0%,rgba(255,255,255,0) 36%),radial-gradient(circle at 67% 72%,rgba(220,180,255,.5) 0%,rgba(220,180,255,0) 42%),conic-gradient(from 70deg at 50% 50%,#aab8f0 0deg,#c4aef8 45deg,#eabafc 90deg,#fcd4e4 135deg,#b8e0f8 180deg,#a8c8f0 225deg,#c0b8f8 270deg,#d0c8f0 315deg,#aab8f0 360deg);border-radius:50%;position:relative}',
-      '.zvorb::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 33% 28%,rgba(255,255,255,.55),transparent 48%);pointer-events:none}',
-      '@keyframes zvhue{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}',
-      '@keyframes zvpop{from{opacity:0;transform:translateY(12px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}',
-      '@keyframes zvring{0%,100%{transform:scale(1);opacity:.35}50%{transform:scale(1.07);opacity:.7}}',
-      '@keyframes zvwave{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}',
-      '@keyframes zvdot{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-5px);opacity:1}}',
+/* ZeVox orb — teal/cyan/green iridescent (distinct from ElevenLabs purple) */
+.zvorb{
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,255,255,.9) 0%, transparent 35%),
+    radial-gradient(circle at 70% 75%, rgba(110,231,183,.6) 0%, transparent 40%),
+    conic-gradient(from 120deg at 50% 50%,
+      #34d399 0deg,
+      #06b6d4 60deg,
+      #3b82f6 110deg,
+      #10b981 160deg,
+      #a7f3d0 210deg,
+      #67e8f9 260deg,
+      #059669 310deg,
+      #34d399 360deg);
+  border-radius:50%;
+  position:relative;
+  overflow:hidden
+}
+.zvorb::after{
+  content:'';position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 30% 28%, rgba(255,255,255,.6) 0%, transparent 45%);
+  pointer-events:none
+}
 
-      /* Launcher pill */
-      '#zv-launcher{display:inline-flex;align-items:center;background:#fff;border-radius:999px;padding:5px;gap:0;box-shadow:0 2px 8px rgba(0,0,0,.1),0 0 0 1px rgba(0,0,0,.06);cursor:pointer;transition:box-shadow .2s,transform .2s}',
-      '#zv-launcher:hover{box-shadow:0 4px 18px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.07);transform:translateY(-1px)}',
-      '#zv-orb{width:36px;height:36px;flex-shrink:0;animation:zvhue 8s linear infinite;border:none;cursor:pointer;outline:none;padding:0}',
-      '#zv-start,#zv-chat-start{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 16px 0 12px;margin-left:4px;border-radius:999px;border:none;outline:none;background:#0d1117;color:#fff;font-size:13.5px;font-weight:500;font-family:inherit;cursor:pointer;letter-spacing:-.01em;white-space:nowrap;transition:background .15s}',
-      '#zv-start:hover,#zv-chat-start:hover{background:#1c2128}',
-      '#zv-start svg,#zv-chat-start svg{width:13px;height:13px;opacity:.8;flex-shrink:0}',
+@keyframes zvhue{0%{filter:hue-rotate(0deg) brightness(1)}50%{filter:hue-rotate(40deg) brightness(1.05)}100%{filter:hue-rotate(0deg) brightness(1)}}
+@keyframes zvpop{from{opacity:0;transform:translateY(16px) scale(.93)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes zvring{0%,100%{transform:scale(1);opacity:.3}50%{transform:scale(1.06);opacity:.8}}
+@keyframes zvwave{0%,100%{transform:scaleY(.2)}50%{transform:scaleY(1)}}
+@keyframes zvdot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+@keyframes zvglow{0%,100%{box-shadow:0 0 20px rgba(52,211,153,.3),0 4px 20px rgba(0,0,0,.18)}50%{box-shadow:0 0 35px rgba(52,211,153,.55),0 4px 20px rgba(0,0,0,.18)}}
 
-      /* Voice card */
-      '#zv-card{display:none;width:340px;background:#fff;border-radius:24px;overflow:visible;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 20px 60px -8px rgba(0,0,0,.2);flex-direction:column;align-items:center;position:relative;margin-bottom:12px}',
-      '#zv-card.on{display:flex;animation:zvpop .4s cubic-bezier(.22,1,.36,1)}',
-      '#zv-card-x{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#9ca3af;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:4;transition:all .15s;outline:none}',
-      '#zv-card-x:hover{background:#f3f4f6;color:#374151}',
-      '#zv-agent{display:none;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#a78bfa;margin-top:16px}',
+/* ── LAUNCHER ── */
+#zv-launcher{
+  display:inline-flex;align-items:center;
+  background:#fff;
+  border-radius:999px;
+  padding:5px 5px 5px 5px;
+  gap:0;
+  box-shadow:0 2px 12px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.06);
+  cursor:pointer;
+  transition:box-shadow .2s,transform .2s
+}
+#zv-launcher:hover{box-shadow:0 6px 24px rgba(0,0,0,.16),0 0 0 1px rgba(5,150,105,.2);transform:translateY(-2px)}
+#zv-orb{
+  width:40px;height:40px;flex-shrink:0;
+  animation:zvhue 6s ease-in-out infinite;
+  border:none;cursor:pointer;outline:none;background:none;padding:0
+}
+#zv-start,#zv-chat-start{
+  display:inline-flex;align-items:center;gap:8px;
+  height:38px;padding:0 18px 0 12px;margin-left:6px;
+  border-radius:999px;border:none;outline:none;
+  background:linear-gradient(135deg,#059669,#0d9488);
+  color:#fff;
+  font-size:13.5px;font-weight:600;
+  cursor:pointer;letter-spacing:-.01em;white-space:nowrap;
+  transition:filter .15s,transform .1s;
+  box-shadow:0 2px 8px rgba(5,150,105,.35)
+}
+#zv-start:hover,#zv-chat-start:hover{filter:brightness(1.08);transform:scale(1.02)}
+#zv-start svg,#zv-chat-start svg{width:14px;height:14px;flex-shrink:0}
 
-      /* Large orb + phone button */
-      '#zv-orb-wrap{position:relative;margin:40px 0 0;display:flex;align-items:center;justify-content:center}',
-      '#zv-orb-lg{width:156px;height:156px;animation:zvhue 9s linear infinite;flex-shrink:0}',
-      '#zv-ring{position:absolute;inset:-10px;border-radius:50%;border:2px solid rgba(167,139,250,.45);opacity:0;transition:opacity .3s;pointer-events:none}',
-      '#zv-ring.on{opacity:1;animation:zvring 2.2s ease-in-out infinite}',
-      '#zv-phone-btn{position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:50px;height:50px;border-radius:50%;background:#0d1117;border:3px solid #fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(0,0,0,.25);z-index:3;transition:transform .15s,background .15s;outline:none}',
-      '#zv-phone-btn:hover{transform:translateX(-50%) scale(1.08)}',
-      '#zv-phone-btn.active{background:#ef4444}',
-      '#zv-phone-btn svg{width:20px;height:20px;fill:#fff;pointer-events:none}',
+/* ── VOICE CARD ── */
+#zv-card{
+  display:none;
+  width:320px;
+  background:#fff;
+  border-radius:28px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.07),0 24px 64px -8px rgba(0,0,0,.22);
+  flex-direction:column;
+  align-items:center;
+  position:relative;
+  overflow:visible;
+  padding-bottom:4px
+}
+#zv-card.on{display:flex;animation:zvpop .35s cubic-bezier(.22,1,.36,1)}
 
-      /* Wave + status */
-      '#zv-wave{display:flex;gap:3px;align-items:center;height:28px;margin:30px 0 2px;opacity:0;transition:opacity .4s}',
-      '#zv-wave.on{opacity:.65}',
-      '#zv-wave span{display:block;width:3px;border-radius:2px;background:#a78bfa;transform-origin:center;transform:scaleY(.25)}',
-      '#zv-wave.on span{animation:zvwave 1.3s ease-in-out infinite}',
-      '#zv-wave span:nth-child(1){height:12px;animation-delay:-.2s}',
-      '#zv-wave span:nth-child(2){height:20px;animation-delay:-.5s}',
-      '#zv-wave span:nth-child(3){height:28px;animation-delay:-.8s}',
-      '#zv-wave span:nth-child(4){height:34px;animation-delay:0s}',
-      '#zv-wave span:nth-child(5){height:28px;animation-delay:-.3s}',
-      '#zv-wave span:nth-child(6){height:20px;animation-delay:-.6s}',
-      '#zv-wave span:nth-child(7){height:12px;animation-delay:-.9s}',
-      '#zv-status{font-size:15px;font-weight:600;color:#0d1117;letter-spacing:-.01em}',
-      '#zv-sub{font-size:12.5px;color:#9ca3af;margin-top:3px;min-height:18px;text-align:center;padding:0 20px}',
-      '#zv-mute{display:none;width:32px;height:32px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;margin-top:10px;outline:none}',
-      '#zv-mute.show{display:flex}',
-      '#zv-mute.on{background:#ef4444;border-color:#ef4444}',
-      '#zv-mute svg{width:14px;height:14px;color:#6b7280}',
-      '#zv-mute.on svg{color:#fff}',
+/* Close button */
+#zv-card-x{
+  position:absolute;top:14px;right:14px;
+  width:30px;height:30px;border-radius:50%;
+  border:1px solid #e5e7eb;background:#fff;
+  color:#9ca3af;font-size:15px;line-height:1;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  z-index:4;transition:all .15s;outline:none
+}
+#zv-card-x:hover{background:#f3f4f6;color:#374151}
 
-      /* Attachment box */
-      '#zv-attach{display:none;width:calc(100% - 32px);margin:14px 0 0;padding:12px;border-radius:12px;background:#f5f3ff;border:1px solid #ede9fe;text-align:left}',
-      '#zv-attach.on{display:block}',
+/* Agent label */
+#zv-agent{
+  display:none;
+  margin-top:20px;
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:#059669
+}
 
-      /* Voice card text input */
-      '#zv-card-input-row{display:flex;align-items:center;width:calc(100% - 32px);margin:18px 0 20px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;overflow:hidden;transition:border-color .15s}',
-      '#zv-card-input-row:focus-within{border-color:#c4b5fd;background:#fff}',
-      '#zv-card-input{flex:1;border:none;background:transparent;padding:11px 14px;font-size:13.5px;font-family:inherit;outline:none;color:#0d1117}',
-      '#zv-card-input::placeholder{color:#9ca3af}',
-      '#zv-card-send{width:36px;height:36px;border:none;background:transparent;color:#c4c4c4;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:3px;transition:color .15s;outline:none}',
-      '#zv-card-send:hover{color:#7c3aed}',
-      '#zv-card-send svg{width:14px;height:14px}',
-      '#zv-br{font-size:10.5px;color:#d1d5db;margin-bottom:6px}',
-      '#zv-br a{color:#9ca3af;text-decoration:none}',
+/* Big orb + phone */
+#zv-orb-wrap{
+  position:relative;
+  margin:36px 0 0;
+  width:160px;height:160px;
+  display:flex;align-items:center;justify-content:center
+}
+#zv-orb-lg{
+  width:160px;height:160px;
+  animation:zvhue 6s ease-in-out infinite,zvglow 4s ease-in-out infinite;
+  flex-shrink:0
+}
+#zv-ring{
+  position:absolute;inset:-12px;border-radius:50%;
+  border:2.5px solid rgba(52,211,153,.5);
+  opacity:0;pointer-events:none;transition:opacity .3s
+}
+#zv-ring.on{opacity:1;animation:zvring 2s ease-in-out infinite}
+#zv-phone-btn{
+  position:absolute;bottom:-18px;left:50%;
+  transform:translateX(-50%);
+  width:52px;height:52px;border-radius:50%;
+  background:linear-gradient(135deg,#059669,#0d9488);
+  border:3.5px solid #fff;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 20px rgba(5,150,105,.4);
+  z-index:3;transition:transform .15s,background .15s;outline:none
+}
+#zv-phone-btn:hover{transform:translateX(-50%) scale(1.1)}
+#zv-phone-btn.active{background:linear-gradient(135deg,#dc2626,#b91c1c);box-shadow:0 4px 20px rgba(220,38,38,.4)}
+#zv-phone-btn svg{width:22px;height:22px;fill:#fff;pointer-events:none}
 
-      /* Chat card */
-      '#zv-chat{display:none;width:360px;height:520px;background:#fff;border-radius:24px;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 20px 60px -8px rgba(0,0,0,.2);flex-direction:column;overflow:hidden;position:relative;margin-bottom:12px}',
-      '#zv-chat.on{display:flex;animation:zvpop .4s cubic-bezier(.22,1,.36,1)}',
+/* Wave bars */
+#zv-wave{
+  display:flex;gap:3.5px;align-items:center;
+  height:32px;margin:34px 0 0;
+  opacity:0;transition:opacity .3s
+}
+#zv-wave.on{opacity:1}
+#zv-wave span{
+  display:block;width:3.5px;border-radius:3px;
+  background:linear-gradient(to top,#059669,#34d399);
+  transform-origin:center;transform:scaleY(.2)
+}
+#zv-wave.on span{animation:zvwave 1.2s ease-in-out infinite}
+#zv-wave span:nth-child(1){height:10px;animation-delay:-.18s}
+#zv-wave span:nth-child(2){height:18px;animation-delay:-.45s}
+#zv-wave span:nth-child(3){height:26px;animation-delay:-.72s}
+#zv-wave span:nth-child(4){height:32px;animation-delay:0s}
+#zv-wave span:nth-child(5){height:26px;animation-delay:-.3s}
+#zv-wave span:nth-child(6){height:18px;animation-delay:-.6s}
+#zv-wave span:nth-child(7){height:10px;animation-delay:-.9s}
 
-      /* Chat header — WHITE */
-      '#zv-chat-hdr{display:flex;align-items:center;gap:10px;padding:14px 16px;background:#fff;border-bottom:1px solid #f3f4f6;flex-shrink:0}',
-      '#zv-chat-hdr-orb{width:32px;height:32px;flex-shrink:0;border-radius:50%;animation:zvhue 9s linear infinite}',
-      '#zv-chat-hdr-info{flex:1;min-width:0}',
-      '#zv-chat-hdr-name{font-size:13.5px;font-weight:600;color:#0d1117;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-      '#zv-chat-hdr-st{font-size:11px;color:#10b981;display:flex;align-items:center;gap:4px;margin-top:1px}',
-      '#zv-chat-hdr-st::before{content:"";width:6px;height:6px;border-radius:50%;background:#10b981;flex-shrink:0}',
-      '#zv-chat-cls{width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#9ca3af;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;outline:none}',
-      '#zv-chat-cls:hover{background:#f3f4f6;color:#374151}',
+#zv-status{
+  font-size:15px;font-weight:600;color:#111827;
+  letter-spacing:-.02em;margin-top:8px
+}
+#zv-sub{
+  font-size:12.5px;color:#9ca3af;
+  margin-top:4px;min-height:18px;
+  text-align:center;padding:0 24px
+}
 
-      /* Tabs */
-      '#zv-tabs{display:none;flex-shrink:0;background:#fff;border-bottom:1px solid #f3f4f6}',
-      '#zv-tabs.show{display:flex}',
-      '.zv-tab{flex:1;padding:10px;font-size:12.5px;font-weight:500;color:#9ca3af;border:none;background:transparent;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;border-bottom:2px solid transparent;transition:all .15s;outline:none}',
-      '.zv-tab.active{color:#7c3aed;border-bottom-color:#7c3aed}',
-      '.zv-tab svg{width:13px;height:13px}',
+/* Mute btn */
+#zv-mute{
+  display:none;
+  width:34px;height:34px;border-radius:50%;
+  border:1.5px solid #e5e7eb;background:#fff;
+  align-items:center;justify-content:center;
+  cursor:pointer;transition:all .15s;
+  margin-top:8px;outline:none
+}
+#zv-mute.show{display:flex}
+#zv-mute.on{background:#ef4444;border-color:#ef4444}
+#zv-mute svg{width:15px;height:15px;stroke:#6b7280}
+#zv-mute.on svg{stroke:#fff}
 
-      /* Messages */
-      '#zv-chat-msgs{flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}',
-      '#zv-chat-msgs::-webkit-scrollbar{width:4px}',
-      '#zv-chat-msgs::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:4px}',
-      '.zv-msg{max-width:82%;display:flex;flex-direction:column;gap:3px}',
-      '.zv-msg.user{align-self:flex-end;align-items:flex-end}',
-      '.zv-msg.agent{align-self:flex-start;align-items:flex-start}',
-      '.zv-msg-row{display:flex;align-items:flex-end;gap:6px}',
-      '.zv-msg-avatar{width:22px;height:22px;flex-shrink:0;border-radius:50%}',
-      '.zv-msg-avatar.zvorb{animation:zvhue 9s linear infinite}',
-      '.zv-msg-bubble{padding:10px 14px;border-radius:18px;font-size:13.5px;line-height:1.5;word-break:break-word}',
-      '.zv-msg.user .zv-msg-bubble{background:#0d1117;color:#fff;border-bottom-right-radius:4px}',
-      '.zv-msg.agent .zv-msg-bubble{background:#f3f4f6;color:#0d1117;border-bottom-left-radius:4px}',
-      '.zv-msg-time{font-size:10px;color:#d1d5db;padding:0 2px}',
-      '.zv-msg-upload{display:flex;flex-direction:column;gap:6px;min-width:180px}',
-      '.zv-upload-label{font-size:12px;font-weight:600;color:#374151}',
-      '.zv-upload-reason{font-size:12.5px;color:#6b7280;line-height:1.4}',
-      '.zv-upload-btn{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:8px 14px;background:#0d1117;color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;transition:opacity .15s}',
-      '.zv-upload-btn:hover{opacity:.8}',
-      '.zv-upload-btn svg{width:14px;height:14px;flex-shrink:0}',
+/* Attachment box */
+#zv-attach{
+  display:none;
+  width:calc(100% - 32px);
+  margin:14px 0 0;padding:12px;
+  border-radius:14px;
+  background:#ecfdf5;border:1px solid #a7f3d0
+}
+#zv-attach.on{display:block}
 
-      /* Typing indicator */
-      '#zv-typing{display:none;align-self:flex-start;padding:10px 14px;background:#f3f4f6;border-radius:18px;border-bottom-left-radius:4px;gap:4px}',
-      '#zv-typing.show{display:flex}',
-      '#zv-typing span{width:6px;height:6px;border-radius:50%;background:#c4c4c4;animation:zvdot 1.4s ease-in-out infinite}',
-      '#zv-typing span:nth-child(2){animation-delay:.2s}',
-      '#zv-typing span:nth-child(3){animation-delay:.4s}',
+/* Card text input */
+#zv-card-input-row{
+  display:flex;align-items:center;
+  width:calc(100% - 28px);
+  margin:18px 0 16px;
+  border:1.5px solid #e5e7eb;border-radius:14px;
+  background:#f9fafb;overflow:hidden;
+  transition:border-color .15s
+}
+#zv-card-input-row:focus-within{border-color:#34d399;background:#fff}
+#zv-card-input{
+  flex:1;border:none;background:transparent;
+  padding:11px 14px;font-size:13.5px;outline:none;color:#111827
+}
+#zv-card-input::placeholder{color:#9ca3af}
+#zv-card-send{
+  width:36px;height:36px;border:none;background:transparent;
+  color:#d1d5db;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-right:3px;
+  transition:color .15s;outline:none
+}
+#zv-card-send:hover{color:#059669}
+#zv-card-send svg{width:14px;height:14px}
 
-      /* Chat input */
-      '#zv-chat-input-row{padding:10px 12px;border-top:1px solid #f3f4f6;background:#fff;flex-shrink:0}',
-      '#zv-chat-input-wrap{display:flex;align-items:center;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;overflow:hidden;transition:border-color .15s}',
-      '#zv-chat-input-wrap:focus-within{border-color:#c4b5fd;background:#fff}',
-      '#zv-chat-input{flex:1;border:none;background:transparent;padding:10px 14px;font-size:13.5px;font-family:inherit;outline:none;resize:none;max-height:100px;min-height:38px;line-height:1.4;color:#0d1117}',
-      '#zv-chat-input::placeholder{color:#9ca3af}',
-      '#zv-chat-send{width:32px;height:32px;border:none;background:transparent;color:#c4c4c4;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:5px;transition:color .15s;outline:none}',
-      '#zv-chat-send:hover{color:#7c3aed}',
-      '#zv-chat-send:disabled{opacity:.35;cursor:default}',
-      '#zv-chat-send svg{width:14px;height:14px}',
-      '#zv-chat-br{font-size:10.5px;color:#d1d5db;text-align:center;padding:4px 0 10px}',
-      '#zv-chat-br a{color:#9ca3af;text-decoration:none}',
+#zv-br{font-size:10.5px;color:#d1d5db;margin-bottom:6px;text-align:center}
+#zv-br a{color:#9ca3af;text-decoration:none}
 
-      /* Voice panel (both-mode) */
-      '#zv-voice-panel{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px}'
-    ].join('\n')
+/* ── CHAT CARD ── */
+#zv-chat{
+  display:none;
+  width:360px;height:520px;
+  background:#fff;border-radius:24px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.07),0 24px 64px -8px rgba(0,0,0,.22);
+  flex-direction:column;overflow:hidden
+}
+#zv-chat.on{display:flex;animation:zvpop .35s cubic-bezier(.22,1,.36,1)}
+
+/* Chat header — white */
+#zv-chat-hdr{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 16px;
+  background:#fff;border-bottom:1px solid #f3f4f6;
+  flex-shrink:0
+}
+#zv-chat-hdr-orb{
+  width:34px;height:34px;flex-shrink:0;border-radius:50%;
+  animation:zvhue 6s ease-in-out infinite
+}
+#zv-chat-hdr-info{flex:1;min-width:0}
+#zv-chat-hdr-name{
+  font-size:14px;font-weight:600;color:#111827;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+#zv-chat-hdr-st{
+  font-size:11px;color:#059669;
+  display:flex;align-items:center;gap:5px;margin-top:2px
+}
+#zv-chat-hdr-st::before{
+  content:'';width:6px;height:6px;
+  border-radius:50%;background:#059669;flex-shrink:0
+}
+#zv-chat-cls{
+  width:30px;height:30px;border-radius:50%;
+  border:1px solid #e5e7eb;background:#fff;
+  color:#9ca3af;font-size:15px;line-height:1;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:all .15s;outline:none
+}
+#zv-chat-cls:hover{background:#f3f4f6;color:#374151}
+
+/* Tabs */
+#zv-tabs{display:none;flex-shrink:0;background:#fff;border-bottom:1px solid #f3f4f6}
+#zv-tabs.show{display:flex}
+.zv-tab{
+  flex:1;padding:10px;
+  font-size:12.5px;font-weight:500;color:#9ca3af;
+  border:none;background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  border-bottom:2px solid transparent;transition:all .15s;outline:none
+}
+.zv-tab.active{color:#059669;border-bottom-color:#059669}
+.zv-tab svg{width:13px;height:13px}
+
+/* Messages */
+#zv-chat-msgs{
+  flex:1;overflow-y:auto;padding:14px 12px;
+  display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth
+}
+#zv-chat-msgs::-webkit-scrollbar{width:4px}
+#zv-chat-msgs::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:4px}
+.zv-msg{max-width:82%;display:flex;flex-direction:column;gap:3px}
+.zv-msg.user{align-self:flex-end;align-items:flex-end}
+.zv-msg.agent{align-self:flex-start;align-items:flex-start}
+.zv-msg-row{display:flex;align-items:flex-end;gap:6px}
+.zv-msg-avatar{
+  width:24px;height:24px;flex-shrink:0;border-radius:50%
+}
+.zv-msg-avatar.zvorb{animation:zvhue 6s ease-in-out infinite}
+.zv-msg-bubble{
+  padding:10px 14px;border-radius:18px;
+  font-size:13.5px;line-height:1.5;word-break:break-word
+}
+.zv-msg.user .zv-msg-bubble{
+  background:linear-gradient(135deg,#059669,#0d9488);
+  color:#fff;border-bottom-right-radius:4px
+}
+.zv-msg.agent .zv-msg-bubble{
+  background:#f3f4f6;color:#111827;border-bottom-left-radius:4px
+}
+.zv-msg-time{font-size:10px;color:#d1d5db;padding:0 2px}
+.zv-msg-upload{display:flex;flex-direction:column;gap:6px;min-width:180px}
+.zv-upload-label{font-size:12px;font-weight:600;color:#374151}
+.zv-upload-reason{font-size:12.5px;color:#6b7280;line-height:1.4}
+.zv-upload-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-top:4px;padding:8px 14px;
+  background:#059669;color:#fff;
+  border-radius:8px;text-decoration:none;
+  font-size:13px;font-weight:500;transition:opacity .15s
+}
+.zv-upload-btn:hover{opacity:.85}
+.zv-upload-btn svg{width:14px;height:14px;flex-shrink:0}
+
+/* Typing */
+#zv-typing{
+  display:none;align-self:flex-start;
+  padding:10px 14px;background:#f3f4f6;
+  border-radius:18px;border-bottom-left-radius:4px;gap:4px
+}
+#zv-typing.show{display:flex}
+#zv-typing span{
+  width:6px;height:6px;border-radius:50%;
+  background:#c4c4c4;animation:zvdot 1.4s ease-in-out infinite
+}
+#zv-typing span:nth-child(2){animation-delay:.2s}
+#zv-typing span:nth-child(3){animation-delay:.4s}
+
+/* Chat input */
+#zv-chat-input-row{
+  padding:10px 12px;
+  border-top:1px solid #f3f4f6;
+  background:#fff;flex-shrink:0
+}
+#zv-chat-input-wrap{
+  display:flex;align-items:center;
+  border:1.5px solid #e5e7eb;border-radius:14px;
+  background:#f9fafb;overflow:hidden;transition:border-color .15s
+}
+#zv-chat-input-wrap:focus-within{border-color:#34d399;background:#fff}
+#zv-chat-input{
+  flex:1;border:none;background:transparent;
+  padding:10px 14px;font-size:13.5px;outline:none;
+  resize:none;max-height:100px;min-height:38px;
+  line-height:1.4;color:#111827
+}
+#zv-chat-input::placeholder{color:#9ca3af}
+#zv-chat-send{
+  width:34px;height:34px;border:none;background:transparent;
+  color:#d1d5db;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-right:5px;
+  transition:color .15s;outline:none
+}
+#zv-chat-send:hover{color:#059669}
+#zv-chat-send:disabled{opacity:.35;cursor:default}
+#zv-chat-send svg{width:14px;height:14px}
+#zv-chat-br{
+  font-size:10.5px;color:#d1d5db;
+  text-align:center;padding:4px 0 8px
+}
+#zv-chat-br a{color:#9ca3af;text-decoration:none}
+#zv-voice-panel{
+  flex:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;padding:24px
+}
+`
     document.head.appendChild(s)
   }
 
   /* ── SVG icons ── */
-  var PHONE_FILL='<svg viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>'
-  var SEND_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
-  var MIC_SVG='<svg id="zv-mon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg><svg id="zv-mof" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .34-.03.67-.08 1"/></svg>'
-  var CHAT_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
-  var VOICE_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'
+  var PHONE_SVG='<svg viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.27-.27.7-.38 1.06-.2 1.1.37 2.28.57 3.54.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C4.61 21 2 18.39 2 15.23c0-.03 0-.06.01-.09V4.96c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02L6.6 10.8z"/></svg>'
+  var SEND_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
+  var MIC_SVG='<svg id="zv-mon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><svg id="zv-mof" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .34-.03.67-.08 1"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>'
+  var CHAT_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
+  var VOICE_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'
 
   /* ── Build UI ── */
   function build(){
@@ -253,66 +477,70 @@
 
     var mode=C.mode,isBoth=(mode==='both'),isChat=(mode==='chat_only'||isBoth),isVoice=(mode==='voice_only'||isBoth)
 
-    /* Launcher inner */
-    var btnLabel=isBoth?'Ask Anything':isVoice?'Start a call':'Chat with us'
-    var btnIcon=isBoth||isVoice?PHONE_FILL:CHAT_ICON
+    /* Launcher */
+    var btnLabel=isBoth?'Ask Anything':(isVoice?'Start a call':'Chat with us')
     var btnId=isChat?'zv-chat-start':'zv-start'
-    var launcherHTML='<button id="zv-orb" class="zvorb" aria-label="Assistant"></button>'
-      +'<button id="'+btnId+'">'+btnIcon+btnLabel+'</button>'
+    var launcherHTML='<button id="zv-orb" class="zvorb" aria-label="ZeVox"></button>'
+      +'<button id="'+btnId+'">'+PHONE_SVG+btnLabel+'</button>'
 
-    /* Voice card HTML */
-    var voiceCardHTML=isVoice&&!isBoth?[
-      '<div id="zv-card">',
-        '<button id="zv-card-x">&#x2715;</button>',
-        '<div id="zv-agent"></div>',
-        '<div id="zv-orb-wrap">',
-          '<div id="zv-orb-lg" class="zvorb"><div id="zv-ring"></div></div>',
-          '<button id="zv-phone-btn">'+PHONE_FILL+'</button>',
-        '</div>',
-        '<div id="zv-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>',
-        '<div id="zv-status">Ready</div>',
-        '<div id="zv-sub"></div>',
-        '<button id="zv-mute">'+MIC_SVG+'</button>',
-        '<div id="zv-attach"></div>',
-        '<div id="zv-card-input-row">',
-          '<input id="zv-card-input" type="text" placeholder="Type a message..." autocomplete="off"/>',
-          '<button id="zv-card-send">'+SEND_ICON+'</button>',
-        '</div>',
-        '<div id="zv-br"></div>',
-      '</div>'
-    ].join(''):''
-
-    /* Chat card HTML */
-    var tabsHTML=isBoth?[
-      '<div id="zv-tabs" class="show">',
-        '<button class="zv-tab" id="zv-tab-voice">'+VOICE_ICON+'Voice</button>',
-        '<button class="zv-tab active" id="zv-tab-chat">'+CHAT_ICON+'Chat</button>',
-      '</div>'
-    ].join(''):''
-
-    var chatCardHTML=isChat?[
-      '<div id="zv-chat">',
-        '<div id="zv-chat-hdr">',
-          '<div id="zv-chat-hdr-orb" class="zvorb"></div>',
-          '<div id="zv-chat-hdr-info">',
-            '<div id="zv-chat-hdr-name">Assistant</div>',
-            '<div id="zv-chat-hdr-st">Connected</div>',
+    /* Voice card */
+    var voiceHTML=''
+    if(isVoice&&!isBoth){
+      voiceHTML=[
+        '<div id="zv-card">',
+          '<button id="zv-card-x">&#x2715;</button>',
+          '<div id="zv-agent"></div>',
+          '<div id="zv-orb-wrap">',
+            '<div id="zv-orb-lg" class="zvorb"><div id="zv-ring"></div></div>',
+            '<button id="zv-phone-btn">'+PHONE_SVG+'</button>',
           '</div>',
-          '<button id="zv-chat-cls">&#x2715;</button>',
-        '</div>',
-        tabsHTML,
-        '<div id="zv-chat-msgs"><div id="zv-typing"><span></span><span></span><span></span></div></div>',
-        '<div id="zv-chat-input-row">',
-          '<div id="zv-chat-input-wrap">',
-            '<textarea id="zv-chat-input" placeholder="Type a message..." rows="1"></textarea>',
-            '<button id="zv-chat-send">'+SEND_ICON+'</button>',
+          '<div id="zv-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>',
+          '<div id="zv-status">Tap to call</div>',
+          '<div id="zv-sub"></div>',
+          '<button id="zv-mute">'+MIC_SVG+'</button>',
+          '<div id="zv-attach"></div>',
+          '<div id="zv-card-input-row">',
+            '<input id="zv-card-input" type="text" placeholder="Type a message..." autocomplete="off"/>',
+            '<button id="zv-card-send">'+SEND_SVG+'</button>',
           '</div>',
-        '</div>',
-        '<div id="zv-chat-br"></div>',
-      '</div>'
-    ].join(''):''
+          '<div id="zv-br"></div>',
+        '</div>'
+      ].join('')
+    }
 
-    el.innerHTML='<div id="zv-launcher">'+launcherHTML+'</div>'+voiceCardHTML+chatCardHTML
+    /* Chat card */
+    var chatHTML=''
+    if(isChat){
+      var tabsHTML=isBoth?[
+        '<div id="zv-tabs" class="show">',
+          '<button class="zv-tab" id="zv-tab-voice">'+VOICE_SVG+'Voice</button>',
+          '<button class="zv-tab active" id="zv-tab-chat">'+CHAT_SVG+'Chat</button>',
+        '</div>'
+      ].join(''):''
+      chatHTML=[
+        '<div id="zv-chat">',
+          '<div id="zv-chat-hdr">',
+            '<div id="zv-chat-hdr-orb" class="zvorb"></div>',
+            '<div id="zv-chat-hdr-info">',
+              '<div id="zv-chat-hdr-name">ZeVox AI</div>',
+              '<div id="zv-chat-hdr-st">Online</div>',
+            '</div>',
+            '<button id="zv-chat-cls">&#x2715;</button>',
+          '</div>',
+          tabsHTML,
+          '<div id="zv-chat-msgs"><div id="zv-typing"><span></span><span></span><span></span></div></div>',
+          '<div id="zv-chat-input-row">',
+            '<div id="zv-chat-input-wrap">',
+              '<textarea id="zv-chat-input" placeholder="Type a message..." rows="1"></textarea>',
+              '<button id="zv-chat-send">'+SEND_SVG+'</button>',
+            '</div>',
+          '</div>',
+          '<div id="zv-chat-br"></div>',
+        '</div>'
+      ].join('')
+    }
+
+    el.innerHTML='<div id="zv-launcher">'+launcherHTML+'</div>'+voiceHTML+chatHTML
     document.body.appendChild(el)
     el.style[C.pos==='left'?'left':'right']='20px'
 
@@ -325,11 +553,11 @@
     /* Logo override */
     if(C.logo){
       var orbe=g('zv-orb')
-      if(orbe){orbe.innerHTML='<img src="'+C.logo+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover"/>';orbe.classList.remove('zvorb');orbe.style.cssText='background:transparent;animation:none;border:none;padding:0'}
+      if(orbe){orbe.innerHTML='<img src="'+C.logo+'" style="width:40px;height:40px;border-radius:50%;object-fit:cover"/>';orbe.classList.remove('zvorb');orbe.style.cssText='background:transparent;animation:none;border:none;padding:0;outline:none'}
       var orbLg=g('zv-orb-lg')
-      if(orbLg){orbLg.innerHTML='<div id="zv-ring"></div><img src="'+C.logo+'" style="width:156px;height:156px;border-radius:50%;object-fit:cover;position:relative;z-index:1"/>';orbLg.classList.remove('zvorb');orbLg.style.cssText='background:#f9fafb;animation:none'}
+      if(orbLg){orbLg.innerHTML='<div id="zv-ring"></div><img src="'+C.logo+'" style="width:160px;height:160px;border-radius:50%;object-fit:cover;position:relative;z-index:1"/>';orbLg.classList.remove('zvorb');orbLg.style.cssText='background:#f0fdf4;animation:none'}
       var chatOrb=g('zv-chat-hdr-orb')
-      if(chatOrb){chatOrb.innerHTML='<img src="'+C.logo+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover"/>';chatOrb.classList.remove('zvorb');chatOrb.style.animation='none'}
+      if(chatOrb){chatOrb.innerHTML='<img src="'+C.logo+'" style="width:34px;height:34px;border-radius:50%;object-fit:cover"/>';chatOrb.classList.remove('zvorb');chatOrb.style.animation='none'}
     }
 
     /* Branding */
@@ -338,12 +566,13 @@
 
     /* Wire voice card */
     if(isVoice&&!isBoth){
-      var orb2=g('zv-orb');if(orb2)orb2.onclick=startCall
+      var orbBtn=g('zv-orb');if(orbBtn)orbBtn.onclick=startCall
       var sb=g('zv-start');if(sb)sb.onclick=startCall
       var ph=g('zv-phone-btn');if(ph)ph.onclick=function(){if(active)endCall();else startCall()}
       var cx=g('zv-card-x')
       if(cx)cx.onclick=function(){
-        if(active){endCall()}else{var vc=g('zv-card');if(vc)vc.classList.remove('on');var la=g('zv-launcher');if(la)la.style.display='inline-flex'}
+        if(active){endCall()}
+        else{var vc=g('zv-card');if(vc)vc.classList.remove('on');var la=g('zv-launcher');if(la)la.style.display='inline-flex'}
       }
       var mb=g('zv-mute');if(mb)mb.onclick=toggleMute
       wireVoiceCardInput()
@@ -351,13 +580,13 @@
 
     /* Wire chat card */
     if(isChat){
-      if(!isBoth){var orb3=g('zv-orb');if(orb3)orb3.onclick=openChat}
-      var csb=g('zv-chat-start');if(csb)csb.onclick=isBoth?openChat:openChat
+      if(!isBoth){var orbBtn2=g('zv-orb');if(orbBtn2)orbBtn2.onclick=openChat}
+      var csb=g('zv-chat-start');if(csb)csb.onclick=openChat
       var cc=g('zv-chat-cls');if(cc)cc.onclick=closeChat
       wireInputBar()
       if(isBoth){
-        var t1=g('zv-tab-voice');if(t1)t1.onclick=function(){showVoiceTab()}
-        var t2=g('zv-tab-chat');if(t2)t2.onclick=function(){showChatTab()}
+        var t1=g('zv-tab-voice');if(t1)t1.onclick=showVoiceTab
+        var t2=g('zv-tab-chat');if(t2)t2.onclick=showChatTab
       }
       if(C.greeting)setTimeout(function(){appendMsg('agent',C.greeting)},400)
     }
