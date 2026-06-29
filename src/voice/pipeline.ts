@@ -615,8 +615,21 @@ export class VoicePipeline extends EventEmitter {
         this.emit('navigate', { urls: confirmedOutput.navigation_urls })
       }
 
-      // Get LLM to formulate response
-      this.messages.push({ role: 'tool', tool_call_id: 'confirm', content: JSON.stringify((result as any).output || {}) })
+      // Security: only LLM-safe summary goes to LLM — same logic as tool dispatch loop
+      const confirmLlmContext: string = (() => {
+        const tr = result as any
+        if (tr.message && typeof tr.message === 'string') return tr.message
+        if (!confirmed) return 'User declined.'
+        if (!tr.success) return tr.error ? `Error: ${tr.error}` : 'Tool failed.'
+        const out = tr.output
+        if (!out) return 'Tool executed successfully.'
+        const safeFields = Object.entries(out)
+          .filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object')
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ')
+        return safeFields || 'Tool executed successfully.'
+      })()
+      this.messages.push({ role: 'tool', tool_call_id: 'confirm', content: confirmLlmContext })
       this.messages.push({ role: 'system', content: confirmed ? 'User confirmed. Communicate the result naturally.' : 'User declined. Acknowledge and ask how else to help.' })
 
       // Use streaming LLM — it speaks directly via TTS
@@ -932,30 +945,41 @@ export class VoicePipeline extends EventEmitter {
 
           const toolOutput = (toolResult as any).success ? (toolResult as any).output : { error: (toolResult as any).error }
 
-          // Forward navigation URLs from the tool to the widget, which opens them
-          // in new tabs (popup-blocker fallback handled client-side).
+          // Forward navigation URLs to the widget (stays in SaaS, never to LLM)
           if ((toolResult as any).success && toolOutput && Array.isArray((toolOutput as any).navigation_urls) && (toolOutput as any).navigation_urls.length > 0) {
             this.emit('navigate', { urls: (toolOutput as any).navigation_urls })
           }
           addLog('info', 'pipeline', 'Tool result: ' + JSON.stringify(toolOutput).substring(0, 200), { tenantId: this.tenant.id })
 
-          // Push the tool call + tool result into the conversation. The next iteration
-          // of the while loop will call the LLM again with this context, and the LLM
-          // will produce a natural spoken response. We deliberately do NOT pre-speak
-          // the tool's raw `.message` here — that would duplicate what the LLM is
-          // about to say. The fallback below catches the rare case where the LLM
-          // returns empty after a tool call (only happens with weak models like 8B).
+          // Security: only the LLM-safe summary goes into the LLM context.
+          // Raw SN record data (output) stays in SaaS memory for display/navigation.
+          // SN controls what the LLM sees by putting a plain-text summary in `message`.
+          // Fallback: if no message, send only non-sensitive scalar fields (no objects/arrays).
+          const llmContext: string = (() => {
+            if (!toolResult) return 'Tool executed.'
+            const tr = toolResult as any
+            // Use explicit LLM summary if SN provided one
+            if (tr.message && typeof tr.message === 'string') return tr.message
+            if (!tr.success) return tr.error ? `Error: ${tr.error}` : 'Tool failed.'
+            const out = tr.output
+            if (!out) return 'Tool executed successfully.'
+            // Scalar-only safe fallback — never forward nested objects/arrays to LLM
+            const safeFields = Object.entries(out)
+              .filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object')
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(', ')
+            return safeFields || 'Tool executed successfully.'
+          })()
+
           this.messages.push({
             role: 'assistant',
-            // Persist the pre-tool narration on the FIRST tool in this turn so the LLM
-            // sees what it already said and doesn't repeat it on the next iteration.
             content: (!savedNarration && preToolNarration) ? preToolNarration : null,
             tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.arguments) } }],
           })
           savedNarration = true
           this.messages.push({
             role: 'tool', tool_call_id: tc.id,
-            content: JSON.stringify(toolOutput),
+            content: llmContext,
           })
         }
         // Nudge the LLM to speak the tool result immediately. Without this,
