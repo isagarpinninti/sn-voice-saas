@@ -596,8 +596,7 @@
         var t1=g('zv-tab-voice');if(t1)t1.onclick=showVoiceTab
         var t2=g('zv-tab-chat');if(t2)t2.onclick=showChatTab
       }
-      var greet=C.greeting||'Hi! How can I help you today?'
-      setTimeout(function(){appendMsg('agent',greet)},400)
+      if(C.greeting)setTimeout(function(){appendMsg('agent',C.greeting)},400)
     }
   }
 
