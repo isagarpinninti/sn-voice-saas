@@ -1337,43 +1337,11 @@ export class VoicePipeline extends EventEmitter {
       .replace(/\s+/g, ' ')
       .trim()
 
-    // Narrate-without-tool recovery: when the model streams "let me search/check/look"
-    // but emits no tool call, force a single retry with tool_choice=required. Without
-    // this, the loop would move on and leave the user hanging while the agent "thinks"
-    // about an action it never actually takes. Skip when forceText=true (tools were
-    // intentionally disabled) or when tools are unavailable.
-    if (!forceText && toolCalls.length === 0 && fullText && this.tools.length > 0) {
-      const narrationPattern = /\b(let me|i['’]?ll|i will|i['’]?m going to|i am going to|let['’]?s|going to)\s+(search|look|check|find|pull|fetch|create|make|take a look|walk you through|see)\b/i
-      if (narrationPattern.test(fullText)) {
-        addLog('warn', 'llm', 'Narrate-without-tool detected — forcing tool call via retry', { tenantId: this.tenant.id })
-        try {
-          // Inject a strong system nudge so the retry doesn't narrate again
-          const nudgedMessages = [
-            ...params.messages,
-            { role: 'assistant', content: fullText },
-            { role: 'system', content: 'You just narrated an action without calling the tool. You MUST call the tool NOW. Do NOT produce any text — only a tool call.' },
-          ]
-          const forcedParams: any = { ...params, messages: nudgedMessages, tool_choice: 'required', stream: false }
-          const forcedRes: any = await this.llm.chat.completions.create(forcedParams)
-          const forcedMsg = forcedRes?.choices?.[0]?.message
-          addLog('info', 'llm', 'Narrate-retry raw: finish=' + forcedRes?.choices?.[0]?.finish_reason + ' tool_calls=' + (forcedMsg?.tool_calls?.length ?? 0) + ' names=' + (forcedMsg?.tool_calls?.map((t: any) => t.function?.name).join(',') || 'none'), { tenantId: this.tenant.id })
-          // request_attachment must never be force-called — only on explicit user offer
-          const BUILTIN_TOOLS = new Set(['request_attachment'])
-          const forcedCalls = (forcedMsg?.tool_calls || []).map((tc: any) => ({
-            id: tc.id || 'forced_' + Date.now(),
-            name: tc.function?.name,
-            arguments: (() => { try { return JSON.parse(tc.function?.arguments || '{}') } catch { return {} } })(),
-          })).filter((t: any) => t.name && !BUILTIN_TOOLS.has(t.name) && this.tools.some(td => td.function?.name === t.name))
-          addLog('info', 'llm', 'Narrate-retry eligible calls: ' + forcedCalls.length + ' [' + forcedCalls.map((t: any) => t.name).join(',') + ']', { tenantId: this.tenant.id })
-          if (forcedCalls.length > 0) {
-            addLog('info', 'llm', 'Narrate-recovery: forced ' + forcedCalls.length + ' tool call(s)', { tenantId: this.tenant.id })
-            return { text: fullText, toolCalls: forcedCalls }
-          }
-        } catch (forceErr: any) {
-          addLog('warn', 'llm', 'Forced-tool retry failed: ' + forceErr.message, { tenantId: this.tenant.id })
-        }
-      }
-    }
+    // Narrate-without-tool recovery was removed: the broad pattern ("let me see",
+    // "I’ll look into this") matched common polite phrases and forced tool calls
+    // with tool_choice=required, causing the LLM to pick arbitrary tools unprompted.
+    // The model’s own tool_choice=auto is sufficient — if it narrates without calling
+    // a tool it means the response was conversational, not action-oriented.
 
     addLog('info', 'llm', 'Done: ' + fullText.substring(0, 80) + ' tools=' + toolCalls.length, { tenantId: this.tenant.id })
     return { text: fullText, toolCalls }

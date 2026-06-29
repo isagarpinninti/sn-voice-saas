@@ -221,6 +221,21 @@ model UsageLog {
 // Audit Log (tenant-scoped, append-only)
 // =====================================================
 
+model PipelineLog {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  level     String
+  source    String
+  tenantId  String?
+  sessionId String?
+  message   String
+  data      Json?
+
+  @@index([tenantId, timestamp])
+  @@index([level, timestamp])
+  @@index([timestamp])
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   tenantId   String?

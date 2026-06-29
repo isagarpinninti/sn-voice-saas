@@ -18,8 +18,10 @@ export async function GET(req: Request) {
   const limit = parseInt(url.searchParams.get('limit') || '100')
   const since = url.searchParams.get('since') || undefined
 
-  const logs = getLogs({ level, source, tenantId, limit, since })
-  const stats = getStats()
+  const [logs, stats] = await Promise.all([
+    getLogs({ level, source, tenantId, limit, since }),
+    getStats(),
+  ])
 
   return NextResponse.json({ logs, stats })
 }
