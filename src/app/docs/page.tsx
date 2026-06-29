@@ -22,12 +22,12 @@ const SECTIONS: TocItem[] = [
 ]
 
 const STANDARD_TOOLS = [
-  { name: 'get_user_context', desc: 'Caller profile — name, email, department, manager.' },
-  { name: 'get_my_tickets', desc: 'Up to 10 open incidents for the caller.' },
+  { name: 'get_current_user', desc: 'Caller profile — name, email, department, manager.' },
+  { name: 'get_my_requests', desc: 'Up to 10 open catalog requests for the caller.' },
   { name: 'get_ticket_status', desc: 'Look up INC / CHG / TASK / PRB by number.' },
   { name: 'create_incident', desc: 'Creates an incident — requires user confirmation.' },
-  { name: 'update_incident', desc: 'Adds comment or changes state — requires confirmation.' },
-  { name: 'search_knowledge', desc: 'Queries the KB cache; falls back to kb_knowledge.' },
+  { name: 'update_incident_notes', desc: 'Adds work note to an incident — requires confirmation.' },
+  { name: 'search_knowledge', desc: 'Searches KB articles by keyword; returns title + number.' },
   { name: 'send_email', desc: "Sends to the caller's resolved email address." },
   { name: 'reset_password', desc: 'Triggers password reset — requires confirmation.' },
   { name: 'navigate_to', desc: 'Opens a ServiceNow page in the user\'s browser (widget).' },
@@ -115,11 +115,12 @@ export default function DocsPage() {
                 </BulletItem>
                 <BulletItem>
                   An LLM API key —{' '}
+                  <ExternalLink href="https://console.groq.com">Groq</ExternalLink>{' '}
+                  (<InlineCode>llama-3.3-70b-versatile</InlineCode>, recommended &amp; tested) or{' '}
                   <ExternalLink href="https://platform.openai.com">OpenAI</ExternalLink>{' '}
-                  (<InlineCode>gpt-4o-mini</InlineCode> recommended) or{' '}
+                  (<InlineCode>gpt-4o-mini</InlineCode>) or{' '}
                   <ExternalLink href="https://console.anthropic.com">Anthropic</ExternalLink>{' '}
-                  (<InlineCode>claude-haiku-4-5-20251001</InlineCode>). Groq with Llama models works but emits
-                  malformed tool calls frequently.
+                  (<InlineCode>claude-haiku-4-5-20251001</InlineCode>).
                 </BulletItem>
                 <BulletItem>
                   A ZeVox account — free tier includes 50 lifetime minutes.
@@ -225,7 +226,7 @@ npx now-sdk install --instance https://your-instance.service-now.com`}</CodeBloc
                   ['LLM Configuration', 'Production LLM (from Section 03)'],
                   ['STT Model', 'nova-3'],
                   ['STT Language', 'en-US'],
-                  ['TTS Voice', 'aura-asteria-en (female) or aura-orion-en (male)'],
+                  ['TTS Voice', 'aura-stella-en (female) or aura-orion-en (male)'],
                   ['TTS Speaking Rate', '1.0'],
                   ['Context Window (Messages)', '4'],
                   ['Max Tool Calls Per Turn', '5'],
@@ -264,7 +265,7 @@ npx now-sdk install --instance https://your-instance.service-now.com`}</CodeBloc
             <Section id="connect-saas" num="06" title="Set up your ZeVox tenant">
               <ol className="space-y-3">
                 <Numbered n="1">
-                  Sign in at <ExternalLink href="/auth">zevox.zetechno.com</ExternalLink> with Google or GitHub.
+                  Sign in at <ExternalLink href="/auth">zevox.onrender.com</ExternalLink> with Google or GitHub.
                 </Numbered>
                 <Numbered n="2">
                   New tenants land on the <strong className="text-foreground font-medium">Get Started</strong>{' '}
@@ -313,7 +314,7 @@ STEP 5: After user agrees, call create_incident. Speak the real
         number back: "I created incident I N C zero zero..."
 
 QUERY PATTERNS:
-- 'my tickets' → get_my_tickets
+- 'my tickets' → get_my_requests
 - 'status of INCxxxx' → get_ticket_status
 - 'email me' → send_email (recipient auto-resolved from profile)
 
@@ -380,8 +381,8 @@ ENDING THE CALL:
                 Open <strong className="text-foreground font-medium">Connection</strong> in ZeVox, copy the embed
                 snippet, and paste it before your <InlineCode>{'</body>'}</InlineCode>:
               </p>
-              <CodeBlock language="html">{`<script src="https://zevox.onrender.com/widget.js"
-        data-token="sk_live_your_token_here"></script>`}</CodeBlock>
+              <CodeBlock language="html">{`<script>window.ZEVOX_TOKEN = "sk_live_your_token_here";</script>
+<script src="https://zevox.onrender.com/widget.js"></script>`}</CodeBlock>
               <p className="text-[13.5px] text-muted-foreground mt-3">
                 Customize the widget (colors, position, greeting, voice-only mode) on the{' '}
                 <strong className="text-foreground font-medium">Connection</strong> page — changes apply instantly.
@@ -481,9 +482,10 @@ ENDING THE CALL:
             <Section id="troubleshooting" num="13" title="Troubleshooting">
               <div className="space-y-3">
                 <Issue q='Agent responds "Sorry, I am having trouble right now"'>
-                  Click Test Connection on the LLM record. Groq with Llama models frequently fails tool calling;
-                  switch to OpenAI <InlineCode>gpt-4o-mini</InlineCode> or Anthropic{' '}
-                  <InlineCode>claude-haiku-4-5</InlineCode>.
+                  Click <strong className="text-foreground font-medium">Test Connection</strong> on the LLM record.
+                  Verify your API key is active and the model name is correct (e.g.{' '}
+                  <InlineCode>llama-3.3-70b-versatile</InlineCode> for Groq). Check SN system logs for the full
+                  error response from the LLM provider.
                 </Issue>
                 <Issue q="Agent invents incident numbers or record details">
                   Open the agent record → Refresh Standard Tools. Each tool now enforces output schema and the
