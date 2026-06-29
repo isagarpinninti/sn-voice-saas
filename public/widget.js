@@ -140,7 +140,7 @@
   cursor:pointer;
   transition:box-shadow .2s,transform .2s
 }
-#zv-launcher:hover{box-shadow:0 6px 24px rgba(0,0,0,.16),0 0 0 1px rgba(5,150,105,.2);transform:translateY(-2px)}
+#zv-launcher:hover{box-shadow:0 6px 24px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.12);transform:translateY(-2px)}
 #zv-orb{
   width:40px;height:40px;flex-shrink:0;
   animation:zvhue 6s ease-in-out infinite;
@@ -150,12 +150,12 @@
   display:inline-flex;align-items:center;gap:8px;
   height:38px;padding:0 18px 0 12px;margin-left:6px;
   border-radius:999px;border:none;outline:none;
-  background:linear-gradient(135deg,#059669,#0d9488);
+  background:var(--zvc);
   color:#fff;
   font-size:13.5px;font-weight:600;
   cursor:pointer;letter-spacing:-.01em;white-space:nowrap;
   transition:filter .15s,transform .1s;
-  box-shadow:0 2px 8px rgba(5,150,105,.35)
+  box-shadow:0 2px 8px rgba(0,0,0,.2)
 }
 #zv-start:hover,#zv-chat-start:hover{filter:brightness(1.08);transform:scale(1.02)}
 #zv-start svg,#zv-chat-start svg{width:14px;height:14px;flex-shrink:0}
@@ -191,7 +191,7 @@
   display:none;
   margin-top:20px;
   font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:#059669
+  color:var(--zvc)
 }
 
 /* Big orb + phone */
@@ -216,11 +216,11 @@
   position:absolute;bottom:-18px;left:50%;
   transform:translateX(-50%);
   width:52px;height:52px;border-radius:50%;
-  background:linear-gradient(135deg,#059669,#0d9488);
+  background:var(--zvc);
   border:3.5px solid #fff;
   cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 20px rgba(5,150,105,.4);
+  box-shadow:0 4px 20px rgba(0,0,0,.2);
   z-index:3;transition:transform .15s,background .15s;outline:none
 }
 #zv-phone-btn:hover{transform:translateX(-50%) scale(1.1)}
@@ -236,7 +236,7 @@
 #zv-wave.on{opacity:1}
 #zv-wave span{
   display:block;width:3.5px;border-radius:3px;
-  background:linear-gradient(to top,#059669,#34d399);
+  background:var(--zvc);
   transform-origin:center;transform:scaleY(.2)
 }
 #zv-wave.on span{animation:zvwave 1.2s ease-in-out infinite}
@@ -278,7 +278,7 @@
   width:calc(100% - 32px);
   margin:14px 0 0;padding:12px;
   border-radius:14px;
-  background:#ecfdf5;border:1px solid #a7f3d0
+  background:color-mix(in srgb,var(--zvc) 8%,#fff);border:1px solid color-mix(in srgb,var(--zvc) 30%,#fff)
 }
 #zv-attach.on{display:block}
 
@@ -291,7 +291,7 @@
   background:#f9fafb;overflow:hidden;
   transition:border-color .15s
 }
-#zv-card-input-row:focus-within{border-color:#34d399;background:#fff}
+#zv-card-input-row:focus-within{border-color:var(--zvc);background:#fff}
 #zv-card-input{
   flex:1;border:none;background:transparent;
   padding:11px 14px;font-size:13.5px;outline:none;color:#111827
@@ -304,7 +304,7 @@
   flex-shrink:0;margin-right:3px;
   transition:color .15s;outline:none
 }
-#zv-card-send:hover{color:#059669}
+#zv-card-send:hover{color:var(--zvc)}
 #zv-card-send svg{width:14px;height:14px}
 
 #zv-br{font-size:10.5px;color:#d1d5db;margin-bottom:6px;text-align:center}
@@ -337,12 +337,12 @@
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis
 }
 #zv-chat-hdr-st{
-  font-size:11px;color:#059669;
+  font-size:11px;color:var(--zvc);
   display:flex;align-items:center;gap:5px;margin-top:2px
 }
 #zv-chat-hdr-st::before{
   content:'';width:6px;height:6px;
-  border-radius:50%;background:#059669;flex-shrink:0
+  border-radius:50%;background:var(--zvc);flex-shrink:0
 }
 #zv-chat-cls{
   width:30px;height:30px;border-radius:50%;
@@ -365,7 +365,7 @@
   display:flex;align-items:center;justify-content:center;gap:6px;
   transition:color .15s;outline:none!important;box-shadow:none!important
 }
-.zv-tab.active{color:#059669!important;border-bottom:2px solid #059669!important}
+.zv-tab.active{color:var(--zvc)!important;border-bottom:2px solid var(--zvc)!important}
 .zv-tab svg{width:13px;height:13px}
 
 /* Messages */
@@ -388,7 +388,7 @@
   font-size:13.5px;line-height:1.5;word-break:break-word
 }
 .zv-msg.user .zv-msg-bubble{
-  background:linear-gradient(135deg,#059669,#0d9488);
+  background:var(--zvc);
   color:#fff;border-bottom-right-radius:4px
 }
 .zv-msg.agent .zv-msg-bubble{
@@ -401,7 +401,7 @@
 .zv-upload-btn{
   display:inline-flex;align-items:center;gap:6px;
   margin-top:4px;padding:8px 14px;
-  background:#059669;color:#fff;
+  background:var(--zvc);color:#fff;
   border-radius:8px;text-decoration:none;
   font-size:13px;font-weight:500;transition:opacity .15s
 }
@@ -433,7 +433,7 @@
   border:1.5px solid #e5e7eb;border-radius:14px;
   background:#f9fafb;overflow:hidden;transition:border-color .15s
 }
-#zv-chat-input-wrap:focus-within{border-color:#34d399;background:#fff}
+#zv-chat-input-wrap:focus-within{border-color:var(--zvc);background:#fff}
 #zv-chat-input{
   flex:1;border:none;background:transparent;
   padding:10px 14px;font-size:13.5px;outline:none;
@@ -448,7 +448,7 @@
   flex-shrink:0;margin-right:5px;
   transition:color .15s;outline:none
 }
-#zv-chat-send:hover{color:#059669}
+#zv-chat-send:hover{color:var(--zvc)}
 #zv-chat-send:disabled{opacity:.35;cursor:default}
 #zv-chat-send svg{width:14px;height:14px}
 #zv-chat-br{
@@ -545,6 +545,7 @@
     el.innerHTML='<div id="zv-launcher">'+launcherHTML+'</div>'+voiceHTML+chatHTML
     document.body.appendChild(el)
     el.style[C.pos==='left'?'left':'right']='20px'
+    el.style.setProperty('--zvc', C.color)
 
     /* Agent name */
     if(C.name){
@@ -744,7 +745,7 @@
         // Large orb + overlapping phone button — same design as voice-only card
         panel.innerHTML='<div style="position:relative;margin-bottom:0">'
           +'<div id="zv-orb-lg" class="zvorb" style="width:140px;height:140px;animation:zvhue 6s ease-in-out infinite;display:block"><div id="zv-ring"></div></div>'
-          +'<button id="zv-start-tab" style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:3px solid #fff;background:linear-gradient(135deg,#059669,#0d9488);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(5,150,105,.45);outline:none;padding:0">'
+          +'<button id="zv-start-tab" style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:3px solid #fff;background:var(--zvc);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.2);outline:none;padding:0">'
           +'<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.27-.27.7-.38 1.06-.2 1.1.37 2.28.57 3.54.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C4.61 21 2 18.39 2 15.23V5a2 2 0 0 1 2-2h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02L6.6 10.8z"/></svg>'
           +'</button>'
           +'<button id="zv-end" style="display:none;position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:3px solid #fff;background:linear-gradient(135deg,#dc2626,#b91c1c);cursor:pointer;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(220,38,38,.45);outline:none;padding:0">'
