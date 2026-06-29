@@ -110,19 +110,21 @@
       #b0acf0 230deg,
       #ccc4fc 270deg,
       #b8d0f8 310deg,
-      #a0b8e8 360deg);
-  border-radius:50%;
-  position:relative;
-  overflow:hidden
+      #a0b8e8 360deg)!important;
+  border-radius:50%!important;
+  position:relative!important;
+  overflow:hidden!important;
+  flex-shrink:0!important;
+  aspect-ratio:1/1!important
 }
 .zvorb::after{
-  content:'';position:absolute;inset:0;border-radius:50%;
+  content:''!important;position:absolute!important;inset:0!important;border-radius:50%!important;
   background:
     repeating-radial-gradient(circle at 50% 50%,
       rgba(255,255,255,.0) 0px, rgba(255,255,255,.0) 7px,
       rgba(255,255,255,.22) 8px, rgba(255,255,255,.0) 9px),
-    radial-gradient(ellipse at 30% 26%, rgba(255,255,255,.96) 0%, rgba(255,255,255,.35) 20%, transparent 46%);
-  pointer-events:none
+    radial-gradient(ellipse at 30% 26%, rgba(255,255,255,.96) 0%, rgba(255,255,255,.35) 20%, transparent 46%)!important;
+  pointer-events:none!important
 }
 
 @keyframes zvhue{0%{filter:hue-rotate(0deg) brightness(1)}50%{filter:hue-rotate(15deg) brightness(1.04)}100%{filter:hue-rotate(0deg) brightness(1)}}
@@ -736,9 +738,9 @@
     if(t1)t1.className='zv-tab active'
     if(t2)t2.className='zv-tab'
     var mp=g('zv-chat-msgs'),ir=g('zv-chat-input-row'),vp=g('zv-voice-panel')
-    // Swap content: hide chat messages/input, show voice panel
-    if(mp)mp.style.display='none'
-    if(ir)ir.style.display='none'
+    // Use setProperty+important to override the !important display:flex in our CSS
+    if(mp)mp.style.setProperty('display','none','important')
+    if(ir)ir.style.setProperty('display','none','important')
     // Inject voice panel if not present
     if(!vp){
       var card=g('zv-chat')
@@ -757,7 +759,7 @@
           +'</button>'
           +'</div>'
           +'<div id="zv-wave" style="margin-top:30px"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>'
-          +'<div id="zv-status" style="font-size:15px;font-weight:600;color:#111827;margin-top:10px;letter-spacing:-.01em">Tap to start a call</div>'
+          +'<div id="zv-status" style="font-size:15px;font-weight:600;color:#111827;margin-top:10px;letter-spacing:-.01em"></div>'
           +'<div id="zv-sub" style="font-size:12px;color:#9ca3af;margin-top:4px;text-align:center;padding:0 24px;min-height:16px"></div>'
           +'<button id="zv-mute" style="display:none;width:32px;height:32px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;align-items:center;justify-content:center;cursor:pointer;margin-top:8px;outline:none;padding:0">'
           +'<svg id="zv-mon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>'
@@ -781,8 +783,8 @@
     if(t1)t1.className='zv-tab'
     if(t2)t2.className='zv-tab active'
     var mp=g('zv-chat-msgs'),ir=g('zv-chat-input-row'),vp=g('zv-voice-panel')
-    if(mp)mp.style.display='flex'
-    if(ir)ir.style.display='flex'
+    if(mp)mp.style.setProperty('display','flex','important')
+    if(ir)ir.style.setProperty('display','flex','important')
     if(vp)vp.style.display='none'
     if(active)endCall()
   }
