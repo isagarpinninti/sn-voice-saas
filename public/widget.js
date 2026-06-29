@@ -98,31 +98,34 @@
 #zv{position:fixed;bottom:24px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;align-items:flex-end;gap:12px}
 #zv *{box-sizing:border-box;margin:0;padding:0;font-family:inherit}
 
-/* ZeVox orb — teal/cyan/green iridescent (distinct from ElevenLabs purple) */
+/* ZeVox orb — holographic metallic disc */
 .zvorb{
   background:
-    radial-gradient(circle at 30% 25%, rgba(255,255,255,.9) 0%, transparent 35%),
-    radial-gradient(circle at 70% 75%, rgba(110,231,183,.6) 0%, transparent 40%),
-    conic-gradient(from 120deg at 50% 50%,
-      #34d399 0deg,
-      #06b6d4 60deg,
-      #3b82f6 110deg,
-      #10b981 160deg,
-      #a7f3d0 210deg,
-      #67e8f9 260deg,
-      #059669 310deg,
-      #34d399 360deg);
+    conic-gradient(from 200deg at 50% 50%,
+      #a0b8e8 0deg,
+      #c0b8f8 50deg,
+      #dcd0ff 90deg,
+      #c4d4f8 140deg,
+      #a8c0f0 180deg,
+      #b0acf0 230deg,
+      #ccc4fc 270deg,
+      #b8d0f8 310deg,
+      #a0b8e8 360deg);
   border-radius:50%;
   position:relative;
   overflow:hidden
 }
 .zvorb::after{
   content:'';position:absolute;inset:0;border-radius:50%;
-  background:radial-gradient(circle at 30% 28%, rgba(255,255,255,.6) 0%, transparent 45%);
+  background:
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,.0) 0px, rgba(255,255,255,.0) 7px,
+      rgba(255,255,255,.22) 8px, rgba(255,255,255,.0) 9px),
+    radial-gradient(ellipse at 30% 26%, rgba(255,255,255,.96) 0%, rgba(255,255,255,.35) 20%, transparent 46%);
   pointer-events:none
 }
 
-@keyframes zvhue{0%{filter:hue-rotate(0deg) brightness(1)}50%{filter:hue-rotate(40deg) brightness(1.05)}100%{filter:hue-rotate(0deg) brightness(1)}}
+@keyframes zvhue{0%{filter:hue-rotate(0deg) brightness(1)}50%{filter:hue-rotate(15deg) brightness(1.04)}100%{filter:hue-rotate(0deg) brightness(1)}}
 @keyframes zvpop{from{opacity:0;transform:translateY(16px) scale(.93)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes zvring{0%,100%{transform:scale(1);opacity:.3}50%{transform:scale(1.06);opacity:.8}}
 @keyframes zvwave{0%,100%{transform:scaleY(.2)}50%{transform:scaleY(1)}}
@@ -497,7 +500,7 @@
             '<button id="zv-phone-btn">'+PHONE_SVG+'</button>',
           '</div>',
           '<div id="zv-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>',
-          '<div id="zv-status">Tap to call</div>',
+          '<div id="zv-status"></div>',
           '<div id="zv-sub"></div>',
           '<button id="zv-mute">'+MIC_SVG+'</button>',
           '<div id="zv-attach"></div>',
@@ -547,9 +550,8 @@
     el.style[C.pos==='left'?'left':'right']='20px'
     el.style.setProperty('--zvc', C.color)
 
-    /* Agent name */
+    /* Agent name — only in chat header, not voice card */
     if(C.name){
-      var ae=g('zv-agent');if(ae){ae.textContent=C.name;ae.style.display='block'}
       var hn=g('zv-chat-hdr-name');if(hn)hn.textContent=C.name
     }
 
