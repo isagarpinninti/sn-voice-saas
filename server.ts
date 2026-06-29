@@ -11,6 +11,14 @@ import { notifyAdmins } from './src/lib/alerts'
 import { logAudit } from './src/lib/audit'
 import { getTelephonyProvider } from './src/lib/telephony'
 
+// ── Fail fast on missing required env vars ──────────────────────────────────
+const REQUIRED_ENV = ['DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'DEEPGRAM_API_KEY']
+const missingEnv = REQUIRED_ENV.filter(k => !process.env[k])
+if (missingEnv.length) {
+  console.error('[Startup] FATAL: missing required env vars:', missingEnv.join(', '))
+  process.exit(1)
+}
+
 const dev = process.env.NODE_ENV !== 'production'
 const app = next({ dev })
 const handle = app.getRequestHandler()

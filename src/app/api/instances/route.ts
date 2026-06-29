@@ -77,6 +77,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'snInstanceUrl, snUsername, snPassword are required' }, { status: 400 })
   }
 
+  // Validate SN instance URL — must be HTTPS, a real hostname, not localhost/private IPs
+  let parsedUrl: URL
+  try {
+    parsedUrl = new URL(body.snInstanceUrl)
+    if (parsedUrl.protocol !== 'https:') throw new Error('must be HTTPS')
+    const h = parsedUrl.hostname
+    if (h === 'localhost' || /^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)) {
+      throw new Error('private/loopback addresses not allowed')
+    }
+    if (!h.includes('.')) throw new Error('must be a fully qualified domain name')
+  } catch (e: any) {
+    return NextResponse.json({ error: 'Invalid snInstanceUrl: ' + e.message }, { status: 400 })
+  }
+
   const name = (body.name || '').trim() || 'Untitled Instance'
 
   // Generate embed token for this instance

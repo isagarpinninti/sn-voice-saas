@@ -4,7 +4,9 @@ import { db } from './db'
 
 const COOKIE_NAME = 'zevox_impersonate'
 const TTL_SECONDS = 60 * 60 // 1 hour
-const SECRET = process.env.NEXTAUTH_SECRET || process.env.IMPERSONATION_SECRET || 'zevox-fallback-do-not-use'
+const _secret = process.env.NEXTAUTH_SECRET || process.env.IMPERSONATION_SECRET
+if (!_secret) throw new Error('NEXTAUTH_SECRET or IMPERSONATION_SECRET env var is required')
+const SECRET: string = _secret
 
 function sign(value: string): string {
   const hmac = crypto.createHmac('sha256', SECRET).update(value).digest('hex').slice(0, 32)

@@ -355,6 +355,34 @@ model AttachmentUpload {
 }
 
 // =====================================================
+// Chat Sessions (text-chat conversation history — survives deploys)
+// =====================================================
+
+model ChatSession {
+  id             String   @id @default(cuid())
+  sessionId      String   @unique  // widget-generated UUID
+  tenantId       String
+  instanceId     String
+  agentId        String   @default("")
+  snUserId       String   @default("")
+  history        Json     @default("[]")  // {role,content}[]
+
+  // Cached from first /gateway/init — avoids calling it on every message
+  llmEndpoint    String   @default("")
+  llmKey         String   @default("")
+  llmModel       String   @default("")
+  systemPrompt   String   @default("") @db.Text
+  tools          Json     @default("[]")
+
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([sessionId])
+  @@index([tenantId])
+}
+
+// =====================================================
 // Waitlist (early-access signups for features like phone calls)
 // =====================================================
 

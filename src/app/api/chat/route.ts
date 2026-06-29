@@ -19,29 +19,7 @@ const CORS: HeadersInit = {
   'Cache-Control': 'no-cache',
 }
 
-// ── In-memory session store (30-min TTL) ──────────────────────────────────
-type ChatSession = {
-  history:       { role: 'user' | 'assistant'; content: string }[]
-  instanceId:    string
-  tenantId:      string
-  snInstanceUrl: string
-  snAuth:        string
-  agentSnToken:  string
-  userEmail:     string
-  createdAt:     number
-  // Cached from first /gateway/init call — avoids creating a new SN session on every message
-  cachedLlmEndpoint?: string
-  cachedLlmKey?:      string
-  cachedLlmModel?:    string
-  cachedSystemPrompt?: string
-  cachedTools?:       any[]
-}
-const sessions = new Map<string, ChatSession>()
-
-function gcSessions() {
-  const cut = Date.now() - 30 * 60 * 1000
-  for (const [id, s] of sessions) if (s.createdAt < cut) sessions.delete(id)
-}
+const SESSION_TTL_MS = 30 * 60 * 1000  // 30 minutes
 
 // ── System prompt builder ─────────────────────────────────────────────────
 function buildSystemPrompt(cfg: any): string {
@@ -62,8 +40,6 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: Request) {
-  gcSessions()
-
   const body      = await req.json().catch(() => null)
   const token     = (body?.token      || '').trim()
   const agentId   = (body?.agent      || '').trim()
@@ -94,28 +70,25 @@ export async function POST(req: Request) {
 
   const snAuth = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
 
-  // ── Get or create session ─────────────────────────────────────────────
-  let sess = sessions.get(sessionId)
-  if (!sess) {
-    sess = {
-      history:       [],
-      instanceId:    instance.id,
-      tenantId:      apiToken.tenantId,
-      snInstanceUrl: instance.snInstanceUrl,
-      snAuth,
-      agentSnToken:  agentId,
-      userEmail,
-      createdAt:     Date.now(),
-    }
-    sessions.set(sessionId, sess)
-  }
-  // Update user email if provided in this turn
-  if (userEmail) sess.userEmail = userEmail
+  // ── Get or create session (DB-backed, survives deploys) ───────────────
+  const now = new Date()
+  let dbSess = await db.chatSession.findUnique({ where: { sessionId } })
 
-  // ── Fetch agent config via /gateway/init — only on the first message ─────
-  // Calling init on every message would create a new SN session per message turn.
-  // Cache the result in the in-memory session after the first successful call.
-  if (!sess.cachedLlmKey) {
+  // Expired sessions are treated as new
+  if (dbSess && dbSess.expiresAt < now) {
+    await db.chatSession.delete({ where: { sessionId } }).catch(() => {})
+    dbSess = null
+  }
+
+  let llmEndpoint: string
+  let llmKey: string
+  let llmModel: string
+  let systemPrompt: string
+  let cachedTools: any[]
+  let history: { role: 'user' | 'assistant'; content: string }[]
+
+  if (!dbSess) {
+    // First message — fetch agent config from SN gateway/init once
     let agentCfg: any = null
     try {
       const initBody: any = {}
@@ -136,26 +109,51 @@ export async function POST(req: Request) {
     const llmCfg = agentCfg?.llm_config || {}
     let ep = llmCfg.base_url || 'https://api.groq.com/openai/v1'
     ep = ep.replace(/\/chat\/completions\/?$/, '') + '/chat/completions'
-
     const rawTools: any[] = agentCfg?.tools || []
     const wrappedTools = rawTools.map((t: any) => {
       if (t?.function) return t
       return { type: 'function', function: { name: t.name, description: t.description || t.name, parameters: t.input_schema ?? { type: 'object', properties: {} } } }
     })
 
-    sess.cachedLlmEndpoint  = ep
-    sess.cachedLlmKey       = llmCfg.api_key || ''
-    sess.cachedLlmModel     = llmCfg.model   || 'llama-3.3-70b-versatile'
-    sess.cachedSystemPrompt = agentCfg?.system_prompt
+    llmEndpoint  = ep
+    llmKey       = llmCfg.api_key || ''
+    llmModel     = llmCfg.model   || 'llama-3.3-70b-versatile'
+    systemPrompt = agentCfg?.system_prompt
       ? agentCfg.system_prompt + '\n\nYou are responding via text chat. Be concise and actionable.'
       : buildSystemPrompt(agentCfg)
-    sess.cachedTools = wrappedTools
-  }
+    cachedTools  = wrappedTools
+    history      = []
 
-  const llmEndpoint  = sess.cachedLlmEndpoint!
-  const llmKey       = sess.cachedLlmKey!
-  const llmModel     = sess.cachedLlmModel!
-  const systemPrompt = sess.cachedSystemPrompt!
+    dbSess = await db.chatSession.create({
+      data: {
+        sessionId,
+        tenantId:     apiToken.tenantId,
+        instanceId:   instance.id,
+        agentId:      agentId || '',
+        snUserId:     snUserId || '',
+        history:      [],
+        llmEndpoint,
+        llmKey,
+        llmModel,
+        systemPrompt,
+        tools:        wrappedTools,
+        expiresAt:    new Date(Date.now() + SESSION_TTL_MS),
+      },
+    })
+  } else {
+    // Existing session — use cached config
+    llmEndpoint  = dbSess.llmEndpoint
+    llmKey       = dbSess.llmKey
+    llmModel     = dbSess.llmModel
+    systemPrompt = dbSess.systemPrompt
+    cachedTools  = dbSess.tools as any[]
+    history      = dbSess.history as { role: 'user' | 'assistant'; content: string }[]
+    // Slide expiry on activity
+    await db.chatSession.update({
+      where: { sessionId },
+      data: { expiresAt: new Date(Date.now() + SESSION_TTL_MS) },
+    })
+  }
 
   // ── Built-in tools ────────────────────────────────────────────────────
   const builtInTools = [
@@ -179,22 +177,22 @@ export async function POST(req: Request) {
     },
   ]
 
-  const llmTools = [...builtInTools, ...(sess.cachedTools || [])]
+  const llmTools = [...builtInTools, ...(cachedTools || [])]
 
   // ── Append user message ───────────────────────────────────────────────
-  sess.history.push({ role: 'user', content: userMsg })
+  history.push({ role: 'user', content: userMsg })
 
   const messages = [
     { role: 'system', content: systemPrompt },
-    ...sess.history.slice(-20),
+    ...history.slice(-20),
   ]
 
   // ── First LLM call ────────────────────────────────────────────────────
   const llmBody: any = {
     model:       llmModel,
     messages,
-    temperature: agentCfg?.llm?.temperature ?? 0.3,
-    max_tokens:  agentCfg?.llm?.max_tokens  ?? 1024,
+    temperature: 0.3,
+    max_tokens:  1024,
   }
   if (llmTools.length) { llmBody.tools = llmTools; llmBody.tool_choice = 'auto' }
 
@@ -206,7 +204,8 @@ export async function POST(req: Request) {
   })
   if (!llmRes.ok) {
     const err = await llmRes.text()
-    return NextResponse.json({ error: `LLM error ${llmRes.status}: ${err}`, session_id: sessionId }, { status: 502, headers: CORS })
+    console.error('[chat] LLM error', llmRes.status, err.substring(0, 300))
+    return NextResponse.json({ error: 'Failed to process your message. Please try again.', session_id: sessionId }, { status: 502, headers: CORS })
   }
 
   let llmData = await llmRes.json()
@@ -251,7 +250,7 @@ export async function POST(req: Request) {
               headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json' },
               body:    JSON.stringify({
                 session_id:    sessionId,
-                agent_id:      agentId || (agentCfg?.selected_agent_id ?? ''),
+                agent_id:      agentId || (dbSess?.agentId ?? ''),
                 tool_name:     tc.function.name,
                 tool_input:    enrichedInput,
               }),
@@ -270,7 +269,8 @@ export async function POST(req: Request) {
     if (attachmentUrl) {
       const agentMsg = choice.message?.content?.trim() ||
         `Please upload ${attachmentReason || 'a file'} using the link below.`
-      sess.history.push({ role: 'assistant', content: agentMsg })
+      history.push({ role: 'assistant', content: agentMsg })
+      await db.chatSession.update({ where: { sessionId }, data: { history } }).catch(() => {})
       return NextResponse.json(
         { session_id: sessionId, message: agentMsg, attachment_url: attachmentUrl, attachment_reason: attachmentReason },
         { headers: CORS }
@@ -288,7 +288,8 @@ export async function POST(req: Request) {
   }
 
   const reply = (choice?.message?.content || '').trim()
-  sess.history.push({ role: 'assistant', content: reply })
+  history.push({ role: 'assistant', content: reply })
+  await db.chatSession.update({ where: { sessionId }, data: { history } }).catch(() => {})
 
   return NextResponse.json({ session_id: sessionId, message: reply }, { headers: CORS })
 }
