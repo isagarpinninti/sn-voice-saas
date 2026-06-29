@@ -137,12 +137,24 @@ function normalizeToolsForGroq(tools: any[]): { tools: any[]; repairs: string[] 
       }
     }
 
+    // Groq's guided decoder rejects double quotes inside description strings.
+    // Replace with single quotes to prevent failed_generation errors.
+    const sanitizeDesc = (s: any) =>
+      typeof s === 'string' ? s.replace(/"/g, "'").replace(/\\/g, '') : ''
+
+    const cleanedParamsWithSafeDescs = { ...params }
+    const propsWithSafeDescs: Record<string, any> = {}
+    for (const [pname, pschema] of Object.entries(params.properties as Record<string, any>)) {
+      propsWithSafeDescs[pname] = { ...pschema, description: sanitizeDesc(pschema.description) }
+    }
+    cleanedParamsWithSafeDescs.properties = propsWithSafeDescs
+
     out.push({
       type: 'function',
       function: {
         name,
-        description: typeof fn.description === 'string' ? fn.description : '',
-        parameters: params,
+        description: sanitizeDesc(fn.description),
+        parameters: cleanedParamsWithSafeDescs,
       },
     })
   }
