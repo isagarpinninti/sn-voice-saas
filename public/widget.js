@@ -740,26 +740,27 @@
       if(card){
         var panel=document.createElement('div')
         panel.id='zv-voice-panel'
-        panel.innerHTML=`
-<div id="zv-orb-lg" class="zvorb" style="width:100px;height:100px;animation:zvhue 6s ease-in-out infinite"><div id="zv-ring"></div></div>
-<div id="zv-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-<div id="zv-status" style="font-size:15px;font-weight:600;color:#111827;margin-top:6px">Tap to start a call</div>
-<div id="zv-sub" style="font-size:12px;color:#6b7280;text-align:center;padding:0 20px"></div>
-<div id="zv-ctrls" style="margin-top:16px;display:flex;align-items:center;gap:10px">
-  <button id="zv-start-tab" style="display:flex;align-items:center;gap:8px;padding:10px 28px;border-radius:24px;border:none;background:linear-gradient(135deg,#059669,#0d9488);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 2px 10px rgba(5,150,105,.35)">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-    Start Voice Call
-  </button>
-  <button id="zv-end" style="display:none;align-items:center;gap:6px;padding:8px 20px;border-radius:24px;border:1px solid #e5e7eb;background:#fff;color:#0d1117;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.68 13.31a16 16 0 003.41 2.6l1.1-1.1a1 1 0 011.11-.27c1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02l-1.1 1.1"/></svg> End
-  </button>
-  <button id="zv-mute" style="width:36px;height:36px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg id="zv-mon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg><svg id="zv-mof" style="display:none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/></svg></button>
-</div>
-<div id="zv-br" style="font-size:11px;color:#9ca3af"></div>`
+        panel.style.cssText='flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;overflow:hidden'
+        // Large orb + overlapping phone button — same design as voice-only card
+        panel.innerHTML='<div style="position:relative;margin-bottom:0">'
+          +'<div id="zv-orb-lg" class="zvorb" style="width:140px;height:140px;animation:zvhue 6s ease-in-out infinite;display:block"><div id="zv-ring"></div></div>'
+          +'<button id="zv-start-tab" style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:3px solid #fff;background:linear-gradient(135deg,#059669,#0d9488);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(5,150,105,.45);outline:none;padding:0">'
+          +'<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.27-.27.7-.38 1.06-.2 1.1.37 2.28.57 3.54.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C4.61 21 2 18.39 2 15.23V5a2 2 0 0 1 2-2h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02L6.6 10.8z"/></svg>'
+          +'</button>'
+          +'<button id="zv-end" style="display:none;position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:3px solid #fff;background:linear-gradient(135deg,#dc2626,#b91c1c);cursor:pointer;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(220,38,38,.45);outline:none;padding:0">'
+          +'<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.27-.27.7-.38 1.06-.2 1.1.37 2.28.57 3.54.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C4.61 21 2 18.39 2 15.23V5a2 2 0 0 1 2-2h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02L6.6 10.8z"/></svg>'
+          +'</button>'
+          +'</div>'
+          +'<div id="zv-wave" style="margin-top:30px"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>'
+          +'<div id="zv-status" style="font-size:15px;font-weight:600;color:#111827;margin-top:10px;letter-spacing:-.01em">Tap to start a call</div>'
+          +'<div id="zv-sub" style="font-size:12px;color:#9ca3af;margin-top:4px;text-align:center;padding:0 24px;min-height:16px"></div>'
+          +'<button id="zv-mute" style="display:none;width:32px;height:32px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;align-items:center;justify-content:center;cursor:pointer;margin-top:8px;outline:none;padding:0">'
+          +'<svg id="zv-mon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>'
+          +'<svg id="zv-mof" width="14" height="14" style="display:none" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/></svg>'
+          +'</button>'
         var cbr=card.querySelector('#zv-chat-br')
         if(cbr)card.insertBefore(panel,cbr)
         else card.appendChild(panel)
-        if(C.brand){var vbr=g('zv-br');if(vbr)vbr.innerHTML='Powered by <a href="https://zevox.onrender.com" target="_blank" style="color:#6b7280;text-decoration:none;font-weight:500">ZeVox</a>'}
         var stBtn=g('zv-start-tab');if(stBtn)stBtn.onclick=startCall
         if(g('zv-end'))g('zv-end').onclick=endCall
         if(g('zv-mute'))g('zv-mute').onclick=toggleMute
