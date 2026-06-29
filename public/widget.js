@@ -127,57 +127,69 @@
     var R=C.radius==='lg'?'18px':'999px'
     var s=document.createElement('style')
     s.textContent=`
-#zv{position:fixed;bottom:20px;z-index:999999;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+#zv{position:fixed;bottom:24px;z-index:999999;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
 #zv *{box-sizing:border-box}
 
+/* ── Iridescent orb base ── */
+.zv-orb-bg{
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255,255,255,.88) 0%, rgba(255,255,255,0) 38%),
+    radial-gradient(circle at 68% 72%, rgba(210,180,255,.45) 0%, rgba(210,180,255,0) 42%),
+    conic-gradient(from 80deg at 50% 50%,
+      #b8c8f0 0deg, #c8b8f8 45deg, #e8c0f8 90deg,
+      #f8d0e0 135deg, #c0e0f8 180deg, #b8d0f0 225deg,
+      #c8c0f8 270deg, #d0c8f0 315deg, #b8c8f0 360deg);
+  border-radius:50%;
+}
+
 /* ── Launcher ── */
-#zv-launcher{display:flex;align-items:center;gap:8px;background:#fff;border-radius:${R};padding:6px 6px 6px 8px;box-shadow:0 1px 2px 0 rgba(16,24,40,.06),0 6px 20px -4px ${C.color}2e,0 0 0 1px rgba(16,24,40,.05);transition:transform .2s,box-shadow .2s}
-#zv-launcher:hover{transform:translateY(-1px);box-shadow:0 2px 4px 0 rgba(16,24,40,.08),0 10px 32px -6px ${C.color}47,0 0 0 1px rgba(16,24,40,.06)}
-#zv-orb{width:36px;height:36px;border-radius:50%;cursor:pointer;border:none;outline:none;padding:0;position:relative;flex-shrink:0;background:radial-gradient(circle at 35% 30%,${C.color},${C.color} 40%,#0d1117 100%);box-shadow:0 0 0 2px ${C.color}26,0 4px 14px ${C.color}66,inset 0 -3px 6px rgba(0,0,0,.3);animation:zvBreathe 2.4s ease-in-out infinite}
-#zv-orb::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.45),rgba(255,255,255,0) 50%);pointer-events:none}
+#zv-launcher{display:flex;align-items:center;gap:0;background:#fff;border-radius:${R};padding:5px;box-shadow:0 2px 8px rgba(0,0,0,.1),0 0 0 1px rgba(0,0,0,.06);transition:transform .2s,box-shadow .2s}
+#zv-launcher:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.07)}
+#zv-orb{width:36px;height:36px;cursor:pointer;border:none;outline:none;padding:0;position:relative;flex-shrink:0;animation:zvOrbShift 6s linear infinite}
+#zv-orb.zv-orb-bg::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.7),rgba(255,255,255,0) 50%);pointer-events:none}
 #zv-orb img{width:36px;height:36px;object-fit:cover;border-radius:50%;position:relative;z-index:1}
-@keyframes zvBreathe{0%,100%{box-shadow:0 0 0 2px ${C.color}26,0 4px 14px ${C.color}66,inset 0 -3px 6px rgba(0,0,0,.3)}50%{box-shadow:0 0 0 4px ${C.color}33,0 6px 22px ${C.color}88,inset 0 -3px 6px rgba(0,0,0,.3)}}
-#zv-start{display:flex;align-items:center;gap:8px;height:38px;padding:0 18px 0 14px;border-radius:999px;border:none;outline:none;background:#0d1117;color:#fff;font-size:13.5px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s;letter-spacing:-.005em}
+@keyframes zvOrbShift{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}
+#zv-start{display:flex;align-items:center;gap:7px;height:36px;padding:0 16px 0 12px;border-radius:999px;border:none;outline:none;background:#0d1117;color:#fff;font-size:13.5px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s;letter-spacing:-.005em;margin-left:4px}
 #zv-start:hover{background:#1c2128}
 #zv-start:active{transform:scale(.97)}
-#zv-start svg{width:14px;height:14px;color:${C.color}}
-#zv-chat-start{display:flex;align-items:center;gap:8px;height:38px;padding:0 18px 0 14px;border-radius:999px;border:1px solid #e5e7eb;outline:none;background:#fff;color:#0d1117;font-size:13.5px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;transition:all .15s;letter-spacing:-.005em}
-#zv-chat-start:hover{background:#f9fafb;border-color:${C.color};color:${C.color}}
-#zv-chat-start svg{width:14px;height:14px;color:${C.color}}
+#zv-start svg{width:13px;height:13px;opacity:.85}
+#zv-chat-start{display:flex;align-items:center;gap:7px;height:36px;padding:0 16px 0 12px;border-radius:999px;border:none;outline:none;background:#0d1117;color:#fff;font-size:13.5px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s;letter-spacing:-.005em;margin-left:4px}
+#zv-chat-start:hover{background:#1c2128}
+#zv-chat-start:active{transform:scale(.97)}
+#zv-chat-start svg{width:13px;height:13px;opacity:.85}
 
 /* ── Voice card ── */
-#zv-card{display:none;width:340px;background:radial-gradient(ellipse 80% 60% at 15% 0%,${C.color}1a 0%,transparent 55%),radial-gradient(ellipse 60% 50% at 90% 20%,rgba(99,102,241,.08) 0%,transparent 55%),#fff;border-radius:20px;box-shadow:0 0 0 1px ${C.color}1a,0 12px 48px -8px rgba(16,24,40,.14),0 4px 16px -4px rgba(16,24,40,.08);padding:22px;flex-direction:column;align-items:center;gap:4px;position:relative;overflow:hidden}
-#zv-card.on{display:flex;animation:zvCardEntry .45s cubic-bezier(.22,1,.36,1)}
-@keyframes zvCardEntry{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
-#zv-card::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(to right,rgba(16,24,40,.025) 1px,transparent 1px),linear-gradient(to bottom,rgba(16,24,40,.025) 1px,transparent 1px);background-size:24px 24px;mask-image:radial-gradient(ellipse 80% 60% at 50% 10%,#000 0%,transparent 70%)}
-#zv-agent{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;background:linear-gradient(110deg,#34d399 0%,${C.color} 45%,#6366f1 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px;position:relative;z-index:1}
-#zv-agent.hide{display:none}
-#zv-orb-lg{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:10px;position:relative;z-index:1;background:radial-gradient(circle at 35% 30%,${C.color},${C.color} 40%,#0d1117 100%);box-shadow:0 0 0 2px ${C.color}26,0 6px 24px ${C.color}80,0 10px 40px -4px rgba(99,102,241,.26),inset 0 -4px 8px rgba(0,0,0,.3);animation:zvBreathe 2.4s ease-in-out infinite}
-#zv-orb-lg::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.4),rgba(255,255,255,0) 55%);pointer-events:none;z-index:2}
-#zv-orb-lg img{width:60px;height:60px;object-fit:cover;border-radius:50%;position:relative;z-index:1}
-#zv-ring{position:absolute;inset:-6px;border-radius:50%;border:2px solid ${C.color}55;opacity:0;transition:opacity .3s;z-index:0}
+#zv-card{display:none;width:340px;background:#fff;border-radius:24px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 16px 56px -8px rgba(0,0,0,.18),0 4px 16px -4px rgba(0,0,0,.1);flex-direction:column;align-items:center;position:relative;overflow:hidden}
+#zv-card.on{display:flex;animation:zvCardEntry .4s cubic-bezier(.22,1,.36,1)}
+@keyframes zvCardEntry{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+#zv-card-close{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#9ca3af;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;z-index:2;transition:all .15s}
+#zv-card-close:hover{background:#f3f4f6;color:#374151}
+#zv-agent{display:none}
+#zv-orb-wrap{position:relative;margin:40px 0 0;display:flex;align-items:center;justify-content:center}
+#zv-orb-lg{width:160px;height:160px;position:relative;animation:zvOrbShift 8s linear infinite}
+#zv-orb-lg.zv-orb-bg::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.7),rgba(255,255,255,0) 50%);pointer-events:none;z-index:2}
+#zv-orb-lg img{width:160px;height:160px;object-fit:cover;border-radius:50%;position:relative;z-index:1}
+#zv-ring{position:absolute;inset:-8px;border-radius:50%;border:2px solid rgba(180,160,255,.4);opacity:0;transition:opacity .3s;z-index:0}
 #zv-ring.on{opacity:1;animation:zvR 2s ease-in-out infinite}
-@keyframes zvR{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.08);opacity:.95}}
-#zv-wave{display:flex;gap:3px;align-items:center;height:18px;margin-bottom:8px;opacity:.55;position:relative;z-index:1}
-#zv-wave span{display:block;width:3px;border-radius:2px;background:${C.color};transform-origin:center;transform:scaleY(.4)}
+@keyframes zvR{0%,100%{transform:scale(1);opacity:.4}50%{transform:scale(1.06);opacity:.8}}
+#zv-phone-btn{position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);width:48px;height:48px;border-radius:50%;background:#0d1117;border:3px solid #fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:3;transition:transform .15s,background .15s}
+#zv-phone-btn:hover{transform:translateX(-50%) scale(1.08)}
+#zv-phone-btn.active{background:#ef4444}
+#zv-phone-btn svg{width:20px;height:20px;color:#fff}
+#zv-wave{display:flex;gap:3px;align-items:center;height:16px;margin:28px 0 4px;opacity:0;transition:opacity .3s;position:relative;z-index:1}
+#zv-wave.on{opacity:.6}
+#zv-wave span{display:block;width:3px;border-radius:2px;background:#a78bfa;transform-origin:center;transform:scaleY(.35)}
 #zv-wave.on span{animation:zvWave 1.3s ease-in-out infinite}
-#zv-wave span:nth-child(1){height:30%;animation-delay:-.2s}#zv-wave span:nth-child(2){height:60%;animation-delay:-.5s}#zv-wave span:nth-child(3){height:90%;animation-delay:-.8s}#zv-wave span:nth-child(4){height:100%;animation-delay:0s}#zv-wave span:nth-child(5){height:90%;animation-delay:-.3s}#zv-wave span:nth-child(6){height:60%;animation-delay:-.6s}#zv-wave span:nth-child(7){height:30%;animation-delay:-.9s}
-@keyframes zvWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
-#zv-status{font-size:15px;font-weight:600;color:#0d1117;letter-spacing:-.01em;position:relative;z-index:1}
-#zv-sub{font-size:12px;color:#6b7280;margin-top:2px;position:relative;z-index:1}
-#zv-ctrls{display:flex;align-items:center;gap:8px;margin-top:14px;position:relative;z-index:1}
-#zv-end{display:flex;align-items:center;gap:6px;padding:8px 24px;border-radius:24px;border:1px solid #e5e7eb;background:#fff;color:#0d1117;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s}
-#zv-end:hover{background:#f9fafb;border-color:#d1d5db}
-#zv-end svg{width:14px;height:14px}
-#zv-mute{width:36px;height:36px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
-#zv-mute:hover{background:#f9fafb;border-color:#d1d5db}
+#zv-wave span:nth-child(1){height:28%;animation-delay:-.2s}#zv-wave span:nth-child(2){height:55%;animation-delay:-.5s}#zv-wave span:nth-child(3){height:85%;animation-delay:-.8s}#zv-wave span:nth-child(4){height:100%;animation-delay:0s}#zv-wave span:nth-child(5){height:85%;animation-delay:-.3s}#zv-wave span:nth-child(6){height:55%;animation-delay:-.6s}#zv-wave span:nth-child(7){height:28%;animation-delay:-.9s}
+@keyframes zvWave{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+#zv-status{font-size:14px;font-weight:500;color:#374151;letter-spacing:-.01em;position:relative;z-index:1}
+#zv-sub{font-size:12px;color:#9ca3af;margin-top:2px;position:relative;z-index:1;min-height:16px}
+#zv-mute{display:none;width:32px;height:32px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;margin-top:8px}
+#zv-mute.show{display:flex}
 #zv-mute.on{background:#ef4444;border-color:#ef4444}
-#zv-mute svg{width:16px;height:16px;color:#6b7280}
+#zv-mute svg{width:14px;height:14px;color:#6b7280}
 #zv-mute.on svg{color:#fff}
-#zv-br{font-size:11px;color:#9ca3af;margin-top:14px;position:relative;z-index:1}
-#zv-br a{color:#6b7280;text-decoration:none;font-weight:500}
-#zv-br a:hover{color:${C.color}}
-#zv-attach{display:none;width:100%;margin-top:14px;padding:12px;border-radius:12px;background:${C.color}14;border:1px solid ${C.color}33;text-align:left;position:relative;z-index:1;animation:zvFadeUp .35s cubic-bezier(.22,1,.36,1)}
+#zv-attach{display:none;width:calc(100% - 32px);margin:12px 16px 0;padding:12px;border-radius:12px;background:#f5f3ff;border:1px solid #ede9fe;text-align:left;animation:zvFadeUp .35s cubic-bezier(.22,1,.36,1)}
 #zv-attach.on{display:block}
 #zv-attach-title{font-size:12px;font-weight:600;color:#0d1117;margin-bottom:2px}
 #zv-attach-reason{font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.4}
@@ -185,73 +197,88 @@
 #zv-attach-btn:hover{background:#1c2128}
 #zv-attach-btn svg{width:12px;height:12px}
 @keyframes zvFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+/* Voice card bottom input */
+#zv-card-input-row{display:flex;align-items:center;gap:0;margin:16px 16px 20px;width:calc(100% - 32px);border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;overflow:hidden;transition:border-color .15s}
+#zv-card-input-row:focus-within{border-color:#c4b5fd}
+#zv-card-input{flex:1;border:none;background:transparent;padding:11px 14px;font-size:13.5px;font-family:inherit;outline:none;color:#0d1117}
+#zv-card-input::placeholder{color:#9ca3af}
+#zv-card-send{width:36px;height:36px;border:none;background:transparent;color:#9ca3af;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s;margin-right:4px}
+#zv-card-send:hover{color:#6366f1}
+#zv-card-send svg{width:15px;height:15px}
+#zv-br{font-size:10.5px;color:#c4c4c4;margin-bottom:4px;position:relative;z-index:1}
+#zv-br a{color:#9ca3af;text-decoration:none}
 
 /* ── Chat card ── */
-#zv-chat{display:none;width:360px;height:520px;background:#fff;border-radius:20px;box-shadow:0 0 0 1px rgba(16,24,40,.08),0 12px 48px -8px rgba(16,24,40,.18),0 4px 16px -4px rgba(16,24,40,.1);flex-direction:column;overflow:hidden;position:relative}
-#zv-chat.on{display:flex;animation:zvCardEntry .45s cubic-bezier(.22,1,.36,1)}
-#zv-chat-hdr{display:flex;align-items:center;gap:12px;padding:16px 18px;background:linear-gradient(135deg,#0d1117 0%,#1c2128 100%);color:#fff;flex-shrink:0}
-#zv-chat-hdr-orb{width:36px;height:36px;border-radius:50%;flex-shrink:0;background:radial-gradient(circle at 35% 30%,${C.color},${C.color} 40%,#0d1117 100%);box-shadow:0 0 0 2px ${C.color}40,0 4px 12px ${C.color}60}
-#zv-chat-hdr-orb img{width:36px;height:36px;border-radius:50%;object-fit:cover}
+#zv-chat{display:none;width:360px;height:520px;background:#fff;border-radius:24px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 16px 56px -8px rgba(0,0,0,.18),0 4px 16px -4px rgba(0,0,0,.1);flex-direction:column;overflow:hidden;position:relative}
+#zv-chat.on{display:flex;animation:zvCardEntry .4s cubic-bezier(.22,1,.36,1)}
+#zv-chat-hdr{display:flex;align-items:center;gap:10px;padding:14px 16px;background:#fff;border-bottom:1px solid #f3f4f6;flex-shrink:0}
+#zv-chat-hdr-orb{width:32px;height:32px;flex-shrink:0;border-radius:50%;animation:zvOrbShift 8s linear infinite}
+#zv-chat-hdr-orb.zv-orb-bg::after{content:"";position:absolute;border-radius:50%;inset:0;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.6),transparent 50%);pointer-events:none}
+#zv-chat-hdr-orb{position:relative}
+#zv-chat-hdr-orb img{width:32px;height:32px;border-radius:50%;object-fit:cover}
 #zv-chat-hdr-info{flex:1;min-width:0}
-#zv-chat-hdr-name{font-size:14px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#zv-chat-hdr-status{font-size:11px;color:#34d399;display:flex;align-items:center;gap:4px;margin-top:2px}
-#zv-chat-hdr-status::before{content:"";width:6px;height:6px;border-radius:50%;background:#34d399;flex-shrink:0}
-#zv-chat-close{width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;flex-shrink:0;transition:background .15s}
-#zv-chat-close:hover{background:rgba(255,255,255,.15)}
+#zv-chat-hdr-name{font-size:13.5px;font-weight:600;color:#0d1117;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#zv-chat-hdr-status{font-size:11px;color:#10b981;display:flex;align-items:center;gap:4px;margin-top:2px}
+#zv-chat-hdr-status::before{content:"";width:6px;height:6px;border-radius:50%;background:#10b981;flex-shrink:0}
+#zv-chat-close{width:28px;height:28px;border-radius:50%;border:1px solid #e5e7eb;background:#fff;color:#9ca3af;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;flex-shrink:0;transition:all .15s}
+#zv-chat-close:hover{background:#f3f4f6;color:#374151}
 
-/* Tabs (both mode only) */
-#zv-tabs{display:none;flex-shrink:0;background:#f8fafc;border-bottom:1px solid #e5e7eb}
+/* Tabs */
+#zv-tabs{display:none;flex-shrink:0;background:#fff;border-bottom:1px solid #f3f4f6}
 #zv-tabs.show{display:flex}
-.zv-tab{flex:1;padding:10px;font-size:12.5px;font-weight:500;color:#6b7280;border:none;background:transparent;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;border-bottom:2px solid transparent;transition:all .15s}
-.zv-tab:hover{color:#0d1117}
-.zv-tab.active{color:${C.color};border-bottom-color:${C.color};background:#fff}
+.zv-tab{flex:1;padding:10px;font-size:12.5px;font-weight:500;color:#9ca3af;border:none;background:transparent;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;border-bottom:2px solid transparent;transition:all .15s}
+.zv-tab:hover{color:#374151}
+.zv-tab.active{color:#6366f1;border-bottom-color:#6366f1}
 .zv-tab svg{width:13px;height:13px}
 
-/* Chat panel */
-#zv-chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+/* Chat messages */
+#zv-chat-msgs{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
 #zv-chat-msgs::-webkit-scrollbar{width:4px}
 #zv-chat-msgs::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:4px}
-.zv-msg{max-width:82%;display:flex;flex-direction:column;gap:3px;animation:zvFadeUp .2s ease}
+.zv-msg{max-width:84%;display:flex;flex-direction:column;gap:3px;animation:zvFadeUp .2s ease}
 .zv-msg.user{align-self:flex-end;align-items:flex-end}
 .zv-msg.agent{align-self:flex-start;align-items:flex-start}
-.zv-msg-bubble{padding:10px 14px;border-radius:16px;font-size:13.5px;line-height:1.5;word-break:break-word}
-.zv-msg.user .zv-msg-bubble{background:${C.color};color:#fff;border-bottom-right-radius:4px}
-.zv-msg.agent .zv-msg-bubble{background:#f1f5f9;color:#0d1117;border-bottom-left-radius:4px}
-.zv-msg-time{font-size:10px;color:#9ca3af;padding:0 4px}
+.zv-msg-row{display:flex;align-items:flex-end;gap:8px}
+.zv-msg.agent .zv-msg-row{flex-direction:row}
+.zv-msg-avatar{width:24px;height:24px;border-radius:50%;flex-shrink:0;animation:zvOrbShift 8s linear infinite}
+.zv-msg-avatar.zv-orb-bg{}
+.zv-msg-bubble{padding:10px 14px;border-radius:18px;font-size:13.5px;line-height:1.5;word-break:break-word}
+.zv-msg.user .zv-msg-bubble{background:#0d1117;color:#fff;border-bottom-right-radius:5px}
+.zv-msg.agent .zv-msg-bubble{background:#f3f4f6;color:#0d1117;border-bottom-left-radius:5px}
+.zv-msg-time{font-size:10px;color:#c4c4c4;padding:0 2px}
 .zv-msg-upload{display:flex;flex-direction:column;gap:6px;min-width:200px}
 .zv-upload-label{font-size:12px;font-weight:600;color:#374151}
 .zv-upload-reason{font-size:12.5px;color:#6b7280;line-height:1.4}
-.zv-upload-btn{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:8px 14px;background:${C.color};color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;transition:opacity .15s}
-.zv-upload-btn:hover{opacity:.85}
+.zv-upload-btn{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:8px 14px;background:#0d1117;color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;transition:opacity .15s}
+.zv-upload-btn:hover{opacity:.8}
 .zv-upload-btn svg{width:14px;height:14px;flex-shrink:0}
 
-/* Typing indicator */
-#zv-typing{display:none;align-self:flex-start;padding:10px 14px;background:#f1f5f9;border-radius:16px;border-bottom-left-radius:4px;gap:4px}
+/* Typing */
+#zv-typing{display:none;align-self:flex-start;padding:10px 14px;background:#f3f4f6;border-radius:18px;border-bottom-left-radius:5px;gap:4px}
 #zv-typing.show{display:flex}
-#zv-typing span{width:7px;height:7px;border-radius:50%;background:#94a3b8;animation:zvDot 1.4s ease-in-out infinite}
+#zv-typing span{width:6px;height:6px;border-radius:50%;background:#c4c4c4;animation:zvDot 1.4s ease-in-out infinite}
 #zv-typing span:nth-child(2){animation-delay:.2s}
 #zv-typing span:nth-child(3){animation-delay:.4s}
 @keyframes zvDot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
 
 /* Input bar */
-#zv-chat-input-row{display:flex;align-items:flex-end;gap:8px;padding:12px 14px;border-top:1px solid #f1f5f9;flex-shrink:0;background:#fff}
-#zv-chat-input{flex:1;border:1px solid #e5e7eb;border-radius:12px;padding:10px 14px;font-size:13.5px;font-family:inherit;outline:none;resize:none;max-height:100px;min-height:40px;line-height:1.4;color:#0d1117;transition:border-color .15s}
-#zv-chat-input:focus{border-color:${C.color}}
+#zv-chat-input-row{display:flex;align-items:center;gap:0;padding:10px 12px;border-top:1px solid #f3f4f6;flex-shrink:0;background:#fff}
+#zv-chat-input-wrap{flex:1;display:flex;align-items:center;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;overflow:hidden;transition:border-color .15s}
+#zv-chat-input-wrap:focus-within{border-color:#c4b5fd;background:#fff}
+#zv-chat-input{flex:1;border:none;background:transparent;padding:10px 14px;font-size:13.5px;font-family:inherit;outline:none;resize:none;max-height:100px;min-height:38px;line-height:1.4;color:#0d1117}
 #zv-chat-input::placeholder{color:#9ca3af}
-#zv-chat-send{width:38px;height:38px;border-radius:50%;border:none;background:${C.color};color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s,transform .1s}
-#zv-chat-send:hover{background:${C.color}cc}
-#zv-chat-send:active{transform:scale(.93)}
-#zv-chat-send:disabled{background:#e5e7eb;cursor:default}
-#zv-chat-send svg{width:16px;height:16px}
-#zv-chat-br{font-size:10.5px;color:#9ca3af;text-align:center;padding:0 14px 8px;flex-shrink:0}
-#zv-chat-br a{color:#6b7280;text-decoration:none;font-weight:500}
+#zv-chat-send{width:32px;height:32px;border:none;background:transparent;color:#9ca3af;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s;margin-right:6px}
+#zv-chat-send:hover{color:#6366f1}
+#zv-chat-send:disabled{opacity:.4;cursor:default}
+#zv-chat-send svg{width:15px;height:15px}
+#zv-chat-br{font-size:10.5px;color:#c4c4c4;text-align:center;padding:0 14px 8px;flex-shrink:0}
+#zv-chat-br a{color:#9ca3af;text-decoration:none}
 
 /* Voice panel inside combined card */
 #zv-voice-panel{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px}
 `
     document.head.appendChild(s)
   }
-
   // ── Build UI ────────────────────────────────────────────────────────────
   function build(){
     injectCSS()
@@ -289,10 +316,10 @@ ${isChat?buildChatCardHTML(isBoth):''}
     // Logo
     if(C.logo){
       var orb=g('zv-orb'),orbLg=g('zv-orb-lg')
-      if(orb){orb.innerHTML='<img src="'+C.logo+'"/>';orb.style.background='#fff';orb.style.animation='none';orb.style.boxShadow='0 2px 10px rgba(0,0,0,.1)'}
-      if(orbLg){orbLg.innerHTML='<div id="zv-ring"></div><img src="'+C.logo+'"/>';orbLg.style.background='#f5f5f5';orbLg.style.animation='none';orbLg.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'}
+      if(orb){orb.innerHTML='<img src="'+C.logo+'"/>';orb.classList.remove('zv-orb-bg');orb.style.background='#fff';orb.style.animation='none'}
+      if(orbLg){orbLg.innerHTML='<div id="zv-ring"></div><img src="'+C.logo+'"/>';orbLg.classList.remove('zv-orb-bg');orbLg.style.background='#f9fafb';orbLg.style.animation='none'}
       var chatOrb=g('zv-chat-hdr-orb')
-      if(chatOrb){chatOrb.innerHTML='<img src="'+C.logo+'"/>';chatOrb.style.background='#fff'}
+      if(chatOrb){chatOrb.innerHTML='<img src="'+C.logo+'"/>';chatOrb.classList.remove('zv-orb-bg');chatOrb.style.background='#fff'}
     }
 
     // Agent name in voice card
@@ -307,11 +334,13 @@ ${isChat?buildChatCardHTML(isBoth):''}
     // Wire voice buttons
     if(isVoice){
       var orbb=g('zv-orb');if(orbb)orbb.onclick=isBoth?openChat:startCall
-      var sb=g('zv-start');if(sb)sb.onclick=startCall  // voice_only only — not rendered in both mode
-      if(g('zv-end'))g('zv-end').onclick=endCall
+      var sb=g('zv-start');if(sb)sb.onclick=startCall
+      var pb=g('zv-phone-btn');if(pb)pb.onclick=function(){if(active)endCall();else startCall()}
+      if(g('zv-card-close'))g('zv-card-close').onclick=function(){if(active)endCall();else{var vc=g('zv-card');if(vc)vc.classList.remove('on');g('zv-launcher').style.display='flex'}}
       if(g('zv-mute'))g('zv-mute').onclick=toggleMute
+      // wire voice card text input as chat (both mode) or just type-to-chat fallback
+      wireVoiceCardInput()
     } else {
-      // chat-only: orb click opens chat
       var orbc=g('zv-orb');if(orbc)orbc.onclick=openChat
     }
 
@@ -331,21 +360,28 @@ ${isChat?buildChatCardHTML(isBoth):''}
   }
 
   function orbHTML(){
-    return'<button id="zv-orb" aria-label="Assistant"></button>'
+    return'<button id="zv-orb" class="zv-orb-bg" aria-label="Assistant"></button>'
   }
 
   function buildVoiceCardHTML(){
     return`<div id="zv-card">
-  <div id="zv-agent" class="hide"></div>
-  <div id="zv-orb-lg"><div id="zv-ring"></div></div>
-  <div id="zv-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-  <div id="zv-status">Connecting...</div>
-  <div id="zv-sub"></div>
-  <div id="zv-ctrls">
-    <button id="zv-end"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.68 13.31a16 16 0 003.41 2.6l1.1-1.1a1 1 0 011.11-.27c1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02l-1.1 1.1"/></svg> End</button>
-    <button id="zv-mute"><svg id="zv-mon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg><svg id="zv-mof" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .34-.03.67-.08 1"/></svg></button>
+  <button id="zv-card-close">✕</button>
+  <div id="zv-agent"></div>
+  <div id="zv-orb-wrap">
+    <div id="zv-orb-lg" class="zv-orb-bg"><div id="zv-ring"></div></div>
+    <button id="zv-phone-btn">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+    </button>
   </div>
+  <div id="zv-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <div id="zv-status">Ready</div>
+  <div id="zv-sub"></div>
+  <button id="zv-mute"><svg id="zv-mon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg><svg id="zv-mof" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .34-.03.67-.08 1"/></svg></button>
   <div id="zv-attach"></div>
+  <div id="zv-card-input-row">
+    <input id="zv-card-input" type="text" placeholder="Type a message..."/>
+    <button id="zv-card-send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+  </div>
   <div id="zv-br"></div>
 </div>`
   }
@@ -357,24 +393,26 @@ ${isChat?buildChatCardHTML(isBoth):''}
 </div>`:''
     return`<div id="zv-chat">
   <div id="zv-chat-hdr">
-    <div id="zv-chat-hdr-orb"></div>
+    <div id="zv-chat-hdr-orb" class="zv-orb-bg"></div>
     <div id="zv-chat-hdr-info">
       <div id="zv-chat-hdr-name">Assistant</div>
-      <div id="zv-chat-hdr-status">Online</div>
+      <div id="zv-chat-hdr-status">Connected</div>
     </div>
     <button id="zv-chat-close">✕</button>
   </div>
   ${tabs}
   <div id="zv-chat-msgs"><div id="zv-typing"><span></span><span></span><span></span></div></div>
   <div id="zv-chat-input-row">
-    <textarea id="zv-chat-input" placeholder="Type a message..." rows="1"></textarea>
-    <button id="zv-chat-send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+    <div id="zv-chat-input-wrap">
+      <textarea id="zv-chat-input" placeholder="or type a message..." rows="1"></textarea>
+      <button id="zv-chat-send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+    </div>
   </div>
   <div id="zv-chat-br"></div>
 </div>`
   }
 
-  // ── Chat state + functions ──────────────────────────────────────────────
+  // ── Chat state + functions  // ── Chat state + functions ──────────────────────────────────────────────
   var chatOpen=false,chatSessionId='',chatBusy=false
 
   function openChat(){
@@ -441,10 +479,14 @@ ${isChat?buildChatCardHTML(isBoth):''}
     var now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
     var d=document.createElement('div')
     d.className='zv-msg '+role
-    // Escape HTML then linkify
     var safe=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')
-    d.innerHTML='<div class="zv-msg-bubble">'+safe+'</div><div class="zv-msg-time">'+now+'</div>'
-    // Insert before typing indicator
+    if(role==='agent'){
+      var avatarHtml='<div class="zv-msg-avatar zv-orb-bg"></div>'
+      if(C.logo)avatarHtml='<img class="zv-msg-avatar" src="'+C.logo+'" style="object-fit:cover"/>'
+      d.innerHTML='<div class="zv-msg-row">'+avatarHtml+'<div class="zv-msg-bubble">'+safe+'</div></div><div class="zv-msg-time">'+now+'</div>'
+    } else {
+      d.innerHTML='<div class="zv-msg-bubble">'+safe+'</div><div class="zv-msg-time">'+now+'</div>'
+    }
     var typing=g('zv-typing')
     if(typing)msgs.insertBefore(d,typing)
     else msgs.appendChild(d)
@@ -464,6 +506,38 @@ ${isChat?buildChatCardHTML(isBoth):''}
     d.innerHTML='<div class="zv-msg-bubble zv-msg-upload"><div class="zv-upload-label">📎 File upload requested</div><div class="zv-upload-reason">'+safe+'</div><a class="zv-upload-btn" href="'+url+'" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Open upload page</a></div>'
     var typing=g('zv-typing');if(typing)msgs.insertBefore(d,typing);else msgs.appendChild(d)
     scrollMsgs()
+  }
+
+  function wireVoiceCardInput(){
+    var inp=g('zv-card-input'),btn=g('zv-card-send')
+    if(!inp||!btn)return
+    inp.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();doCardSend()}
+    })
+    btn.onclick=doCardSend
+  }
+  function doCardSend(){
+    var inp=g('zv-card-input')
+    if(!inp||chatBusy)return
+    var txt=(inp.value||'').trim()
+    if(!txt)return
+    inp.value=''
+    // Route to chat API (reuses same session)
+    appendMsgToCard(txt)
+    chatBusy=true
+    fetch(GW+'/api/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token:TK,agent:AGENT,message:txt,session_id:chatSessionId||undefined,sn_user_id:SN_USER_ID||undefined})
+    }).then(function(r){return r.json()}).then(function(d){
+      chatSessionId=d.session_id||chatSessionId
+      if(d.message)appendMsgToCard(d.message,'agent')
+    }).catch(function(){}).finally(function(){chatBusy=false})
+  }
+  function appendMsgToCard(text,role){
+    // Show in voice card sub-text as a lightweight transcript
+    var sub=g('zv-sub')
+    if(sub)sub.textContent=(role==='agent'?'':'You: ')+text
   }
 
   // ── Both mode — tabs ────────────────────────────────────────────────────
@@ -574,6 +648,8 @@ ${isChat?buildChatCardHTML(isBoth):''}
     } else {
       g('zv-launcher').style.display='none'
       var vc=g('zv-card');if(vc)vc.classList.add('on')
+      var pb=g('zv-phone-btn');if(pb)pb.classList.add('active')
+      var ms=g('zv-mute');if(ms)ms.classList.add('show')
     }
     setSt('Connecting...','')
     await initAudioWorklet()
@@ -619,6 +695,8 @@ ${isChat?buildChatCardHTML(isBoth):''}
       var vc=g('zv-card');if(vc)vc.classList.remove('on')
       resetAttachmentUI()
       g('zv-launcher').style.display='flex'
+      var pb=g('zv-phone-btn');if(pb)pb.classList.remove('active')
+      var ms=g('zv-mute');if(ms)ms.classList.remove('show','on')
     }
   }
 
