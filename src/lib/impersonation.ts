@@ -4,12 +4,15 @@ import { db } from './db'
 
 const COOKIE_NAME = 'zevox_impersonate'
 const TTL_SECONDS = 60 * 60 // 1 hour
-const _secret = process.env.NEXTAUTH_SECRET || process.env.IMPERSONATION_SECRET
-if (!_secret) throw new Error('NEXTAUTH_SECRET or IMPERSONATION_SECRET env var is required')
-const SECRET: string = _secret
+
+function getSecret(): string {
+  const s = process.env.NEXTAUTH_SECRET || process.env.IMPERSONATION_SECRET
+  if (!s) throw new Error('NEXTAUTH_SECRET or IMPERSONATION_SECRET env var is required')
+  return s
+}
 
 function sign(value: string): string {
-  const hmac = crypto.createHmac('sha256', SECRET).update(value).digest('hex').slice(0, 32)
+  const hmac = crypto.createHmac('sha256', getSecret()).update(value).digest('hex').slice(0, 32)
   return value + '.' + hmac
 }
 
@@ -18,7 +21,7 @@ function verify(signed: string): string | null {
   const idx = signed.lastIndexOf('.')
   const value = signed.slice(0, idx)
   const sig = signed.slice(idx + 1)
-  const expected = crypto.createHmac('sha256', SECRET).update(value).digest('hex').slice(0, 32)
+  const expected = crypto.createHmac('sha256', getSecret()).update(value).digest('hex').slice(0, 32)
   if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null
   return value
 }
