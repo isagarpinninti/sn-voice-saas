@@ -243,7 +243,19 @@ export class VoicePipeline extends EventEmitter {
       this.snSessionId = config.session_id
       this.selectedAgentId = config.selected_agent_id || agentId || ''
       // All tools come from ServiceNow — no hardcoded tools in SaaS
-      this.tools = config.tools || []
+      // SN returns {name, description, input_schema} — convert to OpenAI function-calling format
+      const rawTools: any[] = config.tools || []
+      this.tools = rawTools.map((t: any) => {
+        if (t?.function) return t  // already wrapped
+        return {
+          type: 'function',
+          function: {
+            name: t.name,
+            description: t.description || '',
+            parameters: t.input_schema || { type: 'object', properties: {} },
+          },
+        }
+      })
       addLog('info', 'pipeline', 'Tools from SN (' + this.tools.length + '): ' + this.tools.map((t: any) => t?.function?.name || t?.name || JSON.stringify(t)).join(', '), { tenantId: this.tenant.id })
 
       // Sanitize tool schemas before they ever reach Groq. Admin-authored SN
