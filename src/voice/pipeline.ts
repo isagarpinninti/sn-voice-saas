@@ -188,6 +188,11 @@ export class VoicePipeline extends EventEmitter {
   // the navigate_to tool can build the right portal URLs.
   private originPortal: string = ''
 
+  // The end user's SN sys_id — injected into every tool call as __caller_id so
+  // custom_script tools (create_incident, get_current_user) act on behalf of the
+  // actual caller rather than the service account running the API request.
+  private endUserSysId: string = ''
+
   // These are set after init() loads config from SN
   private stt: any = null
   private ttsKey: string = ''
@@ -217,6 +222,7 @@ export class VoicePipeline extends EventEmitter {
 
   async start(agentId?: string, endUserSnId?: string, originPortal?: string) {
     this.originPortal = (originPortal || '').toString().toLowerCase()
+    this.endUserSysId = endUserSnId || ''
     console.log(`[Pipeline] Starting. Instance: ${this.tenant.snInstanceUrl}` + (agentId ? `, Agent: ${agentId}` : ', orchestrator mode') + (endUserSnId ? `, EndUser: ${endUserSnId}` : '') + (this.originPortal ? `, Portal: ${this.originPortal}` : ''))
 
     if (!this.tenant.snInstanceUrl || !this.tenant.snUsername) {
@@ -567,7 +573,7 @@ export class VoicePipeline extends EventEmitter {
     this.isBargingIn = false
     this.emit('state', 'processing')
     try {
-      const enrichedParams = { ...(inputParams || {}), __origin_portal: this.originPortal }
+      const enrichedParams = { ...(inputParams || {}), __origin_portal: this.originPortal, __caller_id: this.endUserSysId }
       const result = await this.snFetch('POST', '/gateway/tool/confirm', {
         session_id: this.snSessionId,
         tool_sys_id: toolSysId,
@@ -853,7 +859,7 @@ export class VoicePipeline extends EventEmitter {
           // Inject implicit context the LLM doesn't know — the portal the user
           // is currently on. Reserved keys are prefixed with __ so script authors
           // can tell runtime-injected fields from LLM-supplied ones.
-          const enrichedInput = { ...(tc.arguments || {}), __origin_portal: this.originPortal }
+          const enrichedInput = { ...(tc.arguments || {}), __origin_portal: this.originPortal, __caller_id: this.endUserSysId }
 
           // All tools are defined and executed in ServiceNow — no SaaS-side handlers
           const toolResult: any = await this.snFetch('POST', '/gateway/tool', {
