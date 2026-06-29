@@ -359,11 +359,13 @@
 .zv-tab{
   flex:1;padding:10px;
   font-size:12.5px;font-weight:500;color:#9ca3af;
-  border:none;background:transparent;cursor:pointer;
+  border-top:none!important;border-left:none!important;border-right:none!important;
+  border-bottom:2px solid transparent!important;
+  background:transparent!important;cursor:pointer;
   display:flex;align-items:center;justify-content:center;gap:6px;
-  border-bottom:2px solid transparent;transition:all .15s;outline:none
+  transition:color .15s;outline:none!important;box-shadow:none!important
 }
-.zv-tab.active{color:#059669;border-bottom-color:#059669}
+.zv-tab.active{color:#059669!important;border-bottom:2px solid #059669!important}
 .zv-tab svg{width:13px;height:13px}
 
 /* Messages */
@@ -661,7 +663,7 @@
     d.className='zv-msg '+role
     var safe=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')
     if(role==='agent'){
-      var avatarHtml='<div class="zv-msg-avatar zv-orb-bg"></div>'
+      var avatarHtml='<div class="zv-msg-avatar zvorb" style="animation:zvhue 6s ease-in-out infinite"></div>'
       if(C.logo)avatarHtml='<img class="zv-msg-avatar" src="'+C.logo+'" style="object-fit:cover"/>'
       d.innerHTML='<div class="zv-msg-row">'+avatarHtml+'<div class="zv-msg-bubble">'+safe+'</div></div><div class="zv-msg-time">'+now+'</div>'
     } else {
@@ -739,12 +741,12 @@
         var panel=document.createElement('div')
         panel.id='zv-voice-panel'
         panel.innerHTML=`
-<div id="zv-orb-lg" style="width:64px;height:64px"><div id="zv-ring"></div></div>
+<div id="zv-orb-lg" class="zvorb" style="width:100px;height:100px;animation:zvhue 6s ease-in-out infinite"><div id="zv-ring"></div></div>
 <div id="zv-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-<div id="zv-status" style="font-size:16px;font-weight:600;color:#0d1117">Tap to start a call</div>
-<div id="zv-sub" style="font-size:12px;color:#6b7280"></div>
-<div id="zv-ctrls" style="margin-top:16px">
-  <button id="zv-start-tab" style="display:flex;align-items:center;gap:8px;padding:10px 28px;border-radius:24px;border:none;background:${C.color};color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">
+<div id="zv-status" style="font-size:15px;font-weight:600;color:#111827;margin-top:6px">Tap to start a call</div>
+<div id="zv-sub" style="font-size:12px;color:#6b7280;text-align:center;padding:0 20px"></div>
+<div id="zv-ctrls" style="margin-top:16px;display:flex;align-items:center;gap:10px">
+  <button id="zv-start-tab" style="display:flex;align-items:center;gap:8px;padding:10px 28px;border-radius:24px;border:none;background:linear-gradient(135deg,#059669,#0d9488);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 2px 10px rgba(5,150,105,.35)">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
     Start Voice Call
   </button>
