@@ -1283,7 +1283,7 @@ export class VoicePipeline extends EventEmitter {
     //   name={"..."}
     // Also tolerates truncated JSON (missing closing brace) by appending '}' until parse succeeds.
     if (toolCalls.length === 0 && fullText) {
-      const regex = /(?:<function=|(?<![a-z_]))([a-z_][a-z0-9_]*)\s*(?:\[\])?\s*[=>\s]\s*(\{[\s\S]*?)(?=<\/function>|<function=|$)/gi
+      const regex = /(?:<function=|(?<![a-z_]))([a-z_][a-z0-9_]*)\s*(?:\[\])?\s*[=>\s]?\s*(\{[\s\S]*?)(?=<\/function>|<function=|$)/gi
       const matches: Array<{ name: string; raw: string }> = []
       let m: RegExpExecArray | null
       while ((m = regex.exec(fullText)) !== null) {
@@ -1333,6 +1333,7 @@ export class VoicePipeline extends EventEmitter {
     fullText = fullText
       .replace(/<function=[\s\S]*?(?:<\/function>|$)/gi, '')
       .replace(/\b[a-z_]+\s*=\s*\{[\s\S]*?\}/gi, '')
+      .replace(/\b[a-z_][a-z0-9_]{2,}\s*\{[^{}]*\}/gi, '') // strip name{...} leaks
       .replace(/\s+/g, ' ')
       .trim()
 
@@ -1386,8 +1387,10 @@ export class VoicePipeline extends EventEmitter {
     clean = clean.replace(/<function=[\s\S]*?(?:<\/function>|$)/g, '')
     // Remove XML/HTML tags
     clean = clean.replace(/<[^>]+>/g, '')
-    // Remove JSON blobs: {...}
-    clean = clean.replace(/\{[^}]{50,}\}/g, '')
+    // Remove tool call leaks: toolname{"key":"value"} (Groq Llama inline format, no separator)
+    clean = clean.replace(/\b[a-z_][a-z0-9_]{2,}\s*\{[^{}]*\}/g, '')
+    // Remove JSON blobs: {...} (lowered threshold to catch shorter blobs)
+    clean = clean.replace(/\{[^}]{20,}\}/g, '')
     // Remove code blocks: ```...```
     clean = clean.replace(/```[\s\S]*?```/g, '')
     // Remove inline code: `...`
