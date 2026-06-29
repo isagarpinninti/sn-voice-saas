@@ -29,6 +29,12 @@ type ChatSession = {
   agentSnToken:  string
   userEmail:     string
   createdAt:     number
+  // Cached from first /gateway/init call — avoids creating a new SN session on every message
+  cachedLlmEndpoint?: string
+  cachedLlmKey?:      string
+  cachedLlmModel?:    string
+  cachedSystemPrompt?: string
+  cachedTools?:       any[]
 }
 const sessions = new Map<string, ChatSession>()
 
@@ -106,33 +112,50 @@ export async function POST(req: Request) {
   // Update user email if provided in this turn
   if (userEmail) sess.userEmail = userEmail
 
-  // ── Fetch agent config via /gateway/init (same as voice pipeline) ────────
-  let agentCfg: any = null
-  try {
-    const initBody: any = {}
-    if (agentId) initBody.agent_id = agentId
-    if (snUserId) initBody.caller_user_id = snUserId
-    const r = await fetch(
-      `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/init`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(initBody),
-        signal: AbortSignal.timeout(10_000),
-      }
-    )
-    if (r.ok) { const d = await r.json(); agentCfg = d.result ?? d }
-  } catch { /* fall back to base prompt */ }
+  // ── Fetch agent config via /gateway/init — only on the first message ─────
+  // Calling init on every message would create a new SN session per message turn.
+  // Cache the result in the in-memory session after the first successful call.
+  if (!sess.cachedLlmKey) {
+    let agentCfg: any = null
+    try {
+      const initBody: any = {}
+      if (agentId) initBody.agent_id = agentId
+      if (snUserId) initBody.caller_user_id = snUserId
+      const r = await fetch(
+        `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/init`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Basic ${snAuth}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(initBody),
+          signal: AbortSignal.timeout(10_000),
+        }
+      )
+      if (r.ok) { const d = await r.json(); agentCfg = d.result ?? d }
+    } catch { /* fall back to defaults */ }
 
-  // /gateway/init returns llm_config, system_prompt, tools — same shape as voice pipeline
-  const llmCfg      = agentCfg?.llm_config || {}
-  let llmEndpoint   = llmCfg.base_url || 'https://api.groq.com/openai/v1'
-  llmEndpoint       = llmEndpoint.replace(/\/chat\/completions\/?$/, '') + '/chat/completions'
-  const llmKey      = llmCfg.api_key || ''
-  const llmModel    = llmCfg.model   || 'llama-3.3-70b-versatile'
-  const systemPrompt = agentCfg?.system_prompt
-    ? agentCfg.system_prompt + '\n\nYou are responding via text chat. Be concise and actionable.'
-    : buildSystemPrompt(agentCfg)
+    const llmCfg = agentCfg?.llm_config || {}
+    let ep = llmCfg.base_url || 'https://api.groq.com/openai/v1'
+    ep = ep.replace(/\/chat\/completions\/?$/, '') + '/chat/completions'
+
+    const rawTools: any[] = agentCfg?.tools || []
+    const wrappedTools = rawTools.map((t: any) => {
+      if (t?.function) return t
+      return { type: 'function', function: { name: t.name, description: t.description || t.name, parameters: t.input_schema ?? { type: 'object', properties: {} } } }
+    })
+
+    sess.cachedLlmEndpoint  = ep
+    sess.cachedLlmKey       = llmCfg.api_key || ''
+    sess.cachedLlmModel     = llmCfg.model   || 'llama-3.3-70b-versatile'
+    sess.cachedSystemPrompt = agentCfg?.system_prompt
+      ? agentCfg.system_prompt + '\n\nYou are responding via text chat. Be concise and actionable.'
+      : buildSystemPrompt(agentCfg)
+    sess.cachedTools = wrappedTools
+  }
+
+  const llmEndpoint  = sess.cachedLlmEndpoint!
+  const llmKey       = sess.cachedLlmKey!
+  const llmModel     = sess.cachedLlmModel!
+  const systemPrompt = sess.cachedSystemPrompt!
 
   // ── Built-in tools ────────────────────────────────────────────────────
   const builtInTools = [
@@ -156,21 +179,7 @@ export async function POST(req: Request) {
     },
   ]
 
-  // ── SN-defined tools (/gateway/init returns {name, description, input_schema}) ──
-  const activeSnTools = (agentCfg?.tools ?? []).filter((t: any) => t.active !== false)
-  const snLlmTools = activeSnTools.map((t: any) => {
-    if (t?.function) return t  // already wrapped
-    return {
-      type: 'function',
-      function: {
-        name:        t.name,
-        description: t.description || t.name,
-        parameters:  t.input_schema ?? { type: 'object', properties: {} },
-      },
-    }
-  })
-
-  const llmTools = [...builtInTools, ...snLlmTools]
+  const llmTools = [...builtInTools, ...(sess.cachedTools || [])]
 
   // ── Append user message ───────────────────────────────────────────────
   sess.history.push({ role: 'user', content: userMsg })
