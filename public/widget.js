@@ -373,8 +373,9 @@
 
 /* Messages */
 #zv-chat-msgs{
-  flex:1;overflow-y:auto;padding:14px 12px;
-  display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth
+  flex:1!important;overflow-y:auto!important;padding:14px 12px!important;
+  display:flex!important;flex-direction:column!important;gap:10px;scroll-behavior:smooth;
+  min-height:0!important
 }
 #zv-chat-msgs::-webkit-scrollbar{width:4px}
 #zv-chat-msgs::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:4px}
@@ -593,7 +594,8 @@
         var t1=g('zv-tab-voice');if(t1)t1.onclick=showVoiceTab
         var t2=g('zv-tab-chat');if(t2)t2.onclick=showChatTab
       }
-      if(C.greeting)setTimeout(function(){appendMsg('agent',C.greeting)},400)
+      var greet=C.greeting||'Hi! How can I help you today?'
+      setTimeout(function(){appendMsg('agent',greet)},400)
     }
   }
 
