@@ -354,10 +354,10 @@
 #zv-chat-cls:hover{background:#f3f4f6;color:#374151}
 
 /* Tabs */
-#zv-tabs{display:none;flex-shrink:0;background:#fff;border-bottom:1px solid #f3f4f6}
-#zv-tabs.show{display:flex}
+#zv-tabs{display:none!important;flex-shrink:0;background:#fff;border-bottom:1px solid #f3f4f6;flex-direction:row!important}
+#zv-tabs.show{display:flex!important;flex-direction:row!important;align-items:stretch}
 .zv-tab{
-  flex:1;padding:10px;
+  flex:1!important;padding:10px;
   font-size:12.5px;font-weight:500;color:#9ca3af;
   border-top:none!important;border-left:none!important;border-right:none!important;
   border-bottom:2px solid transparent!important;
