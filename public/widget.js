@@ -381,26 +381,27 @@
 }
 #zv-chat-msgs::-webkit-scrollbar{width:4px}
 #zv-chat-msgs::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:4px}
-.zv-msg{max-width:82%;display:flex;flex-direction:column;gap:3px}
-.zv-msg.user{align-self:flex-end;align-items:flex-end}
-.zv-msg.agent{align-self:flex-start;align-items:flex-start}
-.zv-msg-row{display:flex;align-items:flex-end;gap:6px}
+.zv-msg{max-width:82%!important;display:flex!important;flex-direction:column!important;gap:3px!important}
+.zv-msg.user{align-self:flex-end!important;align-items:flex-end!important}
+.zv-msg.agent{align-self:flex-start!important;align-items:flex-start!important}
+.zv-msg-row{display:flex!important;align-items:flex-end!important;gap:6px!important}
 .zv-msg-avatar{
-  width:24px;height:24px;flex-shrink:0;border-radius:50%
+  width:24px!important;height:24px!important;flex-shrink:0!important;border-radius:50%!important
 }
-.zv-msg-avatar.zvorb{animation:zvhue 6s ease-in-out infinite}
+.zv-msg-avatar.zvorb{animation:zvhue 6s ease-in-out infinite!important}
 .zv-msg-bubble{
-  padding:10px 14px;border-radius:18px;
-  font-size:13.5px;line-height:1.5;word-break:break-word
+  padding:10px 14px!important;border-radius:18px!important;
+  font-size:13.5px!important;line-height:1.5!important;word-break:break-word!important;
+  display:block!important;margin:0!important
 }
 .zv-msg.user .zv-msg-bubble{
-  background:var(--zvc);
-  color:#fff;border-bottom-right-radius:4px
+  background:var(--zvc)!important;
+  color:#fff!important;border-bottom-right-radius:4px!important
 }
 .zv-msg.agent .zv-msg-bubble{
-  background:#f3f4f6;color:#111827;border-bottom-left-radius:4px
+  background:#f3f4f6!important;color:#111827!important;border-bottom-left-radius:4px!important
 }
-.zv-msg-time{font-size:10px;color:#d1d5db;padding:0 2px}
+.zv-msg-time{font-size:10px!important;color:#d1d5db!important;padding:0 2px!important}
 .zv-msg-upload{display:flex;flex-direction:column;gap:6px;min-width:180px}
 .zv-upload-label{font-size:12px;font-weight:600;color:#374151}
 .zv-upload-reason{font-size:12.5px;color:#6b7280;line-height:1.4}
