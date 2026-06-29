@@ -242,67 +242,8 @@ export class VoicePipeline extends EventEmitter {
 
       this.snSessionId = config.session_id
       this.selectedAgentId = config.selected_agent_id || agentId || ''
+      // All tools come from ServiceNow — no hardcoded tools in SaaS
       this.tools = config.tools || []
-
-      // Built-in: search_knowledge_base — always available on all channels.
-      // Mandatory first step before creating any incident or service request.
-      // Calls SN /gateway/search-kb so the KB logic stays in ServiceNow.
-      this.tools.push({
-        type: 'function',
-        function: {
-          name: 'search_knowledge_base',
-          description:
-            'Search ServiceNow knowledge articles for a solution. ' +
-            'ALWAYS call this FIRST before creating an incident or service request — it is mandatory triage. ' +
-            'Call it as soon as you understand the user\'s issue (after collecting enough context). ' +
-            'If articles are found, present the top solution steps in 1-2 sentences and ask if they resolved the issue. ' +
-            'Only create an incident if (a) no articles were found, (b) the user tried the steps and they failed, or (c) the issue requires IT intervention regardless.',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: {
-                type: 'string',
-                description: 'Plain-English description of the issue to search for. Be specific.',
-              },
-            },
-            required: ['query'],
-          },
-        },
-      })
-
-      // Widget-only built-in: lets the agent ask the user to upload a file.
-      // Skipped on the phone channel because the caller can't click a link.
-      if (this.audioFormat === 'widget') {
-        this.tools.push({
-          type: 'function',
-          function: {
-            name: 'request_attachment',
-            description:
-              "Request a file upload from the user. STRICT RULE: ONLY call this tool when the user explicitly says they have a file, screenshot, log, or document they want to share — for example 'I have a screenshot', 'can I send you a log file?', or 'I want to attach this to the ticket'. NEVER call this proactively, never suggest uploading as a troubleshooting step, and never call it just because a file might be useful. If the user says they have no file or declines, do not call this again. You'll be notified with the file name (and extracted text for PDF/XLSX) once it arrives. If the user wants the file attached to a specific ServiceNow record (e.g. 'attach to INC0010001'), pass target_table and target_record_number.",
-            parameters: {
-              type: 'object',
-              properties: {
-                reason: {
-                  type: 'string',
-                  description:
-                    'Short reason shown to the user. Example: "the invoice you mentioned" or "a screenshot of the error".',
-                },
-                target_table: {
-                  type: 'string',
-                  description:
-                    'ServiceNow table name to attach the file to. Examples: "incident", "sc_request", "change_request", "sc_task", "problem". Omit to attach to the voice session.',
-                },
-                target_record_number: {
-                  type: 'string',
-                  description:
-                    'Human-readable record number on that table — e.g. "INC0010001". Combined with target_table, the upload will attach to that record. Must be provided together with target_table.',
-                },
-              },
-              required: ['reason'],
-            },
-          },
-        })
-      }
 
       // Sanitize tool schemas before they ever reach Groq. Admin-authored SN
       // tool rows frequently produce JSON Schema that Groq's guided decoder
@@ -901,33 +842,13 @@ export class VoicePipeline extends EventEmitter {
           // can tell runtime-injected fields from LLM-supplied ones.
           const enrichedInput = { ...(tc.arguments || {}), __origin_portal: this.originPortal }
 
-          // Built-in: request_attachment is handled in-SaaS (the LLM sees it in
-          // the tool list but it never hits /gateway/tool). Skipped for phone
-          // calls because the caller can't click a link.
-          let toolResult: any
-          if (tc.name === 'request_attachment' && this.audioFormat === 'widget') {
-            toolResult = this.handleRequestAttachment(tc.arguments)
-          } else if (tc.name === 'search_knowledge_base') {
-            // Built-in KB search — calls SN endpoint, KB logic stays in ServiceNow
-            try {
-              const kbRes = await this.snFetch('POST', '/gateway/search-kb', {
-                query: tc.arguments?.query || '',
-                limit: 3,
-                session_id: this.snSessionId,
-              })
-              toolResult = { tool_name: tc.name, tool_sys_id: 'builtin:search_knowledge_base', success: true, output: kbRes }
-            } catch (e: any) {
-              toolResult = { tool_name: tc.name, tool_sys_id: 'builtin:search_knowledge_base', success: false, output: { error: e.message } }
-            }
-          } else {
-            // Execute SN-defined tool via gateway
-            toolResult = await this.snFetch('POST', '/gateway/tool', {
-              session_id: this.snSessionId,
-              agent_id: this.selectedAgentId,
-              tool_name: tc.name,
-              tool_input: enrichedInput,
-            })
-          }
+          // All tools are defined and executed in ServiceNow — no SaaS-side handlers
+          const toolResult: any = await this.snFetch('POST', '/gateway/tool', {
+            session_id: this.snSessionId,
+            agent_id: this.selectedAgentId,
+            tool_name: tc.name,
+            tool_input: enrichedInput,
+          })
 
           if ((toolResult as any).requires_confirmation) {
             // Voice-native confirmation: speak the prompt, store the pending state,
