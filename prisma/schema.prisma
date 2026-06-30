@@ -164,8 +164,9 @@ model Agent {
   widgetShowBranding   Boolean  @default(true)
   widgetLogoUrl        String?
   widgetBorderRadius   String?  @default("full")
-  widgetLauncherLabel  String?
-  widgetLauncherDark   Boolean?
+  widgetLauncherLabel    String?
+  widgetLauncherDark     Boolean?
+  widgetWorkspaceTables  String?  // comma-separated SN table names, e.g. "incident,change_request"
 
   active     Boolean  @default(true)
   tokens     ApiToken[]

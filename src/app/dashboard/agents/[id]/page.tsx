@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
 import { VOICES } from '@/lib/voices'
-import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Send, Bot } from 'lucide-react'
+import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Send, Bot, Download, PanelRight } from 'lucide-react'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
 
@@ -35,6 +35,7 @@ interface WidgetConfig {
   widgetBorderRadius: string
   widgetLauncherLabel: string
   widgetLauncherDark: boolean
+  widgetWorkspaceTables: string
 }
 
 interface ChatMsg { role: 'user' | 'agent'; text: string }
@@ -51,6 +52,7 @@ const DEFAULT_WIDGET: WidgetConfig = {
   widgetBorderRadius: 'full',
   widgetLauncherLabel: 'Start a call',
   widgetLauncherDark: true,
+  widgetWorkspaceTables: '',
 }
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -477,6 +479,50 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 <Button size="sm" onClick={handleSaveWidget} disabled={savingWidget}>
                   {savingWidget ? 'Saving...' : 'Save widget settings'}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </Section>
+
+        {/* Workspace Panel */}
+        <Section
+          title="Workspace sidebar panel"
+          description="Embed this agent as a slide-in panel inside ServiceNow Agent Workspace. Specify which record tables it should appear on, then download the Update Set and import it into your SN instance."
+        >
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-[11px]">Show panel on these tables</Label>
+                <Input
+                  value={widget.widgetWorkspaceTables}
+                  onChange={e => updateWidget('widgetWorkspaceTables', e.target.value)}
+                  placeholder="incident, change_request, sc_task (leave blank for all tables)"
+                  className="text-[12px]"
+                />
+                <p className="text-[11px] text-muted-foreground">Comma-separated SN table names. Leave blank to show on every workspace record.</p>
+              </div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1 border-t border-border">
+                <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                  <PanelRight className="w-3.5 h-3.5 shrink-0" />
+                  <span>Download the Update Set, import it in SN (System Update Sets → Retrieved Update Sets), preview and commit. The panel activates with Alt+Z or the mic button in the sidebar rail.</span>
+                </div>
+                <a
+                  href={`/api/agents/${id}/workspace-update-set`}
+                  onClick={async (e) => {
+                    e.preventDefault()
+                    // Save workspace tables first, then download
+                    await fetch(`/api/agents/${id}/widget`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ widgetWorkspaceTables: widget.widgetWorkspaceTables }),
+                    })
+                    window.location.href = `/api/agents/${id}/workspace-update-set`
+                  }}
+                  className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-[12px] font-medium hover:opacity-90 transition-opacity cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download Update Set
+                </a>
               </div>
             </CardContent>
           </Card>

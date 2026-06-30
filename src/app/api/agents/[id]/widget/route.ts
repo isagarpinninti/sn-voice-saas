@@ -14,7 +14,7 @@ type RouteContext = { params: Promise<{ id: string }> }
 const WIDGET_FIELDS = [
   'widgetMode', 'widgetColor', 'widgetPosition', 'widgetAutoOpen',
   'widgetGreeting', 'widgetTitle', 'widgetShowBranding', 'widgetLogoUrl',
-  'widgetBorderRadius', 'widgetLauncherLabel', 'widgetLauncherDark',
+  'widgetBorderRadius', 'widgetLauncherLabel', 'widgetLauncherDark', 'widgetWorkspaceTables',
 ] as const
 
 export async function GET(_req: Request, ctx: RouteContext) {
@@ -38,8 +38,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
     widgetShowBranding:   agent.widgetShowBranding   ?? true,
     widgetLogoUrl:        agent.widgetLogoUrl        ?? '',
     widgetBorderRadius:   agent.widgetBorderRadius   ?? 'full',
-    widgetLauncherLabel:  agent.widgetLauncherLabel  ?? 'Start a call',
-    widgetLauncherDark:   agent.widgetLauncherDark   ?? true,
+    widgetLauncherLabel:    agent.widgetLauncherLabel    ?? 'Start a call',
+    widgetLauncherDark:     agent.widgetLauncherDark     ?? true,
+    widgetWorkspaceTables:  agent.widgetWorkspaceTables  ?? '',
   })
 }
 
