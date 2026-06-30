@@ -285,7 +285,7 @@ model PhoneNumber {
   id                 String    @id @default(cuid())
   e164               String    @unique // e.g. +14155550123
   friendly           String?
-  provider           String    @default("TWILIO") // TWILIO | TELNYX | FREESWITCH
+  provider           String    @default("TWILIO") // TWILIO
   providerExternalId String?   @unique @map("twilioSid") // DB column kept as twilioSid for zero-migration rename
 
   tenantId   String

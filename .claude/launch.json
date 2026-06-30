@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "widget-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4444"],
+      "port": 4444,
+      "cwd": "/Users/sagarpinninti/Desktop/SN/sn-voice-saas/public"
+    }
+  ]
+}

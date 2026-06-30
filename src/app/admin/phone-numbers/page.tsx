@@ -48,7 +48,7 @@ export default function PhoneNumbersAdminPage() {
     friendly: '',
   })
   const [provForm, setProvForm] = useState({
-    provider: 'telnyx',
+    provider: 'twilio',
     country: 'US',
     areaCode: '',
     contains: '',
@@ -145,7 +145,7 @@ export default function PhoneNumbersAdminPage() {
         return
       }
       toast(`Provisioned ${data.phoneNumber?.e164 || 'number'}`, 'success')
-      setProvForm({ provider: 'telnyx', country: 'US', areaCode: '', contains: '', tenantId: '', agentId: '', friendly: '' })
+      setProvForm({ provider: 'twilio', country: 'US', areaCode: '', contains: '', tenantId: '', agentId: '', friendly: '' })
       setProvisioning(false)
       await refresh()
     } finally {
@@ -320,8 +320,7 @@ export default function PhoneNumbersAdminPage() {
                   onChange={(e) => setProvForm({ ...provForm, provider: e.target.value })}
                   className="w-full h-9 px-3 rounded-md bg-card border border-border text-[13px] text-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
                 >
-                  <option value="telnyx">Telnyx</option>
-                  <option value="twilio" disabled>Twilio (manual only — buy in console)</option>
+                  <option value="twilio">Twilio</option>
                 </select>
               </div>
               <div>
@@ -462,7 +461,6 @@ export default function PhoneNumbersAdminPage() {
                   className="w-full h-9 px-3 rounded-md bg-card border border-border text-[13px] text-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
                 >
                   <option value="TWILIO">Twilio</option>
-                  <option value="TELNYX">Telnyx</option>
                 </select>
               </div>
               <div>
@@ -471,11 +469,11 @@ export default function PhoneNumbersAdminPage() {
                   id="providerExternalId"
                   value={form.providerExternalId}
                   onChange={(e) => setForm({ ...form, providerExternalId: e.target.value })}
-                  placeholder={form.provider === 'TELNYX' ? 'phone_number id' : 'PN...'}
+                  placeholder="PN..."
                   className="font-mono"
                 />
                 <p className="text-[10.5px] text-muted-foreground/70 mt-1">
-                  Provider's opaque ID for this number (Twilio PN sid, Telnyx phone_number id). Optional; used for provisioning automation.
+                  Twilio Phone Number SID (e.g. PNxxx). Optional; used for provisioning automation.
                 </p>
               </div>
               <div className="md:col-span-2 flex justify-end">

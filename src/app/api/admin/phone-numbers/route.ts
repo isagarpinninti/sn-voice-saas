@@ -40,8 +40,7 @@ export async function POST(req: NextRequest) {
     (typeof body.twilioSid === 'string' && body.twilioSid) ||
     ''
   const providerExternalId = providerExternalIdRaw ? providerExternalIdRaw.trim() : null
-  const rawProvider = typeof body.provider === 'string' ? body.provider.trim().toUpperCase() : 'TWILIO'
-  const provider = rawProvider === 'TELNYX' || rawProvider === 'FREESWITCH' ? rawProvider : 'TWILIO'
+  const provider = 'TWILIO'
   const friendly = typeof body.friendly === 'string' && body.friendly ? body.friendly.trim() : null
 
   if (!E164_RE.test(e164)) {

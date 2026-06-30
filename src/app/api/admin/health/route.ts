@@ -105,7 +105,6 @@ export async function GET() {
         ? { name: 'Twilio signature validation', category: 'telephony' as const, status: 'ok' as const, detail: 'Enforced' }
         : { name: 'Twilio signature validation', category: 'telephony' as const, status: 'warn' as const, detail: 'Disabled (set TWILIO_SIGNATURE_VALIDATION=true in production)' },
     ),
-    Promise.resolve(envCheck('Telnyx public key', 'telephony', 'TELNYX_PUBLIC_KEY', false)),
   ])
 
   const overall: Check['status'] = checks.some((c) => c.status === 'error')

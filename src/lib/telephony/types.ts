@@ -2,7 +2,7 @@
 // `X-Twilio-Signature`, Media Streams JSON envelope) live behind implementations
 // of TelephonyProvider; callers deal only in these types.
 
-export type TelephonyProviderName = 'twilio' | 'telnyx' | 'freeswitch'
+export type TelephonyProviderName = 'twilio' | 'freeswitch'
 
 export interface WebhookRequest {
   url: string

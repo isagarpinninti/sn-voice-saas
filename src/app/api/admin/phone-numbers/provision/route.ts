@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}))
-  const providerName = (String(body.provider || 'telnyx').toLowerCase() as TelephonyProviderName)
+  const providerName: TelephonyProviderName = 'twilio'
   const country = String(body.country || 'US').toUpperCase()
   const areaCode = body.areaCode ? String(body.areaCode).trim() : undefined
   const contains = body.contains ? String(body.contains).trim() : undefined
