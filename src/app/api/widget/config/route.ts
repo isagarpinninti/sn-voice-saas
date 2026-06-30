@@ -50,9 +50,11 @@ export async function GET(req: Request) {
     autoOpen:     instance.widgetAutoOpen,
     greeting:     instance.widgetGreeting     || null,
     agentName:    instance.widgetAgentName    || null,
-    showBranding: instance.widgetShowBranding,
-    logoUrl:      instance.widgetLogoUrl      || null,
-    borderRadius: instance.widgetBorderRadius || 'full',
+    showBranding:    instance.widgetShowBranding,
+    logoUrl:         instance.widgetLogoUrl          || null,
+    borderRadius:    instance.widgetBorderRadius     || 'full',
+    launcherLabel:   instance.widgetLauncherLabel    || 'Start a call',
+    launcherDark:    instance.widgetLauncherDark     ?? true,
   }
 
   // Per-agent override — look up by Agent.id (= saas_token stored on SN voice_agent)
@@ -69,9 +71,11 @@ export async function GET(req: Request) {
           autoOpen:     agent.widgetAutoOpen     ?? base.autoOpen,
           greeting:     agent.widgetGreeting     || base.greeting,
           agentName:    agent.widgetTitle        || agent.name || base.agentName,
-          showBranding: agent.widgetShowBranding ?? base.showBranding,
-          logoUrl:      agent.widgetLogoUrl      || base.logoUrl,
-          borderRadius: agent.widgetBorderRadius || base.borderRadius,
+          showBranding:  agent.widgetShowBranding  ?? base.showBranding,
+          logoUrl:       agent.widgetLogoUrl       || base.logoUrl,
+          borderRadius:  agent.widgetBorderRadius  || base.borderRadius,
+          launcherLabel: agent.widgetLauncherLabel || base.launcherLabel,
+          launcherDark:  agent.widgetLauncherDark  ?? base.launcherDark,
         },
         { headers: CORS_HEADERS }
       )

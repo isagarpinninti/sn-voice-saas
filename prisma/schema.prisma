@@ -122,9 +122,11 @@ model Instance {
   widgetAutoOpen     Boolean  @default(false)
   widgetGreeting     String?
   widgetAgentName    String?
-  widgetShowBranding Boolean  @default(true)
-  widgetLogoUrl      String?
-  widgetBorderRadius String?  @default("full")
+  widgetShowBranding   Boolean  @default(true)
+  widgetLogoUrl        String?
+  widgetBorderRadius   String?  @default("full")
+  widgetLauncherLabel  String?  @default("Start a call")
+  widgetLauncherDark   Boolean  @default(true)
 
   active         Boolean  @default(true)
   agents         Agent[]
@@ -159,9 +161,11 @@ model Agent {
   widgetAutoOpen     Boolean  @default(false)
   widgetGreeting     String?
   widgetTitle        String?
-  widgetShowBranding Boolean  @default(true)
-  widgetLogoUrl      String?
-  widgetBorderRadius String?  @default("full")
+  widgetShowBranding   Boolean  @default(true)
+  widgetLogoUrl        String?
+  widgetBorderRadius   String?  @default("full")
+  widgetLauncherLabel  String?
+  widgetLauncherDark   Boolean?
 
   active     Boolean  @default(true)
   tokens     ApiToken[]

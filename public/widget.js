@@ -23,7 +23,7 @@
   }
   var SN_USER_ID=getSnUserId()
 
-  var C={color:'#059669',pos:'right',name:'',brand:true,logo:'',radius:'full',mode:'voice_only',greeting:''}
+  var C={color:'#059669',pos:'right',name:'',brand:true,logo:'',radius:'full',mode:'voice_only',greeting:'',launcherLabel:'Start a call',launcherDark:true}
   var pendingNavUrls=[]
 
   function detectOriginPortal(){
@@ -89,6 +89,8 @@
     if(c.borderRadius)C.radius=c.borderRadius
     if(c.widgetMode)C.mode=c.widgetMode
     if(c.greeting)C.greeting=c.greeting
+    if(c.launcherLabel)C.launcherLabel=c.launcherLabel
+    if(c.launcherDark===false)C.launcherDark=false
   }).catch(function(){}).finally(build)
 
   /* ── STYLES ── */
@@ -137,15 +139,17 @@
 /* ── LAUNCHER ── */
 #zv-launcher{
   display:inline-flex;align-items:center;
-  background:#fff;
+  background:var(--zvl-bg,#0f172a);
   border-radius:999px;
-  padding:5px 5px 5px 5px;
-  gap:0;
-  box-shadow:0 2px 12px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.06);
+  padding:5px 20px 5px 5px;
+  gap:12px;
+  box-shadow:0 2px 16px rgba(0,0,0,.22),0 0 0 1px rgba(255,255,255,.06);
   cursor:pointer;
   transition:box-shadow .2s,transform .2s
 }
-#zv-launcher:hover{box-shadow:0 6px 24px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.12);transform:translateY(-2px)}
+#zv-launcher:hover{box-shadow:0 6px 28px rgba(0,0,0,.32);transform:translateY(-2px)}
+#zv-launcher.zv-light{background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.06)}
+#zv-launcher.zv-light:hover{box-shadow:0 6px 24px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.12)}
 #zv-orb{
   width:40px;height:40px;flex-shrink:0;
   animation:zvhue 6s ease-in-out infinite;
@@ -153,17 +157,17 @@
 }
 #zv-start,#zv-chat-start{
   display:inline-flex;align-items:center;gap:8px;
-  height:38px;padding:0 18px 0 12px;margin-left:6px;
-  border-radius:999px;border:none;outline:none;
-  background:var(--zvc);
-  color:#fff;
+  border:none;outline:none;background:transparent;
+  color:var(--zvl-txt,#fff);
   font-size:13.5px;font-weight:600;
   cursor:pointer;letter-spacing:-.01em;white-space:nowrap;
-  transition:filter .15s,transform .1s;
-  box-shadow:0 2px 8px rgba(0,0,0,.2)
+  padding:0;
+  transition:opacity .15s
 }
-#zv-start:hover,#zv-chat-start:hover{filter:brightness(1.08);transform:scale(1.02)}
-#zv-start svg,#zv-chat-start svg{width:14px;height:14px;flex-shrink:0}
+#zv-launcher.zv-light #zv-start,
+#zv-launcher.zv-light #zv-chat-start{color:#111827}
+#zv-start:hover,#zv-chat-start:hover{opacity:.85}
+#zv-start svg,#zv-chat-start svg{width:15px;height:15px;flex-shrink:0}
 
 /* ── VOICE CARD ── */
 #zv-card{
@@ -487,8 +491,9 @@
     var mode=C.mode,isBoth=(mode==='both'),isChat=(mode==='chat_only'||isBoth),isVoice=(mode==='voice_only'||isBoth)
 
     /* Launcher */
-    var btnLabel=isBoth?'Ask Anything':(isVoice?'Start a call':'Chat with us')
+    var btnLabel=C.launcherLabel||(isBoth?'Ask Anything':(isVoice?'Start a call':'Chat with us'))
     var btnId=isChat?'zv-chat-start':'zv-start'
+    var launcherClass=C.launcherDark===false?'zv-light':''
     var launcherHTML='<button id="zv-orb" class="zvorb" aria-label="ZeVox"></button>'
       +'<button id="'+btnId+'">'+PHONE_SVG+btnLabel+'</button>'
 
@@ -549,7 +554,7 @@
       ].join('')
     }
 
-    el.innerHTML='<div id="zv-launcher">'+launcherHTML+'</div>'+voiceHTML+chatHTML
+    el.innerHTML='<div id="zv-launcher"'+(launcherClass?' class="'+launcherClass+'"':'')+'>'+launcherHTML+'</div>'+voiceHTML+chatHTML
     document.body.appendChild(el)
     el.style[C.pos==='left'?'left':'right']='20px'
     el.style.setProperty('--zvc', C.color)

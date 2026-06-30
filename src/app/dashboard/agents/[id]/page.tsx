@@ -33,6 +33,8 @@ interface WidgetConfig {
   widgetShowBranding: boolean
   widgetLogoUrl: string
   widgetBorderRadius: string
+  widgetLauncherLabel: string
+  widgetLauncherDark: boolean
 }
 
 interface ChatMsg { role: 'user' | 'agent'; text: string }
@@ -47,6 +49,8 @@ const DEFAULT_WIDGET: WidgetConfig = {
   widgetShowBranding: true,
   widgetLogoUrl: '',
   widgetBorderRadius: 'full',
+  widgetLauncherLabel: 'Start a call',
+  widgetLauncherDark: true,
 }
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -423,6 +427,35 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                         className="flex-1 capitalize text-[10px]"
                       >
                         {r}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px]">Launcher button label</Label>
+                  <Input
+                    value={widget.widgetLauncherLabel}
+                    onChange={e => updateWidget('widgetLauncherLabel', e.target.value)}
+                    placeholder="Start a call"
+                    className="text-[12px]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px]">Launcher theme</Label>
+                  <div className="flex gap-2">
+                    {[{label:'Dark',value:true},{label:'Light',value:false}].map(t => (
+                      <Button
+                        key={String(t.value)}
+                        type="button"
+                        size="sm"
+                        variant={widget.widgetLauncherDark === t.value ? 'default' : 'outline'}
+                        onClick={() => updateWidget('widgetLauncherDark', t.value)}
+                        className="flex-1 text-[10px]"
+                      >
+                        {t.label}
                       </Button>
                     ))}
                   </div>
