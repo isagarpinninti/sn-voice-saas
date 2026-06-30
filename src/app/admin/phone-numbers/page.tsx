@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useToast } from '@/components/ui/toast'
 import { useConfirm } from '@/components/ui/confirm-dialog'
-import { Phone, Plus, Trash2, Building2, Bot, Link2, Sparkles, PhoneOutgoing } from 'lucide-react'
+import { Phone, Plus, Trash2, Building2, Bot, Link2, Sparkles, PhoneOutgoing, Edit2, Check, X } from 'lucide-react'
 
 type PhoneNumber = {
   id: string
@@ -58,6 +58,13 @@ export default function PhoneNumbersAdminPage() {
   })
   const [tenantAgents, setTenantAgents] = useState<Agent[]>([])
   const [provTenantAgents, setProvTenantAgents] = useState<Agent[]>([])
+
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editAgentId, setEditAgentId] = useState('')
+  const [editFriendly, setEditFriendly] = useState('')
+  const [editAgents, setEditAgents] = useState<Agent[]>([])
+  const [savingEdit, setSavingEdit] = useState(false)
 
   async function refresh() {
     setLoading(true)
@@ -201,6 +208,56 @@ export default function PhoneNumbersAdminPage() {
       return
     }
     toast(`Calling ${trimmed}…`, 'success')
+  }
+
+  async function startEdit(p: PhoneNumber) {
+    setEditingId(p.id)
+    setEditFriendly(p.friendly || '')
+    setEditAgentId(p.agentId || '')
+    // Load agents for this tenant
+    setEditAgents([])
+    fetch(`/api/admin/tenants/${encodeURIComponent(p.tenantId)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const agents: Agent[] = Array.isArray(d?.tenant?.agents) ? d.tenant.agents.filter((a: any) => a.active) : []
+        setEditAgents(agents)
+      })
+      .catch(() => {})
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditAgentId('')
+    setEditFriendly('')
+    setEditAgents([])
+  }
+
+  async function saveEdit(id: string) {
+    setSavingEdit(true)
+    try {
+      const res = await fetch(`/api/admin/phone-numbers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: editAgentId || null, friendly: editFriendly }),
+      })
+      if (!res.ok) { toast('Save failed', 'error'); return }
+      toast('Updated', 'success')
+      cancelEdit()
+      await refresh()
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function toggleActive(p: PhoneNumber) {
+    const res = await fetch(`/api/admin/phone-numbers/${p.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !p.active }),
+    })
+    if (!res.ok) { toast('Update failed', 'error'); return }
+    toast(p.active ? 'Deactivated' : 'Activated', 'success')
+    await refresh()
   }
 
   async function remove(p: PhoneNumber) {
@@ -446,55 +503,92 @@ export default function PhoneNumbersAdminPage() {
           <CardContent className="p-0">
             <div className="divide-y divide-border">
               {rows.map((p) => (
-                <div key={p.id} className="flex items-start justify-between gap-4 p-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Phone className="w-4 h-4 text-primary shrink-0" />
-                      <span className="font-mono text-[14px] font-semibold text-foreground">{p.e164}</span>
-                      {p.friendly && <span className="text-[12px] text-muted-foreground">· {p.friendly}</span>}
-                      {!p.active && <Badge variant="outline">Inactive</Badge>}
-                      <Badge variant={p.tenant.plan === 'PREMIUM' || p.tenant.plan === 'ENTERPRISE' ? 'default' : 'success'}>
-                        {p.tenant.plan}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-4 text-[11.5px] text-muted-foreground flex-wrap">
-                      <span className="inline-flex items-center gap-1">
-                        <Building2 className="w-3 h-3" />
-                        {p.tenant.company || p.tenant.user.email || p.tenantId.slice(0, 10) + '…'}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Bot className="w-3 h-3" />
-                        {p.agent?.name || '(orchestrator picks)'}
-                      </span>
-                      {p.instance && (
+                <div key={p.id} className="p-4 space-y-2">
+                  {/* Row header — always visible */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <Phone className="w-4 h-4 text-primary shrink-0" />
+                        <span className="font-mono text-[14px] font-semibold text-foreground">{p.e164}</span>
+                        {p.friendly && <span className="text-[12px] text-muted-foreground">· {p.friendly}</span>}
+                        <Badge variant={p.active ? 'success' : 'outline'}>{p.active ? 'Active' : 'Inactive'}</Badge>
+                        <Badge variant={p.tenant.plan === 'PREMIUM' || p.tenant.plan === 'ENTERPRISE' ? 'default' : 'success'}>
+                          {p.tenant.plan}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-4 text-[11.5px] text-muted-foreground flex-wrap">
                         <span className="inline-flex items-center gap-1">
-                          <Link2 className="w-3 h-3" />
-                          {p.instance.snInstanceUrl?.replace('https://', '') || p.instance.name}
+                          <Building2 className="w-3 h-3" />
+                          {p.tenant.company || p.tenant.user.email || p.tenantId.slice(0, 10) + '…'}
                         </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Bot className="w-3 h-3" />
+                          {p.agent?.name || <span className="text-amber-400">No agent assigned</span>}
+                        </span>
+                        {p.instance && (
+                          <span className="inline-flex items-center gap-1">
+                            <Link2 className="w-3 h-3" />
+                            {p.instance.snInstanceUrl?.replace('https://', '') || p.instance.name}
+                          </span>
+                        )}
+                        <Badge variant="outline">{p.provider}</Badge>
+                        {p.providerExternalId && <span className="font-mono text-[10.5px]">{p.providerExternalId.slice(0, 14)}…</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {editingId === p.id ? (
+                        <>
+                          <button type="button" onClick={() => saveEdit(p.id)} disabled={savingEdit}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-emerald-500 hover:bg-emerald-500/10 transition-colors" title="Save">
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button type="button" onClick={cancelEdit} disabled={savingEdit}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:bg-secondary transition-colors" title="Cancel">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" onClick={() => startEdit(p)}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors" title="Edit agent / friendly name">
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button type="button" onClick={() => toggleActive(p)}
+                            className={`inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors ${p.active ? 'text-amber-500 hover:bg-amber-500/10' : 'text-emerald-500 hover:bg-emerald-500/10'}`}
+                            title={p.active ? 'Deactivate' : 'Activate'}>
+                            <Phone className="w-4 h-4" />
+                          </button>
+                          <button type="button" onClick={() => callOut(p)}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-primary/70 hover:bg-primary/10 hover:text-primary transition-colors" title="Place outbound call">
+                            <PhoneOutgoing className="w-4 h-4" />
+                          </button>
+                          <button type="button" onClick={() => remove(p)}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-destructive/70 hover:bg-destructive/10 hover:text-destructive transition-colors" title="Remove">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
                       )}
-                      <Badge variant="outline">{p.provider}</Badge>
-                      {p.providerExternalId && <span className="font-mono text-[10.5px]">{p.providerExternalId.slice(0, 14)}…</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => callOut(p)}
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-md text-primary/70 hover:bg-primary/10 hover:text-primary transition-colors"
-                      aria-label="Call out"
-                      title="Place an outbound call from this number"
-                    >
-                      <PhoneOutgoing className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => remove(p)}
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-md text-destructive/70 hover:bg-destructive/10 hover:text-destructive transition-colors"
-                      aria-label="Remove"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+
+                  {/* Inline edit form */}
+                  {editingId === p.id && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border">
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Friendly name</label>
+                        <Input value={editFriendly} onChange={e => setEditFriendly(e.target.value)}
+                          placeholder="e.g. IT Helpdesk" className="text-[12px] h-8" autoFocus />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Assigned agent</label>
+                        <select value={editAgentId} onChange={e => setEditAgentId(e.target.value)}
+                          className="w-full h-8 text-[12px] rounded-md border border-input bg-background px-2 outline-none focus:ring-1 focus:ring-primary">
+                          <option value="">{editAgents.length === 0 ? 'Loading…' : '(orchestrator picks)'}</option>
+                          {editAgents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
