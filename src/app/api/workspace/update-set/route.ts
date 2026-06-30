@@ -17,14 +17,14 @@ export async function GET(req: NextRequest) {
 
   const tenant = await db.tenant.findFirst({
     where: { user: { email: session.user.email } },
-    include: { apiTokens: { where: { active: true }, take: 1 } },
+    include: { tokens: { where: { active: true }, take: 1 } },
   })
 
   if (!tenant) {
     return NextResponse.json({ error: 'No tenant found' }, { status: 404 })
   }
 
-  const token = tenant.apiTokens[0]?.token || ''
+  const token = tenant.tokens[0]?.token || ''
   const serverUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
   const panelUrl = `${serverUrl}/panel`
 
