@@ -427,7 +427,7 @@ function AddNumbersStep({ agents, onAdded }: { agents: Agent[]; onAdded: () => v
 
 // ── Step 3: Manage (assign + active toggle + delete) ─────────────────────────
 
-function ManageStep({ numbers, agents, onRefresh }: { numbers: PhoneNumber[]; agents: Agent[]; onRefresh: () => void }) {
+function ManageStep({ numbers, agents, onRefresh, onAddNumber }: { numbers: PhoneNumber[]; agents: Agent[]; onRefresh: () => void; onAddNumber: () => void }) {
   const { toast } = useToast()
   const [editingId, setEditingId]   = useState<string | null>(null)
   const [editFriendly, setEditFriendly] = useState('')
@@ -481,12 +481,22 @@ function ManageStep({ numbers, agents, onRefresh }: { numbers: PhoneNumber[]; ag
 
   if (numbers.length === 0) {
     return (
-      <EmptyState icon={Phone} title="No numbers added yet" description="Import or buy a number in the previous step." />
+      <div className="space-y-4">
+        <EmptyState icon={Phone} title="No numbers added yet" description="Import or buy a number to get started." />
+        <Button onClick={onAddNumber} className="mx-auto flex">
+          <Phone className="w-4 h-4" /> Add phone number
+        </Button>
+      </div>
     )
   }
 
   return (
     <div className="space-y-2">
+      <div className="flex justify-end mb-2">
+        <Button size="sm" onClick={onAddNumber}>
+          <Phone className="w-3.5 h-3.5" /> Add phone number
+        </Button>
+      </div>
       {numbers.map(p => (
         <Card key={p.id} className={!p.active ? 'opacity-60' : ''}>
           <CardContent className="p-4">
@@ -700,7 +710,7 @@ export default function PhoneNumbersPage() {
         <AddNumbersStep agents={agents} onAdded={() => { load(); setStep(3) }} />
       )}
       {step === 3 && conn?.connected && (
-        <ManageStep numbers={numbers} agents={agents} onRefresh={load} />
+        <ManageStep numbers={numbers} agents={agents} onRefresh={load} onAddNumber={() => setStep(2)} />
       )}
     </div>
   )
