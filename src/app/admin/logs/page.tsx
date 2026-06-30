@@ -192,10 +192,12 @@ export default function LiveLogsPage() {
       {/* Log stream */}
       <Card className="overflow-hidden">
         <div className="max-h-[calc(100vh-280px)] overflow-y-auto font-mono text-[12px]">
-          {logs.length === 0 && (
+          {logs.length === 0 && !error && (
             <div className="px-6 py-16 text-center text-muted-foreground">
-              <p className="text-[14px] mb-1">No logs yet</p>
-              <p className="text-[11px]">Trigger the voice widget — events appear here in real time.</p>
+              <p className="text-[14px] mb-1 text-foreground">No logs yet</p>
+              <p className="text-[11px] mt-1">The server logs a startup entry on every restart.</p>
+              <p className="text-[11px] mt-0.5">If you see nothing, try refreshing — the server may have just restarted.</p>
+              <p className="text-[11px] mt-3 text-muted-foreground/60">Logs also appear when tenants open the voice widget or make API calls.</p>
             </div>
           )}
           {logs.map((log) => (

@@ -614,7 +614,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
         </Section>
 
         {/* Test Agent */}
-        <Section title="Test agent" description="Send a message and see how this agent responds via the chat API.">
+        <Section title="Test agent" description="Send a message and see how this agent responds via the chat API. Requires an active ServiceNow connection with a configured LLM.">
           <Card>
             <CardContent className="p-0">
               {/* Chat header */}

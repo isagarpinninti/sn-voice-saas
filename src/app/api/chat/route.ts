@@ -116,7 +116,7 @@ export async function POST(req: Request) {
     })
 
     llmEndpoint  = ep
-    llmKey       = llmCfg.api_key || ''
+    llmKey       = llmCfg.api_key || process.env.GROQ_API_KEY || ''
     llmModel     = llmCfg.model   || 'llama-3.3-70b-versatile'
     systemPrompt = agentCfg?.system_prompt
       ? agentCfg.system_prompt + '\n\nYou are responding via text chat. Be concise and actionable.'
@@ -186,6 +186,14 @@ export async function POST(req: Request) {
     { role: 'system', content: systemPrompt },
     ...history.slice(-20),
   ]
+
+  // ── Guard: no LLM key ────────────────────────────────────────────────
+  if (!llmKey) {
+    return NextResponse.json(
+      { error: 'Chat is not configured — no LLM API key. Check your ServiceNow connection and agent settings.', session_id: sessionId },
+      { status: 503, headers: CORS }
+    )
+  }
 
   // ── First LLM call ────────────────────────────────────────────────────
   const llmBody: any = {
@@ -287,7 +295,7 @@ export async function POST(req: Request) {
     if (secondRes.ok) { llmData = await secondRes.json(); choice = llmData.choices?.[0] }
   }
 
-  const reply = (choice?.message?.content || '').trim()
+  const reply = (choice?.message?.content || '').trim() || 'I was unable to generate a response. Please try again.'
   history.push({ role: 'assistant', content: reply })
   await db.chatSession.update({ where: { sessionId }, data: { history } }).catch(() => {})
 
