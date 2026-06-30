@@ -468,7 +468,7 @@ AiVoiceKbSearcher.prototype = {
 
             if (content.indexOf(term) !== -1) {
                 score += 1;
-                var regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+                var regex = new RegExp(term.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&'), 'gi');
                 var matches = content.match(regex);
                 if (matches && matches.length > 1) {
                     score += Math.min(matches.length - 1, 3);
