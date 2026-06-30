@@ -1,274 +1,435 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
-import { MessageSquare, ChevronRight, X, Loader2, User, Bot, Wrench, RefreshCw } from 'lucide-react'
+import {
+  MessageSquare, X, Loader2, User, Bot, Wrench,
+  RefreshCw, Search, Clock, Hash,
+} from 'lucide-react'
 
-interface Session {
-  sys_id: string
-  agent: string
-  channel: string
-  status: string
-  started_at: string
-  ended_at: string
-  messages: number
-  tokens: number
-  escalated: boolean
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type HistoryMessage = {
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string | { type: string; text?: string; tool_use_id?: string; name?: string; input?: unknown }[]
+  tool_calls?: { id: string; function: { name: string; arguments: string } }[]
+  tool_call_id?: string
+  name?: string
 }
 
-interface LogEntry {
-  sequence: number
-  message_type: string
-  message: string
-  tool: string
-  tool_input: string
-  tool_output: string
-  token_count: number
-  timestamp: string
+type ConversationRow = {
+  id: string
+  sessionId: string
+  agentId: string
+  agentName: string | null
+  snUserId: string | null
+  messageCount: number
+  userMessageCount: number
+  lastMessage: string | null
+  lastMessageRole: string | null
+  createdAt: string
+  updatedAt: string
 }
 
-interface SessionDetail {
-  sys_id: string
-  agent: string
-  channel: string
-  status: string
-  started_at: string
-  ended_at: string
-  summary: string
-  escalated: boolean
-  logs: LogEntry[]
+type ConversationDetail = {
+  sessionId: string
+  agentName: string | null
+  snUserId: string | null
+  history: HistoryMessage[]
+  createdAt: string
+  updatedAt: string
 }
 
-function statusBadge(status: string) {
-  if (status === 'completed') return <Badge variant="success" dot>Completed</Badge>
-  if (status === 'active')    return <Badge variant="default" dot>Active</Badge>
-  if (status === 'expired')   return <Badge variant="secondary" dot>Expired</Badge>
-  return <Badge variant="secondary">{status}</Badge>
-}
-
-function channelIcon(channel: string) {
-  if (channel === 'phone') return '📞'
-  if (channel === 'chat')  return '💬'
-  return '🔊'
-}
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function relativeTime(dt: string) {
   if (!dt) return '—'
   const diff = Date.now() - new Date(dt).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1)   return 'just now'
-  if (m < 60)  return `${m}m ago`
+  const m = Math.floor(diff / 60_000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
   const h = Math.floor(m / 60)
-  if (h < 24)  return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  if (d < 7) return `${d}d ago`
+  return new Date(dt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function duration(start: string, end: string) {
-  if (!start || !end) return '—'
-  const s = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000)
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
+function msgText(content: HistoryMessage['content']): string {
+  if (!content) return ''
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .map(c => (typeof c === 'string' ? c : c.text || c.name || ''))
+      .join(' ')
+      .trim()
+  }
+  return ''
 }
 
-function msgIcon(type: string) {
-  if (type === 'user')        return <User className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-  if (type === 'agent')       return <Bot className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-  if (type === 'tool_call' || type === 'tool_result') return <Wrench className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-  return <MessageSquare className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+function initials(name: string | null | undefined) {
+  if (!name) return '?'
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 }
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+
+function AgentAvatar({ name }: { name: string | null }) {
+  return (
+    <div className="w-8 h-8 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center shrink-0">
+      {initials(name)}
+    </div>
+  )
+}
+
+function MessageBubble({ msg, idx }: { msg: HistoryMessage; idx: number }) {
+  const text = msgText(msg.content)
+  if (!text && !msg.tool_calls?.length) return null
+
+  const isUser = msg.role === 'user'
+  const isAssistant = msg.role === 'assistant'
+  const isTool = msg.role === 'tool'
+  const isSystem = msg.role === 'system'
+
+  if (isSystem) return null
+
+  if (isTool) {
+    return (
+      <div key={idx} className="flex gap-2 items-start">
+        <div className="w-5 h-5 rounded bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
+          <Wrench className="w-2.5 h-2.5 text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] text-amber-400/70 uppercase tracking-wider mb-0.5">
+            Tool result{msg.name ? ` · ${msg.name}` : ''}
+          </p>
+          <div className="bg-amber-500/8 border border-amber-500/15 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-amber-200/80 break-all leading-relaxed">
+            {text.length > 300 ? text.slice(0, 300) + '…' : text}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (msg.tool_calls?.length) {
+    return (
+      <div key={idx} className="flex gap-2 items-start">
+        <div className="w-5 h-5 rounded bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
+          <Wrench className="w-2.5 h-2.5 text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0 space-y-1">
+          {msg.tool_calls.map((tc, ti) => (
+            <div key={ti}>
+              <p className="text-[10px] text-amber-400/70 uppercase tracking-wider mb-0.5">
+                Calling tool · {tc.function.name}
+              </p>
+              <div className="bg-amber-500/8 border border-amber-500/15 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-amber-200/80 break-all leading-relaxed">
+                {(() => {
+                  try {
+                    const parsed = JSON.parse(tc.function.arguments)
+                    return JSON.stringify(parsed, null, 2).slice(0, 300)
+                  } catch {
+                    return tc.function.arguments.slice(0, 300)
+                  }
+                })()}
+              </div>
+            </div>
+          ))}
+          {text && (
+            <div className="bg-muted rounded-xl px-3 py-2 text-[12.5px] text-foreground leading-relaxed max-w-[88%] rounded-tl-sm">
+              {text}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div key={idx} className={`flex gap-2 items-end ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+      {isAssistant && (
+        <div className="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0 mb-0.5">
+          <Bot className="w-2.5 h-2.5 text-emerald-400" />
+        </div>
+      )}
+      {isUser && (
+        <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mb-0.5">
+          <User className="w-2.5 h-2.5 text-primary" />
+        </div>
+      )}
+      <div className={`max-w-[82%] flex flex-col gap-0.5 ${isUser ? 'items-end' : 'items-start'}`}>
+        <div className={`px-3 py-2 rounded-2xl text-[12.5px] leading-relaxed break-words ${
+          isUser
+            ? 'bg-primary text-primary-foreground rounded-br-sm'
+            : 'bg-muted text-foreground rounded-bl-sm'
+        }`}>
+          {text}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────
 
 export default function ConversationsPage() {
   const { toast } = useToast()
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [offset, setOffset] = useState(0)
-  const [hasMore, setHasMore] = useState(false)
-  const [selected, setSelected] = useState<SessionDetail | null>(null)
+
+  const [sessions, setSessions]       = useState<ConversationRow[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor]   = useState<string | null>(null)
+  const [hasMore, setHasMore]         = useState(false)
+  const [search, setSearch]           = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  const [selected, setSelected]         = useState<ConversationDetail | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
-  const LIMIT = 20
+  const [selectedId, setSelectedId]     = useState<string | null>(null)
 
-  useEffect(() => { loadSessions(0, true) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const transcriptRef = useRef<HTMLDivElement>(null)
+  const searchTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  async function loadSessions(off: number, reset = false) {
-    if (reset) setLoading(true); else setRefreshing(true)
+  // Debounce search
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => setDebouncedSearch(search), 350)
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
+  }, [search])
+
+  useEffect(() => { load(true) }, [debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function load(reset = false) {
+    if (reset) { setLoading(true); setNextCursor(null) }
+    else setLoadingMore(true)
+
     try {
-      const res = await fetch(`/api/conversations?limit=${LIMIT}&offset=${off}`)
-      const d = await res.json()
-      if (d.error && !d.sessions?.length) {
-        toast(d.error || 'Failed to load conversations', 'error')
-      }
-      const rows: Session[] = d.sessions || []
-      setSessions(prev => reset ? rows : [...prev, ...rows])
-      setHasMore(rows.length === LIMIT)
-      setOffset(off + rows.length)
+      const params = new URLSearchParams({ limit: '25' })
+      if (!reset && nextCursor) params.set('cursor', nextCursor)
+      if (debouncedSearch) params.set('search', debouncedSearch)
+
+      const res = await fetch(`/api/conversations?${params}`)
+      const d   = await res.json()
+      if (d.error) { toast(d.error, 'error'); return }
+
+      setSessions(prev => reset ? d.sessions : [...prev, ...d.sessions])
+      setNextCursor(d.nextCursor)
+      setHasMore(d.hasMore)
     } catch {
       toast('Failed to load conversations', 'error')
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
     }
-    setLoading(false)
-    setRefreshing(false)
   }
 
-  async function openDetail(sysId: string) {
+  async function openDetail(s: ConversationRow) {
+    if (selectedId === s.sessionId) return
+    setSelectedId(s.sessionId)
     setLoadingDetail(true)
+    setSelected(null)
     try {
-      const res = await fetch(`/api/conversations/${sysId}`)
-      const d = await res.json()
-      if (d.error) { toast(d.error, 'error'); setLoadingDetail(false); return }
+      const res = await fetch(`/api/conversations/${s.sessionId}`)
+      const d   = await res.json()
+      if (d.error) { toast(d.error, 'error'); setSelectedId(null); return }
       setSelected(d)
-    } catch { toast('Failed to load session', 'error') }
-    setLoadingDetail(false)
+      setTimeout(() => transcriptRef.current?.scrollTo({ top: 0 }), 50)
+    } catch {
+      toast('Failed to load conversation', 'error')
+      setSelectedId(null)
+    } finally {
+      setLoadingDetail(false)
+    }
   }
 
-  if (loading) return (
-    <div>
-      <PageHeader title="Conversations" description="All voice and chat sessions from your ServiceNow instance." />
-      <p className="text-[13px] text-muted-foreground">Loading conversations...</p>
-    </div>
-  )
+  const filteredSessions = sessions.filter(s => {
+    if (!debouncedSearch) return true
+    const q = debouncedSearch.toLowerCase()
+    return (
+      s.agentName?.toLowerCase().includes(q) ||
+      s.snUserId?.toLowerCase().includes(q) ||
+      s.lastMessage?.toLowerCase().includes(q)
+    )
+  })
 
   return (
-    <div>
+    <div className="animate-fade-up h-full">
       <PageHeader
         title="Conversations"
-        description="All voice and chat sessions from your ServiceNow instance."
+        description="Chat sessions from your widget — message history, agents, and users."
         actions={
-          <Button size="sm" variant="outline" onClick={() => loadSessions(0, true)} disabled={refreshing}>
-            {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          <Button size="sm" variant="outline" onClick={() => load(true)} disabled={loading}>
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             Refresh
           </Button>
         }
       />
 
-      {sessions.length === 0 ? (
+      {/* Search bar */}
+      <div className="relative mb-5">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+        <Input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by agent, user or message…"
+          className="pl-9 h-9 text-[13px]"
+        />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-[72px] rounded-xl bg-secondary/40 animate-pulse" />
+          ))}
+        </div>
+      ) : filteredSessions.length === 0 ? (
         <EmptyState
           icon={MessageSquare}
-          title="No conversations yet"
-          description="Sessions appear here once users start interacting with your voice or chat widget."
+          title={debouncedSearch ? 'No matches' : 'No conversations yet'}
+          description={
+            debouncedSearch
+              ? 'Try a different search term.'
+              : 'Sessions appear here once users start chatting with your widget.'
+          }
         />
       ) : (
-        <div className="flex gap-6">
-          {/* Session list */}
-          <div className="flex-1 min-w-0 space-y-2">
-            {sessions.map(s => (
-              <Card
-                key={s.sys_id}
-                className={`cursor-pointer transition-colors hover:border-border/80 ${selected?.sys_id === s.sys_id ? 'border-primary/40 bg-primary/[0.02]' : ''}`}
-                onClick={() => openDetail(s.sys_id)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="text-lg shrink-0 mt-0.5">{channelIcon(s.channel)}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-[13px] font-semibold text-foreground truncate">{s.agent || 'Unknown agent'}</span>
-                        {statusBadge(s.status)}
-                        {s.escalated && <Badge variant="destructive">Escalated</Badge>}
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
-                        <span>{relativeTime(s.started_at)}</span>
-                        <span>·</span>
-                        <span>{duration(s.started_at, s.ended_at)}</span>
-                        <span>·</span>
-                        <span>{s.messages} messages</span>
-                        {s.tokens > 0 && <><span>·</span><span>{s.tokens.toLocaleString()} tokens</span></>}
-                      </div>
+        <div className="flex gap-5 items-start">
+          {/* ── Session list ── */}
+          <div className="flex-1 min-w-0 space-y-1.5">
+            {filteredSessions.map(s => {
+              const isActive = selectedId === s.sessionId
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => openDetail(s)}
+                  className={`w-full text-left rounded-xl border transition-all px-4 py-3 flex gap-3 items-start group
+                    ${isActive
+                      ? 'border-primary/40 bg-primary/[0.04] shadow-sm'
+                      : 'border-border bg-card hover:border-border/80 hover:bg-secondary/30'
+                    }`}
+                >
+                  <AgentAvatar name={s.agentName} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <span className="text-[13px] font-semibold text-foreground truncate">
+                        {s.agentName || 'Unknown agent'}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground shrink-0">{relativeTime(s.updatedAt)}</span>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-1" />
+                    <p className={`text-[12px] truncate mb-1 ${
+                      s.lastMessage ? 'text-muted-foreground' : 'text-muted-foreground/40 italic'
+                    }`}>
+                      {s.lastMessage
+                        ? (s.lastMessageRole === 'user' ? 'User: ' : 'Agent: ') + s.lastMessage
+                        : 'No messages'}
+                    </p>
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground/60">
+                      <span className="inline-flex items-center gap-1">
+                        <Hash className="w-2.5 h-2.5" />
+                        {s.userMessageCount} {s.userMessageCount === 1 ? 'message' : 'messages'}
+                      </span>
+                      {s.snUserId && (
+                        <span className="inline-flex items-center gap-1 truncate max-w-[120px]">
+                          <User className="w-2.5 h-2.5 shrink-0" />
+                          {s.snUserId}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </button>
+              )
+            })}
 
             {hasMore && (
-              <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => loadSessions(offset)} disabled={refreshing}>
-                {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-1"
+                onClick={() => load(false)}
+                disabled={loadingMore}
+              >
+                {loadingMore ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                 Load more
               </Button>
             )}
           </div>
 
-          {/* Detail panel */}
-          {(selected || loadingDetail) && (
-            <div className="w-[420px] shrink-0">
-              <Card className="sticky top-0">
-                <CardContent className="p-0">
-                  {loadingDetail ? (
-                    <div className="flex items-center justify-center h-48">
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          {/* ── Detail panel ── */}
+          <div className={`w-[400px] shrink-0 transition-opacity ${selectedId ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <Card className="sticky top-4 overflow-hidden">
+              {loadingDetail ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : selected && (
+                <>
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-border">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <AgentAvatar name={selected.agentName} />
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-foreground truncate">
+                          {selected.agentName || 'Unknown agent'}
+                        </p>
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <Clock className="w-2.5 h-2.5" />
+                          <span>{new Date(selected.createdAt).toLocaleString(undefined, {
+                            month: 'short', day: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
+                          })}</span>
+                        </div>
+                      </div>
                     </div>
-                  ) : selected && (
-                    <>
-                      {/* Detail header */}
-                      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-border">
-                        <div>
-                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                            <span className="text-[13px] font-semibold text-foreground">{selected.agent}</span>
-                            {statusBadge(selected.status)}
-                          </div>
-                          <p className="text-[11px] text-muted-foreground">
-                            {new Date(selected.started_at).toLocaleString()} · {duration(selected.started_at, selected.ended_at)}
-                          </p>
-                        </div>
-                        <button onClick={() => setSelected(null)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
+                    <button
+                      onClick={() => { setSelected(null); setSelectedId(null) }}
+                      className="text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
 
-                      {/* Summary */}
-                      {selected.summary && (
-                        <div className="px-4 py-3 border-b border-border bg-muted/30">
-                          <p className="text-[11px] text-muted-foreground/70 uppercase tracking-wider font-medium mb-1">Summary</p>
-                          <p className="text-[12.5px] text-foreground leading-relaxed">{selected.summary}</p>
-                        </div>
-                      )}
+                  {/* Meta pills */}
+                  <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/20 flex-wrap">
+                    <Badge variant="outline" className="text-[10px]">
+                      {(selected.history as HistoryMessage[]).filter(m => m.role === 'user').length} user msgs
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {(selected.history as HistoryMessage[]).filter(m => m.role === 'assistant').length} agent msgs
+                    </Badge>
+                    {selected.snUserId && (
+                      <Badge variant="outline" className="text-[10px] font-mono">
+                        {selected.snUserId}
+                      </Badge>
+                    )}
+                  </div>
 
-                      {/* Transcript */}
-                      <div className="max-h-[520px] overflow-y-auto px-4 py-3 space-y-3">
-                        {selected.logs.length === 0 && (
-                          <p className="text-[12px] text-muted-foreground text-center py-6">No transcript available.</p>
-                        )}
-                        {selected.logs.map((log, i) => {
-                          const isUser   = log.message_type === 'user'
-                          const isAgent  = log.message_type === 'agent'
-                          const isTool   = log.message_type === 'tool_call' || log.message_type === 'tool_result'
-                          const isSystem = log.message_type === 'system'
-                          if (isSystem) return null
-                          return (
-                            <div key={i} className={`flex gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                              <div className="shrink-0 mt-0.5">{msgIcon(log.message_type)}</div>
-                              <div className={`max-w-[85%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
-                                {isTool && (
-                                  <p className="text-[9px] text-amber-400/70 uppercase tracking-wider font-medium px-1">
-                                    {log.message_type === 'tool_call' ? `Tool: ${log.tool || 'unknown'}` : 'Tool result'}
-                                  </p>
-                                )}
-                                <div className={`px-3 py-2 rounded-xl text-[12px] leading-relaxed break-words ${
-                                  isUser  ? 'bg-primary text-primary-foreground rounded-tr-sm' :
-                                  isAgent ? 'bg-muted text-foreground rounded-tl-sm' :
-                                  'bg-amber-500/10 text-amber-200 rounded-md font-mono text-[11px]'
-                                }`}>
-                                  {isTool ? (log.message || log.tool_input || log.tool_output || '—') : (log.message || '—')}
-                                </div>
-                                <p className="text-[10px] text-muted-foreground/50 px-1">
-                                  {log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''}
-                                </p>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
+                  {/* Transcript */}
+                  <div
+                    ref={transcriptRef}
+                    className="max-h-[560px] overflow-y-auto px-4 py-4 space-y-3"
+                  >
+                    {(selected.history as HistoryMessage[]).length === 0 && (
+                      <p className="text-[12px] text-muted-foreground text-center py-8">No messages in this session.</p>
+                    )}
+                    {(selected.history as HistoryMessage[]).map((msg, i) => (
+                      <MessageBubble key={i} msg={msg} idx={i} />
+                    ))}
+                  </div>
+                </>
+              )}
+            </Card>
+          </div>
         </div>
       )}
     </div>

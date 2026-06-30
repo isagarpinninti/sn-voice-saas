@@ -1,7 +1,3 @@
-/**
- * GET /api/conversations?limit=20&offset=0
- * Fetches paginated conversation sessions from SN via the admin dashboard API.
- */
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
@@ -15,28 +11,75 @@ export async function GET(req: Request) {
   const tenant = await db.tenant.findUnique({ where: { userId: session.user.id } })
   if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
 
-  const instance = await db.instance.findFirst({
-    where: { tenantId: tenant.id, active: true },
-    orderBy: { createdAt: 'asc' },
-  })
-  if (!instance) return NextResponse.json({ sessions: [], total: 0 })
-
   const url = new URL(req.url)
   const limit  = Math.min(50, parseInt(url.searchParams.get('limit')  || '20'))
-  const offset = Math.max(0,  parseInt(url.searchParams.get('offset') || '0'))
+  const cursor = url.searchParams.get('cursor') || undefined
+  const agentId = url.searchParams.get('agentId') || undefined
+  const search  = url.searchParams.get('search')?.trim() || undefined
 
-  const authHeader = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
-
-  try {
-    const res = await fetch(
-      `${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/admin/sessions?limit=${limit}&offset=${offset}`,
-      { headers: { Authorization: `Basic ${authHeader}`, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) }
-    )
-    if (!res.ok) return NextResponse.json({ sessions: [], total: 0, error: `SN returned ${res.status}` })
-    const data = await res.json()
-    const result = data.result ?? data
-    return NextResponse.json({ sessions: result.sessions ?? result ?? [], total: result.total ?? 0 })
-  } catch (e: any) {
-    return NextResponse.json({ sessions: [], total: 0, error: e.message })
+  const where = {
+    tenantId: tenant.id,
+    ...(agentId ? { agentId } : {}),
   }
+
+  const rows = await db.chatSession.findMany({
+    where,
+    orderBy: { updatedAt: 'desc' },
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      sessionId: true,
+      agentId: true,
+      snUserId: true,
+      history: true,
+      createdAt: true,
+      updatedAt: true,
+      expiresAt: true,
+    },
+  })
+
+  const hasMore = rows.length > limit
+  const page = rows.slice(0, limit)
+  const nextCursor = hasMore ? page[page.length - 1].id : null
+
+  // Resolve agent names in one query
+  const agentIds = [...new Set(page.map(r => r.agentId).filter(Boolean))]
+  const agents = agentIds.length
+    ? await db.agent.findMany({ where: { id: { in: agentIds } }, select: { id: true, name: true } })
+    : []
+  const agentMap = Object.fromEntries(agents.map(a => [a.id, a.name]))
+
+  const sessions = page
+    .map(r => {
+      const history = (r.history as Array<{ role: string; content: string }>) || []
+      const userMessages = history.filter(m => m.role === 'user')
+      const lastMsg = history.filter(m => m.role === 'user' || m.role === 'assistant').at(-1)
+      return {
+        id: r.id,
+        sessionId: r.sessionId,
+        agentId: r.agentId,
+        agentName: agentMap[r.agentId] || null,
+        snUserId: r.snUserId || null,
+        messageCount: history.length,
+        userMessageCount: userMessages.length,
+        lastMessage: typeof lastMsg?.content === 'string' ? lastMsg.content.slice(0, 160) : null,
+        lastMessageRole: lastMsg?.role || null,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        expiresAt: r.expiresAt,
+      }
+    })
+    .filter(r => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      return (
+        r.agentName?.toLowerCase().includes(q) ||
+        r.snUserId?.toLowerCase().includes(q) ||
+        r.sessionId.toLowerCase().includes(q) ||
+        r.lastMessage?.toLowerCase().includes(q)
+      )
+    })
+
+  return NextResponse.json({ sessions, nextCursor, hasMore })
 }
