@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
 import { VOICES } from '@/lib/voices'
-import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Send, Bot, Download, PanelRight } from 'lucide-react'
+import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Send, Bot, Phone, ExternalLink } from 'lucide-react'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
 
@@ -78,6 +78,9 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const [widget, setWidget] = useState<WidgetConfig>(DEFAULT_WIDGET)
   const [savingWidget, setSavingWidget] = useState(false)
 
+  // Phone numbers assigned to this agent
+  const [phoneNumbers, setPhoneNumbers] = useState<{ id: string; e164: string; friendly: string | null; provider: string; active: boolean }[]>([])
+
   // Test agent state
   const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([])
   const [chatInput, setChatInput] = useState('')
@@ -103,6 +106,14 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     fetch(`/api/agents/${id}/widget`)
       .then(r => r.json())
       .then(d => { if (!d.error) setWidget({ ...DEFAULT_WIDGET, ...d }) })
+      .catch(() => {})
+
+    fetch('/api/phone-numbers', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        const all = d.phoneNumbers || []
+        setPhoneNumbers(all.filter((p: any) => p.agent?.id === id))
+      })
       .catch(() => {})
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -475,6 +486,17 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 </label>
               </div>
 
+              <div className="space-y-1.5">
+                <Label className="text-[11px]">Workspace panel — show on tables</Label>
+                <Input
+                  value={widget.widgetWorkspaceTables}
+                  onChange={e => updateWidget('widgetWorkspaceTables', e.target.value)}
+                  placeholder="incident, change_request, sc_task (leave blank for all)"
+                  className="text-[12px]"
+                />
+                <p className="text-[11px] text-muted-foreground">Comma-separated SN table names for the Agent Workspace sidebar panel. Download the Update Set from <Link href="/dashboard/downloads/sn-app" className="underline underline-offset-2 hover:text-foreground">ServiceNow App</Link>.</p>
+              </div>
+
               <div className="flex justify-end pt-1">
                 <Button size="sm" onClick={handleSaveWidget} disabled={savingWidget}>
                   {savingWidget ? 'Saving...' : 'Save widget settings'}
@@ -484,48 +506,59 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           </Card>
         </Section>
 
-        {/* Workspace Panel */}
+        {/* Phone Numbers */}
         <Section
-          title="Workspace sidebar panel"
-          description="Embed this agent as a slide-in panel inside ServiceNow Agent Workspace. Specify which record tables it should appear on, then download the Update Set and import it into your SN instance."
+          title="Phone numbers"
+          description="Inbound calls to these numbers are routed to this agent."
         >
-          <Card>
-            <CardContent className="p-5 space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-[11px]">Show panel on these tables</Label>
-                <Input
-                  value={widget.widgetWorkspaceTables}
-                  onChange={e => updateWidget('widgetWorkspaceTables', e.target.value)}
-                  placeholder="incident, change_request, sc_task (leave blank for all tables)"
-                  className="text-[12px]"
-                />
-                <p className="text-[11px] text-muted-foreground">Comma-separated SN table names. Leave blank to show on every workspace record.</p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1 border-t border-border">
-                <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                  <PanelRight className="w-3.5 h-3.5 shrink-0" />
-                  <span>Download the Update Set, import it in SN (System Update Sets → Retrieved Update Sets), preview and commit. The panel activates with Alt+Z or the mic button in the sidebar rail.</span>
+          {phoneNumbers.length === 0 ? (
+            <Card>
+              <CardContent className="p-5 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <p className="text-[12.5px] text-muted-foreground">No phone numbers assigned to this agent yet.</p>
                 </div>
-                <a
-                  href={`/api/agents/${id}/workspace-update-set`}
-                  onClick={async (e) => {
-                    e.preventDefault()
-                    // Save workspace tables first, then download
-                    await fetch(`/api/agents/${id}/widget`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ widgetWorkspaceTables: widget.widgetWorkspaceTables }),
-                    })
-                    window.location.href = `/api/agents/${id}/workspace-update-set`
-                  }}
-                  className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-[12px] font-medium hover:opacity-90 transition-opacity cursor-pointer"
+                <Link
+                  href="/dashboard/phone-numbers"
+                  className="shrink-0 inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  Download Update Set
-                </a>
-              </div>
-            </CardContent>
-          </Card>
+                  Manage numbers <ExternalLink className="w-3 h-3" />
+                </Link>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {phoneNumbers.map(p => (
+                    <div key={p.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className="w-7 h-7 rounded-md border border-primary/20 bg-primary/[0.06] flex items-center justify-center shrink-0">
+                        <Phone className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold font-mono text-foreground">{p.e164}</p>
+                        {p.friendly && <p className="text-[11px] text-muted-foreground">{p.friendly}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider border border-border rounded px-1.5 py-0.5">{p.provider}</span>
+                        <span className={`text-[10px] font-medium ${p.active ? 'text-emerald-400' : 'text-muted-foreground'}`}>
+                          {p.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-4 py-2.5 border-t border-border">
+                  <Link
+                    href="/dashboard/phone-numbers"
+                    className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Manage all numbers <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </Section>
 
         {/* Voice Selection */}
