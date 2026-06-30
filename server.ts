@@ -341,6 +341,7 @@ app.prepare().then(() => {
       pipeline.on('ended', () => { addLog('info', 'pipeline', 'ENDED', { tenantId: tenantRef.id }); send(ws, { type: 'ended' }) })
       pipeline.on('navigate', (d: any) => { addLog('info', 'pipeline', 'NAV ' + (d.urls?.length || 0) + ' url(s)', { tenantId: tenantRef.id }); send(ws, { type: 'navigate', urls: d.urls }) })
       pipeline.on('attachment_requested', (d: any) => { addLog('info', 'pipeline', 'Attachment requested: ' + d.reason, { tenantId: tenantRef.id }); send(ws, { type: 'attachment_requested', url: d.url, reason: d.reason }) })
+      pipeline.on('record_updated', (d: any) => { addLog('info', 'pipeline', 'Record updated: ' + JSON.stringify(d.fields).substring(0, 200), { tenantId: tenantRef.id }); send(ws, { type: 'record_updated', table: d.table, sysId: d.sysId, fields: d.fields }) })
 
       authed = true
       addLog('info', 'ws', 'Replaying ' + buffer.length + ' buffered msg(s)', { tenantId: tenantRef.id })

@@ -152,11 +152,30 @@ html,body{height:100%;background:#fff;overflow:hidden}
 /* Footer */
 #zvp-footer{font-size:10px;color:#d1d5db;text-align:center;padding:4px 0 6px;flex-shrink:0}
 #zvp-footer a{color:#9ca3af;text-decoration:none}
+
+/* Chat toolbar (translate + suggest) */
+#zvp-chat-toolbar{display:flex;align-items:center;gap:6px;padding:4px 10px 0;flex-shrink:0}
+.zvp-toolbar-btn{width:28px;height:28px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;color:#6b7280;display:flex;align-items:center;justify-content:center;cursor:pointer;outline:none;transition:border-color .15s,color .15s,background .15s;flex-shrink:0}
+.zvp-toolbar-btn:hover{border-color:var(--zvc);color:var(--zvc)}
+.zvp-toolbar-btn.active{border-color:var(--zvc);background:var(--zvc);color:#fff}
+.zvp-toolbar-btn svg{width:14px;height:14px;pointer-events:none}
+#zvp-lang-select{display:none;font-size:12px;border:1.5px solid var(--zvc);border-radius:8px;padding:3px 6px;outline:none;color:#111827;background:#fff;cursor:pointer}
+#zvp-lang-select.show{display:block}
+#zvp-lang-pill{display:none;font-size:10px;font-weight:500;background:#ecfdf5;color:var(--zvc);border-radius:10px;padding:2px 8px;white-space:nowrap}
+#zvp-lang-pill.show{display:block}
+
+/* System card (record_updated) */
+.zvp-sys-card{align-self:center;width:calc(100% - 20px);border:1.5px solid #10b981;border-radius:10px;padding:8px 12px;background:#f0fdf4;margin:4px 0}
+.zvp-sys-card-title{font-size:11px;font-weight:700;color:#059669;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.zvp-sys-card-row{font-size:11.5px;color:#374151;display:flex;gap:6px}
+.zvp-sys-card-key{color:#6b7280;flex-shrink:0}
 `
     document.head.appendChild(s)
   }
 
   var PHONE_SVG='<svg viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.27-.27.7-.38 1.06-.2 1.1.37 2.28.57 3.54.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C4.61 21 2 18.39 2 15.23V5a2 2 0 0 1 2-2h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02L6.6 10.8z"/></svg>'
+  var GLOBE_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+  var BULB_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>'
   var SEND_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
   var VOICE_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'
   var CHAT_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
@@ -200,6 +219,21 @@ html,body{height:100%;background:#fff;overflow:hidden}
       // Chat panel
       isChat ? [
         '<div id="zvp-chat"'+(isVoice?'':' class="on"')+'>',
+          '<div id="zvp-chat-toolbar">',
+            '<button class="zvp-toolbar-btn" id="zvp-translate-btn" title="Translate responses">'+GLOBE_SVG+'</button>',
+            '<select id="zvp-lang-select">',
+              '<option value="">English</option>',
+              '<option value="Spanish">Spanish</option>',
+              '<option value="French">French</option>',
+              '<option value="German">German</option>',
+              '<option value="Japanese">Japanese</option>',
+              '<option value="Arabic">Arabic</option>',
+              '<option value="Hindi">Hindi</option>',
+              '<option value="Portuguese">Portuguese</option>',
+            '</select>',
+            '<span id="zvp-lang-pill"></span>',
+            '<button class="zvp-toolbar-btn" id="zvp-suggest-btn" title="Suggest next steps">'+BULB_SVG+'</button>',
+          '</div>',
           '<div id="zvp-msgs"><div id="zvp-typing"><span></span><span></span><span></span></div></div>',
           '<div id="zvp-inp-wrap">',
             '<div id="zvp-inp-inner">',
@@ -242,6 +276,48 @@ html,body{height:100%;background:#fff;overflow:hidden}
       }
       if(snd)snd.onclick=doSend
       if(C.greeting)setTimeout(function(){appendMsg('agent',C.greeting)},300)
+
+      // Wire translate button
+      var tbtn=g('zvp-translate-btn'),lsel=g('zvp-lang-select'),lpill=g('zvp-lang-pill')
+      var translateActive=false
+      if(tbtn){
+        tbtn.onclick=function(){
+          translateActive=!translateActive
+          tbtn.className='zvp-toolbar-btn'+(translateActive?' active':'')
+          if(lsel)lsel.className=translateActive?'show':''
+          if(!translateActive&&lpill){lpill.className='';lpill.textContent=''}
+        }
+      }
+      if(lsel){
+        lsel.onchange=function(){
+          var lang=lsel.value
+          if(!lang){
+            if(lpill){lpill.className='';lpill.textContent=''}
+            return
+          }
+          if(lpill){lpill.className='show';lpill.textContent='Responding in '+lang}
+          // Send a hidden system-style chat message to set language
+          var systemMsg='From now on respond in '+lang+'. You can still understand my English input.'
+          sendChatMessage(systemMsg,true)
+        }
+      }
+
+      // Wire suggest button
+      var sugbtn=g('zvp-suggest-btn')
+      if(sugbtn){
+        sugbtn.onclick=function(){
+          var q='What are the next steps to resolve this record?'
+          if(active&&ws&&ws.readyState===1){
+            // Voice mode — inject as text
+            ws.send(JSON.stringify({type:'text',text:q}))
+            appendMsg('user',q)
+          } else {
+            // Chat mode — send via chat API
+            var inp2=g('zvp-inp')
+            if(inp2){inp2.value=q;doSend()}
+          }
+        }
+      }
     }
 
     // Show initial record context if in URL
@@ -337,6 +413,39 @@ html,body{height:100%;background:#fff;overflow:hidden}
   function showTyping(on){var t=g('zvp-typing');if(t)t.className=on?'show':'';scrollMsgs()}
   function setSendEnabled(on){var b=g('zvp-send');if(b)b.disabled=!on}
 
+  // Send a chat message programmatically (hidden=true skips appending user bubble)
+  function sendChatMessage(txt,hidden){
+    if(!txt)return
+    if(!hidden)appendMsg('user',txt)
+    chatBusy=true;setSendEnabled(false);showTyping(true);scrollMsgs()
+    fetch(GW+'/api/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token:TK,agent:AGENT,message:txt,session_id:chatSessionId||undefined,record_table:recordTable||undefined,record_sys_id:recordSysId||undefined})
+    }).then(function(r){return r.json()}).then(function(d){
+      chatSessionId=d.session_id||chatSessionId
+      showTyping(false)
+      if(d.message)appendMsg('agent',d.message)
+    }).catch(function(){showTyping(false)
+    }).finally(function(){chatBusy=false;setSendEnabled(true)})
+  }
+
+  // Append a green system card showing record field updates
+  function appendSystemCard(title,fields){
+    var msgs=g('zvp-msgs');if(!msgs)return
+    var d=document.createElement('div');d.className='zvp-sys-card'
+    var rows=''
+    if(fields&&typeof fields==='object'){
+      Object.keys(fields).forEach(function(k){
+        var v=String(fields[k]||'').substring(0,80)
+        rows+='<div class="zvp-sys-card-row"><span class="zvp-sys-card-key">'+k+'</span><span>&#8594; '+v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</span></div>'
+      })
+    }
+    d.innerHTML='<div class="zvp-sys-card-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Record Updated</div>'+rows
+    var typing=g('zvp-typing');if(typing)msgs.insertBefore(d,typing);else msgs.appendChild(d)
+    scrollMsgs()
+  }
+
   // ── Voice ────────────────────────────────────────────────────────────────
   var ws,micCtx,micStr,micP,active=false,muted=false
 
@@ -400,6 +509,7 @@ html,body{height:100%;background:#fff;overflow:hidden}
           else if(m.type==='user_message'&&m.text){appendMsg('user',m.text)}
           else if(m.type==='error'){setSt('Error: '+m.message);endCallGraceful()}
           else if(m.type==='ended')endCallGraceful()
+          else if(m.type==='record_updated'){appendSystemCard('Updated',m.fields)}
         }catch(e){}
       }
       ws.onclose=function(ev){if(active&&ev.code!==1000){setSt('Connection lost');setTimeout(function(){if(active)endCall()},2000)}}

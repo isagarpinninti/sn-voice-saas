@@ -162,6 +162,63 @@ function normalizeToolsForGroq(tools: any[]): { tools: any[]; repairs: string[] 
   return { tools: out, repairs }
 }
 
+function getTableResolutionGuidance(table: string, record: Record<string, string>): string {
+  const state = record.state || ''
+  const priority = record.priority || ''
+  const assignedTo = record.assigned_to || ''
+
+  const guides: Record<string, string> = {
+    incident: `INCIDENT RESOLUTION GUIDANCE:
+Key fields to track: state (1=New, 2=In Progress, 3=On Hold, 4=Resolved, 6=Closed), priority, assigned_to, assignment_group, work_notes, close_notes, resolution_code.
+Common next steps:
+- If unassigned: suggest assigning to appropriate group/person
+- If New: move to In Progress when work begins (state: "2")
+- Add work_notes for every action taken (visible to fulfillers)
+- To resolve: set state="4", provide resolution_code and close_notes
+- Priority 1/2: escalate immediately if not in progress within SLA
+Current state: ${state}, Priority: ${priority}, Assigned: ${assignedTo || 'UNASSIGNED'}`,
+
+    change_request: `CHANGE REQUEST GUIDANCE:
+Key fields: state, type (Standard/Normal/Emergency), risk, assignment_group, work_notes, close_notes.
+Workflow: Draft -> Review -> Authorize -> Scheduled -> Implement -> Review -> Closed.
+- Verify risk assessment is complete
+- Ensure implementation plan and backout plan are documented
+- Coordinate with CAB if risk is High
+Current state: ${state}`,
+
+    sc_task: `SERVICE CATALOG TASK GUIDANCE:
+Key fields: state, assigned_to, work_notes, close_notes.
+- Fulfill the requested service as described in the short_description
+- Update work_notes with progress
+- Set state="3" (Closed Complete) when fulfilled or "4" (Closed Incomplete) if cannot fulfill
+Current state: ${state}, Assigned: ${assignedTo || 'UNASSIGNED'}`,
+
+    sc_req_item: `REQUESTED ITEM GUIDANCE:
+Key fields: state, assigned_to, work_notes, close_notes, approval.
+- Check approval status first
+- Fulfill all associated tasks
+- Update the requester on progress
+Current state: ${state}`,
+
+    problem: `PROBLEM MANAGEMENT GUIDANCE:
+Key fields: state, known_error, workaround, root_cause, fix_notes.
+- Identify root cause before closing
+- Document workaround if a permanent fix is not yet available
+- Link related incidents
+- Set known_error=true once root cause is identified
+Current state: ${state}`,
+
+    change_task: `CHANGE TASK GUIDANCE:
+Key fields: state, assigned_to, work_notes.
+- Complete this task as part of the parent change
+- Document all actions in work_notes
+- Set state="3" when complete
+Current state: ${state}`,
+  }
+
+  return guides[table] || `RECORD GUIDANCE:\nHelp the fulfiller progress and resolve this ${table} record. Track state changes, document actions in work_notes, and guide toward resolution.`
+}
+
 export class VoicePipeline extends EventEmitter {
   private tenant: Tenant
   private selectedAgentId: string = ''  // Set by SN orchestrator after init
@@ -213,6 +270,10 @@ export class VoicePipeline extends EventEmitter {
   // Poller that watches AttachmentUpload rows for status='completed'. Cleared
   // on completion, on call stop, or when TTL expires.
   private uploadPoller: ReturnType<typeof setInterval> | null = null
+
+  // Workspace record context — set at start(), used by built-in tools
+  private recordTable: string = ''
+  private recordSysId: string = ''
 
   constructor(tenant: Tenant, opts: { audioFormat?: 'widget' | 'phone' } = {}) {
     super()
@@ -287,13 +348,63 @@ export class VoicePipeline extends EventEmitter {
       prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately — do not fake progress. CRITICAL: NEVER invent, fabricate, or assume the result of a tool call. Never say "I have created incident INC0012345" unless the tool actually returned that number. The tool result will appear in the conversation — report ONLY what it contains. If no tool result is present, DO NOT claim the action was completed.'
       prompt += '\n\nFILE UPLOAD RULE: NEVER call request_attachment unless the user explicitly says they have a file, screenshot, or document to share. Do not suggest uploading as a troubleshooting step. Do not call it because a file might be useful. Only call it when the user volunteers they have something to upload.'
 
+      // Store record context for use by built-in workspace tools
+      this.recordTable = recordTable || ''
+      this.recordSysId = recordSysId || ''
+
+      // Inject built-in workspace tools when a record is in context
+      if (recordTable && recordSysId) {
+        const workspaceTools = [
+          {
+            type: 'function',
+            function: {
+              name: 'update_record',
+              description: `Update fields on the current ${recordTable} record the fulfiller is viewing. Use this when the user asks to change state, assignment, priority, work notes, or any other field. Confirm before updating if the change is significant.`,
+              parameters: {
+                type: 'object',
+                properties: {
+                  fields: {
+                    type: 'object',
+                    description: 'Key-value pairs of fields to update. Use SN field names (e.g. state, assigned_to, priority, work_notes, close_notes, resolution_code, short_description). For reference fields like assigned_to, provide the display value and the system will resolve it.',
+                  },
+                  confirm_message: {
+                    type: 'string',
+                    description: 'Optional: a sentence to speak to the user confirming what you are about to update, before actually updating.',
+                  },
+                },
+                required: ['fields'],
+              },
+            },
+          },
+          {
+            type: 'function',
+            function: {
+              name: 'suggest_next_steps',
+              description: `Analyze the current ${recordTable} record and return specific, actionable next steps to progress or resolve it. Call this when the user asks what to do next, how to proceed, or wants recommendations.`,
+              parameters: {
+                type: 'object',
+                properties: {
+                  focus: {
+                    type: 'string',
+                    description: 'Optional focus: resolution, escalation, assignment, communication, or closure',
+                  },
+                },
+              },
+            },
+          },
+        ]
+        this.tools = [...this.tools, ...workspaceTools]
+        addLog('info', 'pipeline', `Injected ${workspaceTools.length} built-in workspace tools for ${recordTable}`, { tenantId: this.tenant.id })
+      }
+
       // Inject current record context when the panel is opened from a workspace form
       if (recordTable && recordSysId) {
         try {
           const record = await this.fetchRecord(recordTable, recordSysId)
           if (record) {
             addLog('info', 'pipeline', `Record context loaded: ${recordTable}/${recordSysId}`, { tenantId: this.tenant.id })
-            prompt += `\n\nCURRENT RECORD CONTEXT:\nThe fulfiller is viewing this ${recordTable} record in ServiceNow:\n${JSON.stringify(record, null, 2)}\n\nUse this context proactively. Reference specific values (number, state, priority, description) when relevant. You can look up more details or take actions on this record using your tools.`
+            const tableGuidance = getTableResolutionGuidance(recordTable, record)
+            prompt += `\n\nCURRENT RECORD CONTEXT:\nThe fulfiller is viewing this ${recordTable} record in ServiceNow:\n${JSON.stringify(record, null, 2)}\n\nYou are an AI assistant helping a ServiceNow fulfiller/agent resolve this record. You can:\n- Answer questions about the record\n- Suggest next steps based on the record's current state\n- Update record fields using the update_record tool when asked\n- Help draft work notes, resolution notes, or communications\n- Identify missing information needed for resolution\n\n${tableGuidance}`
           }
         } catch (e: any) {
           addLog('warn', 'pipeline', `Could not load record context ${recordTable}/${recordSysId}: ${e.message}`, { tenantId: this.tenant.id })
@@ -491,6 +602,41 @@ export class VoicePipeline extends EventEmitter {
         url,
       },
     }
+  }
+
+  private async handleUpdateRecord(args: any): Promise<{ success: boolean; error?: string }> {
+    const fields: Record<string, any> = args?.fields || {}
+    if (!Object.keys(fields).length) {
+      return { success: false, error: 'No fields provided to update.' }
+    }
+    try {
+      const auth = Buffer.from(`${this.tenant.snUsername}:${this.tenant.snPassword}`).toString('base64')
+      const url = `${this.tenant.snInstanceUrl}/api/now/table/${encodeURIComponent(this.recordTable)}/${encodeURIComponent(this.recordSysId)}`
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(fields),
+      })
+      if (!res.ok) {
+        const err = await res.text().catch(() => res.statusText)
+        addLog('warn', 'pipeline', `update_record failed ${res.status}: ${err.substring(0, 200)}`, { tenantId: this.tenant.id })
+        return { success: false, error: `Update failed (${res.status})` }
+      }
+      addLog('info', 'pipeline', `update_record success: ${JSON.stringify(fields).substring(0, 200)}`, { tenantId: this.tenant.id })
+      return { success: true }
+    } catch (e: any) {
+      addLog('warn', 'pipeline', `update_record exception: ${e.message}`, { tenantId: this.tenant.id })
+      return { success: false, error: e.message }
+    }
+  }
+
+  private handleSuggestNextSteps(args: any): string {
+    const focus = args?.focus || 'general'
+    return `Analyze the current record in your context and provide 3-5 specific, actionable next steps the fulfiller should take right now to progress this record toward resolution. Focus: ${focus}. Base your suggestions on the actual field values in the record (state, priority, assigned_to, description, work_notes). Be concrete — mention specific field changes, who to contact, or what information is missing.`
   }
 
   private notifyUploadArrived(meta: UploadMeta) {
@@ -874,6 +1020,41 @@ export class VoicePipeline extends EventEmitter {
           // is currently on. Reserved keys are prefixed with __ so script authors
           // can tell runtime-injected fields from LLM-supplied ones.
           const enrichedInput = { ...(tc.arguments || {}), __origin_portal: this.originPortal, __caller_id: this.endUserSysId }
+
+          // Handle built-in workspace tools (SaaS-side, no SN round-trip)
+          if (tc.name === 'update_record' && this.recordTable && this.recordSysId) {
+            const builtInResult = await this.handleUpdateRecord(tc.arguments || {})
+            if (builtInResult.success) {
+              this.emit('record_updated', {
+                table: this.recordTable,
+                sysId: this.recordSysId,
+                fields: tc.arguments?.fields || {},
+              })
+            }
+            const llmMsg = builtInResult.success
+              ? `Record updated successfully. Fields changed: ${Object.keys(tc.arguments?.fields || {}).join(', ')}.`
+              : `Update failed: ${builtInResult.error}`
+            this.messages.push({
+              role: 'assistant',
+              content: (!savedNarration && preToolNarration) ? preToolNarration : null,
+              tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.arguments) } }],
+            })
+            savedNarration = true
+            this.messages.push({ role: 'tool', tool_call_id: tc.id, content: llmMsg })
+            continue
+          }
+
+          if (tc.name === 'suggest_next_steps') {
+            const suggestions = this.handleSuggestNextSteps(tc.arguments || {})
+            this.messages.push({
+              role: 'assistant',
+              content: (!savedNarration && preToolNarration) ? preToolNarration : null,
+              tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.arguments) } }],
+            })
+            savedNarration = true
+            this.messages.push({ role: 'tool', tool_call_id: tc.id, content: suggestions })
+            continue
+          }
 
           // All tools are defined and executed in ServiceNow — no SaaS-side handlers
           const toolResult: any = await this.snFetch('POST', '/gateway/tool', {
