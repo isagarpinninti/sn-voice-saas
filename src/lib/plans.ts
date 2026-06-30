@@ -65,4 +65,4 @@ export type PlanKey = keyof typeof PLANS
 
 // Plans that include the dedicated inbound phone number feature.
 // Includes legacy PRO_VOICE/ENTERPRISE so existing tenants keep working.
-export const PHONE_ELIGIBLE_PLANS = new Set(['PREMIUM', 'PRO_VOICE', 'ENTERPRISE'])
+export const PHONE_ELIGIBLE_PLANS = new Set(['PREMIUM', 'PRO_VOICE', 'ENTERPRISE', 'PRO', 'BUSINESS'])
