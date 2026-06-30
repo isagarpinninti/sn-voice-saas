@@ -73,6 +73,9 @@ async function countRecent(): Promise<Check> {
 
 export async function GET() {
   const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   if (!isUserAdmin(session)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
