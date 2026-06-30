@@ -6,11 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
-import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
 import { useConfirm } from '@/components/ui/confirm-dialog'
-import { CheckCircle2, XCircle, Loader2, Copy, Check, Plus, Server, Trash2, Phone, Bot, Link2, Sparkles } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { CheckCircle2, XCircle, Loader2, Copy, Check, Plus, Server, Trash2 } from 'lucide-react'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
 
@@ -28,16 +26,6 @@ interface Instance {
   createdAt: string
 }
 
-interface PhoneNumber {
-  id: string
-  e164: string
-  friendly: string | null
-  active: boolean
-  createdAt: string
-  instance: { id: string; name: string; snInstanceUrl: string | null } | null
-  agent: { id: string; name: string } | null
-}
-
 export default function ConnectionPage() {
   const { toast } = useToast()
   const confirm = useConfirm()
@@ -52,31 +40,18 @@ export default function ConnectionPage() {
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [createForm, setCreateForm] = useState({ name: '', snInstanceUrl: '', snUsername: '', snPassword: '' })
-  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
-  const [phonePlanEligible, setPhonePlanEligible] = useState(false)
-
   useEffect(() => {
     fetch('/api/instances').then(r => r.json()).then(data => {
       setInstances(data.instances || [])
       setMaxInstances(data.maxInstances || 1)
       setLoading(false)
     }).catch(() => setLoading(false))
-    fetch('/api/phone-numbers').then(r => r.json()).then(data => {
-      setPhoneNumbers(data.phoneNumbers || [])
-      setPhonePlanEligible(!!data.planEligible)
-    }).catch(() => {})
   }, [])
 
   function copyValue(value: string) {
     navigator.clipboard.writeText(value)
     setCopied(value)
     setTimeout(() => setCopied(''), 2000)
-  }
-
-  function formatPhone(e164: string) {
-    // +14155550123 → +1 (415) 555-0123 for US/Canada; everything else stays as-is.
-    const m = e164.match(/^\+1(\d{3})(\d{3})(\d{4})$/)
-    return m ? `+1 (${m[1]}) ${m[2]}-${m[3]}` : e164
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -175,108 +150,6 @@ export default function ConnectionPage() {
         <Server className="w-3 h-3" />
         {maxInstances === -1 ? `${instances.length} instances · Unlimited` : `${instances.length} of ${maxInstances} instances`}
       </div>
-
-      {/* Phone numbers — only on phone-eligible plans (Premium / legacy PRO_VOICE / ENTERPRISE) */}
-      {phonePlanEligible && (
-        <div className="mb-8">
-          <Section
-            title="Inbound phone numbers"
-            count={phoneNumbers.length || undefined}
-            description="Numbers provisioned for your tenant. Calls hit your bound agent — same logic as the widget."
-            actions={
-              <a
-                href="mailto:support@zevox.com?subject=Provision%20a%20new%20phone%20number"
-                className="text-[12px] text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" />
-                Request another number
-              </a>
-            }
-          >
-            {phoneNumbers.length === 0 ? (
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-lg border border-indigo-400/30 bg-indigo-400/[0.08] flex items-center justify-center shrink-0">
-                      <Phone className="w-4 h-4 text-indigo-300" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13.5px] font-semibold text-foreground mb-0.5">No number assigned yet</p>
-                      <p className="text-[12.5px] text-muted-foreground leading-relaxed">
-                        Your plan includes a dedicated inbound phone number. Email{' '}
-                        <a href="mailto:support@zevox.com" className="text-primary hover:underline">support@zevox.com</a>{' '}
-                        with the agent you'd like calls routed to and we'll provision one in 1 business day.
-                      </p>
-                    </div>
-                    <a
-                      href="mailto:support@zevox.com?subject=Provision%20my%20phone%20number"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-foreground text-background text-[12px] font-medium hover:bg-foreground/90 transition-colors shrink-0"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      Request now
-                    </a>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="p-0">
-                  <div className="divide-y divide-border">
-                    {phoneNumbers.map((p) => (
-                      <div key={p.id} className="flex items-start justify-between gap-4 p-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            <Phone className="w-4 h-4 text-primary shrink-0" />
-                            <span className="font-mono text-[14px] font-semibold text-foreground tabular-nums">
-                              {formatPhone(p.e164)}
-                            </span>
-                            {p.friendly && (
-                              <span className="text-[12.5px] text-muted-foreground">· {p.friendly}</span>
-                            )}
-                            {p.active ? (
-                              <Badge variant="success" dot>Active</Badge>
-                            ) : (
-                              <Badge variant="secondary" dot>Inactive</Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4 text-[11.5px] text-muted-foreground flex-wrap">
-                            <span className="inline-flex items-center gap-1">
-                              <Bot className="w-3 h-3" />
-                              {p.agent?.name || '(orchestrator picks)'}
-                            </span>
-                            {p.instance && (
-                              <span className="inline-flex items-center gap-1 font-mono">
-                                <Link2 className="w-3 h-3" />
-                                {p.instance.snInstanceUrl?.replace('https://', '').replace('.service-now.com', '') || p.instance.name}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => copyValue(p.e164)}
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors shrink-0"
-                          aria-label="Copy number"
-                          title="Copy E.164 number"
-                        >
-                          {copied === p.e164 ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            <p className="text-[11px] text-muted-foreground/70 mt-2">
-              Restrict who can reach these numbers via the{' '}
-              <a href="/dashboard/phone-allowlist" className="text-foreground hover:text-primary transition-colors underline decoration-border underline-offset-2">
-                Phone Allowlist
-              </a>
-              .
-            </p>
-          </Section>
-        </div>
-      )}
 
       {/* Create instance form */}
       {showCreate && (

@@ -35,6 +35,7 @@ export default function LiveLogsPage() {
   const [tenants, setTenants] = useState<TenantOption[]>([])
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Load tenant list once for the filter dropdown
@@ -67,12 +68,17 @@ export default function LiveLogsPage() {
     params.set('limit', '200')
     try {
       const res = await fetch('/api/admin/logs?' + params.toString())
-      if (res.ok) {
-        const d = await res.json()
-        setLogs(d.logs || [])
-        setStats(d.stats || {})
+      if (!res.ok) {
+        setError('Failed to load logs — ' + res.status)
+        return
       }
-    } catch {}
+      const d = await res.json()
+      setLogs(d.logs || [])
+      setStats(d.stats || {})
+      setError(null)
+    } catch {
+      setError('Network error')
+    }
   }
 
   // Color-coded levels and sources stay multi-color so admins can scan log streams visually
@@ -176,6 +182,12 @@ export default function LiveLogsPage() {
           )}
         </CardContent>
       </Card>
+
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-lg border border-destructive/30 bg-destructive/10 text-[12.5px] text-destructive">
+          {error}
+        </div>
+      )}
 
       {/* Log stream */}
       <Card className="overflow-hidden">

@@ -14,10 +14,8 @@ export function SidebarNav({ items }: { items: NavItem[] }) {
     return pathname === href || pathname.startsWith(href + '/')
   }
 
-  // Group items in declaration order
   const grouped: Record<NavGroup, NavItem[]> = { workspace: [], insights: [], account: [] }
   for (const item of items) grouped[item.group].push(item)
-
   const groupOrder: NavGroup[] = ['workspace', 'insights', 'account']
 
   return (
@@ -27,10 +25,10 @@ export function SidebarNav({ items }: { items: NavItem[] }) {
         if (groupItems.length === 0) return null
         return (
           <div key={group} className="mb-5 last:mb-0">
-            <p className="text-[10px] text-[#666] uppercase tracking-widest px-2.5 pt-1 pb-2 font-medium">
+            <p className="text-[10px] text-[#444] uppercase tracking-widest px-2.5 pt-1 pb-2 font-semibold">
               {NAV_GROUP_LABELS[group]}
             </p>
-            <div className="space-y-[2px]">
+            <div className="space-y-[1px]">
               {groupItems.map((item) => {
                 const active = isActive(item.href)
                 return (
@@ -41,14 +39,18 @@ export function SidebarNav({ items }: { items: NavItem[] }) {
                     className={cn(
                       'group relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] transition-all duration-150',
                       active
-                        ? 'bg-white/8 text-[#ededed] font-medium'
-                        : 'text-[#666666] hover:text-[#a1a1a1] hover:bg-white/4'
+                        ? 'bg-[#6366f1]/10 text-white font-medium'
+                        : 'text-[#555] hover:text-[#a1a1a1] hover:bg-white/4'
                     )}
                   >
+                    {/* Active indicator bar */}
+                    {active && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[18px] rounded-full bg-[#6366f1] shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                    )}
                     <svg
                       className={cn(
-                        'w-[16px] h-[16px] shrink-0 transition-colors',
-                        active ? 'text-[#a1a1a1]' : 'text-[#666666] group-hover:text-[#a1a1a1]'
+                        'w-[15px] h-[15px] shrink-0 transition-colors',
+                        active ? 'text-[#6366f1]' : 'text-[#444] group-hover:text-[#777]'
                       )}
                       fill="none"
                       viewBox="0 0 24 24"
@@ -57,7 +59,7 @@ export function SidebarNav({ items }: { items: NavItem[] }) {
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                     </svg>
-                    {item.label}
+                    <span className={active ? 'ml-0.5' : ''}>{item.label}</span>
                   </Link>
                 )
               })}

@@ -2,7 +2,6 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 type CardProps = React.HTMLAttributes<HTMLDivElement> & {
-  /** Adds a subtle interactive hover (border brighten + tiny lift). */
   interactive?: boolean
 }
 
@@ -11,8 +10,8 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
     <div
       ref={ref}
       className={cn(
-        "rounded-lg border border-border bg-card text-card-foreground transition-colors",
-        interactive && "hover:border-border/80 hover:bg-card/80",
+        "rounded-xl border border-white/[0.07] bg-[#0d0d0d] text-card-foreground transition-all duration-150",
+        interactive && "hover:border-white/[0.12] hover:bg-[#111] cursor-pointer",
         className
       )}
       {...props}
@@ -39,7 +38,7 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-[15px] font-semibold tracking-[-0.01em]", className)}
+    className={cn("text-[15px] font-semibold tracking-[-0.01em] text-[#ededed]", className)}
     {...props}
   />
 ))
@@ -51,7 +50,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-[12px] text-muted-foreground", className)}
+    className={cn("text-[12px] text-[#666]", className)}
     {...props}
   />
 ))

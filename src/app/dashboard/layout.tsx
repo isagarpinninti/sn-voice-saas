@@ -29,7 +29,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
     impersonationContext = { realEmail: real?.email, targetEmail: target?.email }
   }
 
-  // Load tenant for the workspace name + plan badge in the sidebar footer
   const tenant = session.user.id
     ? await db.tenant.findUnique({
         where: { userId: session.user.id },
@@ -39,7 +38,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const workspaceName = tenant?.company || session.user.name?.split(' ')[0] || 'ZeVox'
   const planLabel = tenant ? PLANS[tenant.plan as PlanKey]?.name || 'Free' : 'Free'
+  const isPremium = tenant && ['PREMIUM', 'PRO_VOICE', 'ENTERPRISE', 'PRO', 'BUSINESS'].includes(tenant.plan)
   const adminUser = isUserAdmin(session)
+  const initial = (session.user.email?.[0] || session.user.name?.[0] || '?').toUpperCase()
 
   return (
     <ToastProvider>
@@ -50,41 +51,46 @@ export default async function DashboardLayout({ children }: { children: React.Re
           targetUserEmail={impersonationContext.targetEmail}
         />
       )}
-      <div className="flex h-screen overflow-hidden bg-black">
+      <div className="flex h-screen overflow-hidden" style={{ background: '#000' }}>
+
         {/* ── Sidebar ── */}
-        <aside className="w-56 shrink-0 flex flex-col border-r border-white/8 bg-[#0a0a0a]">
+        <aside className="w-[220px] shrink-0 flex flex-col border-r border-white/[0.06]" style={{ background: '#080808' }}>
+
           {/* Logo */}
-          <div className="flex items-center gap-2.5 px-4 h-13 border-b border-white/8 shrink-0">
+          <div className="flex items-center gap-3 px-4 h-[52px] border-b border-white/[0.06] shrink-0">
             <Link href="/dashboard" className="flex items-center gap-2.5 group">
               <div
-                className="w-6 h-6 rounded-md bg-[#6366f1] flex items-center justify-center transition-transform group-hover:scale-105"
-                style={{ boxShadow: '0 0 12px rgba(99,102,241,0.45)' }}
+                className="w-[26px] h-[26px] rounded-lg flex items-center justify-center transition-all duration-200 group-hover:scale-105"
+                style={{
+                  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  boxShadow: '0 0 16px rgba(99,102,241,0.35), inset 0 1px 0 rgba(255,255,255,0.15)',
+                }}
               >
-                <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <svg className="w-[13px] h-[13px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line strokeLinecap="round" x1="12" y1="19" x2="12" y2="22" />
                 </svg>
               </div>
-              <span className="text-[13px] font-semibold tracking-tight text-[#ededed] group-hover:text-white transition-colors">
-                ZeVox
-              </span>
+              <span className="text-[14px] font-semibold tracking-tight text-white">ZeVox</span>
             </Link>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 overflow-y-auto py-3">
+          <nav className="flex-1 px-3 overflow-y-auto py-4">
             <SidebarNav items={NAV} />
 
-            {/* Resources (always shown) */}
-            <div className="mb-4 last:mb-0">
-              <p className="text-[10px] text-[#666] uppercase tracking-widest px-2.5 pt-1 pb-1.5 font-medium">
+            {/* Resources */}
+            <div className="mt-5">
+              <p className="text-[10px] text-[#444] uppercase tracking-widest px-2.5 pb-2 font-semibold">
                 Resources
               </p>
               <a
                 href="/docs"
                 target="_blank"
-                className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] text-[#666] hover:text-[#a1a1a1] hover:bg-white/4 transition-all duration-150"
+                className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[13px] text-[#555] hover:text-[#a1a1a1] hover:bg-white/4 transition-all duration-150"
               >
-                <svg className="w-[16px] h-[16px] shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <svg className="w-[15px] h-[15px] shrink-0 text-[#444] group-hover:text-[#777] transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                 </svg>
                 Documentation
@@ -92,23 +98,46 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </div>
           </nav>
 
-          {/* Sidebar footer */}
-          <div className="px-3 py-3 border-t border-white/8 space-y-2 shrink-0">
-            {/* Plan badge */}
+          {/* Footer */}
+          <div className="px-3 py-3 border-t border-white/[0.06] shrink-0 space-y-1.5">
+            {/* Workspace + plan */}
             <Link
               href="/dashboard/billing"
-              className="flex items-center justify-between px-2.5 py-1.5 rounded-md border border-white/8 bg-white/3 hover:bg-white/5 transition-colors"
+              className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg transition-all duration-150 hover:bg-white/[0.04] group"
+              style={{ border: '1px solid rgba(255,255,255,0.06)' }}
             >
-              <span className="text-[12px] font-medium text-[#ededed] truncate">{workspaceName}</span>
-              <span className="text-[10px] text-[#666] ml-2 shrink-0">{planLabel}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="w-[22px] h-[22px] rounded-md flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+                >
+                  {workspaceName[0].toUpperCase()}
+                </div>
+                <span className="text-[12px] font-medium text-[#bbb] truncate group-hover:text-white transition-colors">
+                  {workspaceName}
+                </span>
+              </div>
+              <span
+                className="text-[10px] font-semibold shrink-0 px-1.5 py-0.5 rounded"
+                style={{
+                  background: isPremium ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+                  color: isPremium ? '#818cf8' : '#444',
+                  border: isPremium ? '1px solid rgba(99,102,241,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
+                {planLabel}
+              </span>
             </Link>
 
-            {/* User row with initials avatar */}
-            <div className="flex items-center gap-2 px-2.5 py-1.5">
-              <div className="w-6 h-6 rounded-full bg-[#6366f1]/20 flex items-center justify-center text-[#6366f1] text-[10px] font-bold shrink-0 ring-1 ring-[#6366f1]/20">
-                {session.user.email?.[0]?.toUpperCase() || '?'}
+            {/* User row */}
+            <div className="flex items-center gap-2 px-2.5 py-1">
+              <div
+                className="w-[20px] h-[20px] rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
+                style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.18)' }}
+              >
+                {initial}
               </div>
-              <p className="text-[11px] text-[#a1a1a1] truncate flex-1 min-w-0">{session.user.email}</p>
+              <p className="text-[11px] text-[#444] truncate flex-1 min-w-0">{session.user.email}</p>
             </div>
           </div>
         </aside>
@@ -123,16 +152,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
               adminUser ? (
                 <Link
                   href="/admin/subscriptions"
-                  className="inline-flex items-center gap-1.5 px-3 h-8 rounded-md bg-destructive/10 border border-destructive/20 text-[12px] font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[11px] font-semibold transition-colors"
+                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}
                 >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Admin Portal
+                  <ShieldCheck className="w-3 h-3" />
+                  Admin
                 </Link>
               ) : undefined
             }
           />
-          <main className="flex-1 bg-black overflow-y-auto">
-            <div className="max-w-[1100px] mx-auto px-8 py-8">{children}</div>
+          <main className="flex-1 overflow-y-auto" style={{ background: '#000' }}>
+            <div className="max-w-[1080px] mx-auto px-8 py-8">{children}</div>
           </main>
         </div>
       </div>
