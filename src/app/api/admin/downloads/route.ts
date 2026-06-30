@@ -37,6 +37,10 @@ export async function GET(req: NextRequest) {
 function buildKbRerankPatchXml(): string {
   const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
 
+  // Script content shared between sys_script_include (runtime) and sys_module
+  // (SN Studio workspace source). Extracted here so both stay in sync.
+  const script = buildAiVoiceKbSearcherScript()
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <unload unload_date="${now}">
   <sys_update_set action="INSERT_OR_UPDATE">
@@ -62,7 +66,25 @@ function buildKbRerankPatchXml(): string {
     <mobile_callable>false</mobile_callable>
     <name>AiVoiceKbSearcher</name>
     <sandbox_callable>false</sandbox_callable>
-    <script><![CDATA[/**
+    <script><![CDATA[${script}]]></script>
+    <sys_policy/>
+  </sys_script_include>
+
+  <sys_module action="INSERT_OR_UPDATE">
+    <sys_id>20903443d06744efb4a7f37a90e95814</sys_id>
+    <sys_scope display_value="x_ztpas_ai_voice_a">eaf4191f0e074fba9cc08a4b05f91a81</sys_scope>
+    <sys_update_name>sys_module_20903443d06744efb4a7f37a90e95814</sys_update_name>
+    <external_source>false</external_source>
+    <path>x_ztpas_ai_voice_a/ai-voice-agent/1.0.2/src/server/script-includes/AiVoiceKbSearcher.js</path>
+    <sys_name>x_ztpas_ai_voice_a/ai-voice-agent/1.0.2/src/server/script-includes/AiVoiceKbSearcher.js</sys_name>
+    <content><![CDATA[${script}]]></content>
+  </sys_module>
+
+</unload>`
+}
+
+function buildAiVoiceKbSearcherScript(): string {
+  return `/**
  * AiVoiceKbSearcher - Two-layer KB search for token-efficient retrieval
  * Layer 1: Keyword-based search on cached chunks (no LLM cost)
  * Layer 2: Relevance ranking with deduplication and recency scoring
@@ -552,10 +574,5 @@ AiVoiceKbSearcher.prototype = {
     },
 
     type: 'AiVoiceKbSearcher'
-};
-]]></script>
-    <sys_policy/>
-  </sys_script_include>
-
-</unload>`
+};`
 }
