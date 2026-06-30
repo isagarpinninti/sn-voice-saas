@@ -1195,15 +1195,15 @@ export class VoicePipeline extends EventEmitter {
   }
 
   /**
-   * TPD fallback: retry on llama-3.1-8b-instant when the primary model hits
+   * TPD fallback: retry on llama-3.2-3b-preview when the primary model hits
    * the daily token cap. If 8b narrates without calling a tool, force a tool
    * call so we don't hallucinate data (e.g. fake KB articles).
    * Returns null on failure so the caller can fall through to the generic path.
    */
   private async _runTpdFallback(origParams: any): Promise<{ text: string; toolCalls: any[] } | null> {
-    addLog('warn', 'llm', 'TPD cap hit on ' + origParams.model + ' — falling back to llama-3.1-8b-instant', { tenantId: this.tenant.id })
+    addLog('warn', 'llm', 'TPD cap hit on ' + origParams.model + ' — falling back to llama-3.2-3b-preview', { tenantId: this.tenant.id })
     const narrationPattern = /\b(let me|i['’]?ll|i will|i['’]?m going to|i am going to|let['’]?s|going to)\s+(search|look|check|find|pull|fetch|create|make|take a look|walk you through|see)\b/i
-    const fbParams: any = { ...origParams, model: 'llama-3.1-8b-instant', stream: false }
+    const fbParams: any = { ...origParams, model: 'llama-3.2-3b-preview', stream: false }
     // Try normal tool_choice first, but if 8b hits Groq's failed_generation
     // (malformed tool JSON under guided decoding), retry with tool_choice='required'
     // which forces a valid tool-call emission path.
@@ -1376,13 +1376,13 @@ export class VoicePipeline extends EventEmitter {
       const msg = err?.message || ''
 
       // Recovery 0: Groq 429 TPD (tokens-per-day) cap on the primary model.
-      // Retry on llama-3.1-8b-instant — same account, different bucket,
+      // Retry on llama-3.2-3b-preview — same account, different bucket,
       // ~10x higher daily quota. If 8b returns narration without a tool call
       // (common — the model would rather chat than call functions), we force
       // a tool call via a second retry with tool_choice='required'. Without
       // this, 8b hallucinates KB content it never actually fetched.
       const isTpdRateLimit = /429/.test(msg) && /tokens per day|TPD|Rate limit reached/i.test(msg)
-      if (isTpdRateLimit && params.model !== 'llama-3.1-8b-instant') {
+      if (isTpdRateLimit && params.model !== 'llama-3.2-3b-preview') {
         const fallback = await this._runTpdFallback(params)
         if (fallback) return fallback
       }
@@ -1435,7 +1435,7 @@ export class VoicePipeline extends EventEmitter {
           // instead of the hardcoded safe-recovery message below.
           const retryMsg = retryErr?.message || ''
           const retryIsTpd = /429/.test(retryMsg) && /tokens per day|TPD|Rate limit reached/i.test(retryMsg)
-          if (retryIsTpd && params.model !== 'llama-3.1-8b-instant') {
+          if (retryIsTpd && params.model !== 'llama-3.2-3b-preview') {
             const fallback = await this._runTpdFallback(params)
             if (fallback) return fallback
           }
