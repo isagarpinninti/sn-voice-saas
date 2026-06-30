@@ -84,6 +84,7 @@ model Tenant {
   phoneNumbers      PhoneNumber[]
   allowedCallers    AllowedCaller[]
   attachmentUploads AttachmentUpload[]
+  twilioConnection  TwilioConnection?
 
   company           String?
 
@@ -400,6 +401,24 @@ model ChatSession {
 
   @@index([sessionId])
   @@index([tenantId])
+}
+
+// =====================================================
+// Twilio Connection (per-tenant BYOC credentials)
+// =====================================================
+
+model TwilioConnection {
+  id          String   @id @default(cuid())
+  tenantId    String   @unique
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  accountSid  String
+  authToken   String   // AES-256-GCM encrypted: iv:tag:ciphertext (hex)
+  accountName String?  // fetched from Twilio on connect (friendly label)
+  verified    Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // =====================================================
