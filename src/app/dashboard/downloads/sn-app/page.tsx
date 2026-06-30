@@ -8,7 +8,7 @@ import { Section } from '@/components/ui/section'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Download, Server, Terminal, KeyRound, CheckCircle2, ExternalLink, BookOpen, Wrench, Cpu, Library, ShieldCheck } from 'lucide-react'
+import { Download, Server, Terminal, KeyRound, CheckCircle2, ExternalLink, BookOpen, Wrench, Cpu, Library, ShieldCheck, PanelRight } from 'lucide-react'
 import Link from 'next/link'
 import { SN_APP_VERSION } from '@/app/api/downloads/sn-app/route'
 
@@ -113,6 +113,47 @@ export default async function SnAppDownloadPage() {
               <Download className="w-4 h-4" />
               Download .zip
             </a>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Workspace Panel Update Set */}
+      <Card className="mb-8">
+        <CardContent className="p-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1.5">
+                <PanelRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                <h3 className="text-[15px] font-semibold text-foreground tracking-[-0.01em]">
+                  Workspace Sidebar Panel
+                </h3>
+                <Badge variant="outline">New</Badge>
+              </div>
+              <p className="text-[12.5px] text-muted-foreground">
+                Update Set · Adds a slide-in AI panel to any workspace record form · Voice + Chat · Auto-passes record context
+              </p>
+            </div>
+            <a
+              href="/api/workspace/update-set"
+              className={cn(buttonVariants({ size: 'default', variant: 'outline' }), 'shrink-0')}
+            >
+              <Download className="w-4 h-4" />
+              Download Update Set
+            </a>
+          </div>
+          <div className="mt-4 pt-4 border-t border-border grid gap-2">
+            {[
+              'In ServiceNow, navigate to System Update Sets → Retrieved Update Sets',
+              'Click Import Update Set from XML and upload the downloaded file',
+              'Preview and commit the Update Set — it adds three system properties and one UI script',
+              'Open System Properties → search "zevox" to verify the token and server URL were imported correctly',
+              'Navigate to any workspace record (e.g. Agent Workspace → Incidents) and press Alt+Z or look for the mic icon in the sidebar rail',
+            ].map((step, i) => (
+              <div key={i} className="flex items-start gap-2.5 text-[12.5px] text-muted-foreground">
+                <span className="shrink-0 w-4 h-4 rounded-full bg-secondary text-foreground text-[10px] font-semibold flex items-center justify-center mt-px">{i + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

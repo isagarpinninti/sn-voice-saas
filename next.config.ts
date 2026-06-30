@@ -11,6 +11,13 @@ const nextConfig: NextConfig = {
           { key: 'Pragma', value: 'no-cache' },
         ],
       },
+      {
+        source: '/panel.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+        ],
+      },
     ]
   },
 };

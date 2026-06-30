@@ -256,7 +256,7 @@ app.prepare().then(() => {
       try { msg = JSON.parse(str) } catch { return }
       if (msg.type === 'start') {
         addLog('info', 'pipeline', 'STARTING (orchestrator will pick agent)...', { tenantId: tenantRef.id })
-        pipeline.start(undefined, endUserSnId || undefined, msg.originPortal)
+        pipeline.start(undefined, endUserSnId || undefined, msg.originPortal, msg.table || undefined, msg.sysId || undefined)
           .then(() => addLog('info', 'pipeline', 'Started OK', { tenantId: tenantRef.id }))
           .catch((e: any) => {
             addLog('error', 'pipeline', 'FAIL: ' + e.message, { tenantId: tenantRef.id, data: { stack: e.stack?.substring(0, 500) } })

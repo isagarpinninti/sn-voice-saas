@@ -220,10 +220,10 @@ export class VoicePipeline extends EventEmitter {
     this.audioFormat = opts.audioFormat || 'widget'
   }
 
-  async start(agentId?: string, endUserSnId?: string, originPortal?: string) {
+  async start(agentId?: string, endUserSnId?: string, originPortal?: string, recordTable?: string, recordSysId?: string) {
     this.originPortal = (originPortal || '').toString().toLowerCase()
     this.endUserSysId = endUserSnId || ''
-    console.log(`[Pipeline] Starting. Instance: ${this.tenant.snInstanceUrl}` + (agentId ? `, Agent: ${agentId}` : ', orchestrator mode') + (endUserSnId ? `, EndUser: ${endUserSnId}` : '') + (this.originPortal ? `, Portal: ${this.originPortal}` : ''))
+    console.log(`[Pipeline] Starting. Instance: ${this.tenant.snInstanceUrl}` + (agentId ? `, Agent: ${agentId}` : ', orchestrator mode') + (endUserSnId ? `, EndUser: ${endUserSnId}` : '') + (this.originPortal ? `, Portal: ${this.originPortal}` : '') + (recordTable && recordSysId ? `, Record: ${recordTable}/${recordSysId}` : ''))
 
     if (!this.tenant.snInstanceUrl || !this.tenant.snUsername) {
       const msg = 'ServiceNow not connected. Go to ZeVox Dashboard → Connection and enter your instance details.'
@@ -286,6 +286,20 @@ export class VoicePipeline extends EventEmitter {
       prompt += '\n\nVOICE RULES: You are on a live voice call. Keep replies to 1-3 sentences. No markdown, no lists, no formatting. Speak naturally.'
       prompt += '\n\nTOOL DISCIPLINE: Never promise an action in words without actually calling the tool in the same turn. If you narrate "let me check the knowledge base" or "I am creating the ticket", you MUST call the corresponding tool immediately — do not fake progress. CRITICAL: NEVER invent, fabricate, or assume the result of a tool call. Never say "I have created incident INC0012345" unless the tool actually returned that number. The tool result will appear in the conversation — report ONLY what it contains. If no tool result is present, DO NOT claim the action was completed.'
       prompt += '\n\nFILE UPLOAD RULE: NEVER call request_attachment unless the user explicitly says they have a file, screenshot, or document to share. Do not suggest uploading as a troubleshooting step. Do not call it because a file might be useful. Only call it when the user volunteers they have something to upload.'
+
+      // Inject current record context when the panel is opened from a workspace form
+      if (recordTable && recordSysId) {
+        try {
+          const record = await this.fetchRecord(recordTable, recordSysId)
+          if (record) {
+            addLog('info', 'pipeline', `Record context loaded: ${recordTable}/${recordSysId}`, { tenantId: this.tenant.id })
+            prompt += `\n\nCURRENT RECORD CONTEXT:\nThe fulfiller is viewing this ${recordTable} record in ServiceNow:\n${JSON.stringify(record, null, 2)}\n\nUse this context proactively. Reference specific values (number, state, priority, description) when relevant. You can look up more details or take actions on this record using your tools.`
+          }
+        } catch (e: any) {
+          addLog('warn', 'pipeline', `Could not load record context ${recordTable}/${recordSysId}: ${e.message}`, { tenantId: this.tenant.id })
+        }
+      }
+
       this.messages.push({ role: 'system', content: prompt })
 
       // Init STT — use our SaaS Deepgram key by default, customer's key only if they provide their own
@@ -1439,6 +1453,26 @@ export class VoicePipeline extends EventEmitter {
   }
 
   // ── ServiceNow REST ──
+  private async fetchRecord(table: string, sysId: string): Promise<Record<string, string> | null> {
+    const auth = Buffer.from(`${this.tenant.snUsername}:${this.tenant.snPassword}`).toString('base64')
+    // Request a broad but useful set of fields; SN silently ignores unknown ones
+    const fields = 'number,short_description,description,state,priority,urgency,impact,category,subcategory,assignment_group,assigned_to,caller_id,opened_by,opened_at,updated_at,sys_updated_on,close_notes,resolution_code,active,stage,contact_type,sys_class_name,table_name,name,title,u_type,type,business_service,cmdb_ci'
+    const url = `${this.tenant.snInstanceUrl}/api/now/table/${encodeURIComponent(table)}/${encodeURIComponent(sysId)}?sysparm_fields=${encodeURIComponent(fields)}&sysparm_display_value=true&sysparm_exclude_reference_link=true`
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' },
+    })
+    if (!res.ok) return null
+    const data: any = await res.json()
+    if (!data?.result) return null
+    // Strip empty/null values to keep prompt concise
+    const result: Record<string, string> = {}
+    for (const [k, v] of Object.entries(data.result as Record<string, any>)) {
+      const val = typeof v === 'object' ? v?.display_value ?? v?.value ?? '' : String(v ?? '')
+      if (val && val !== 'false' && val !== '0') result[k] = val
+    }
+    return Object.keys(result).length ? result : null
+  }
+
   private async snFetch(method: string, path: string, body?: any): Promise<unknown> {
     const baseUrl = `${this.tenant.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1${path}`
     const auth = Buffer.from(`${this.tenant.snUsername}:${this.tenant.snPassword}`).toString('base64')
