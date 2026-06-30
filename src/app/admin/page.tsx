@@ -8,7 +8,7 @@ import { Section } from '@/components/ui/section'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table'
-import { Users, Building2, CheckCircle2, DollarSign, PhoneCall, FileText, CreditCard, Paintbrush } from 'lucide-react'
+import { Users, Building2, CheckCircle2, DollarSign, PhoneCall, FileText, CreditCard, Paintbrush, Download } from 'lucide-react'
 
 export default async function AdminPage() {
   const totalTenants = await db.tenant.count()
@@ -154,6 +154,25 @@ export default async function AdminPage() {
                 </CardContent>
               </Card>
             </Link>
+          </div>
+        </Section>
+      </div>
+
+      {/* SN Patches */}
+      <div className="mb-10">
+        <Section title="SN Update Set Patches" description="Download and import these into ServiceNow to apply fixes without reinstalling the full app.">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <a href="/api/admin/downloads?file=kb-rerank-patch" download="zevox-kb-rerank-patch.xml" className="block group">
+              <Card className="h-full hover:border-border/80 transition-colors">
+                <CardContent className="p-5">
+                  <div className="w-8 h-8 rounded-md bg-muted/60 border border-border flex items-center justify-center mb-3 group-hover:border-primary/40 transition-colors">
+                    <Download className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
+                  <p className="text-[13px] font-semibold text-foreground mb-0.5">KB Rerank Model Patch</p>
+                  <p className="text-[12px] text-muted-foreground">Updates <code className="text-[11px] bg-muted px-1 py-0.5 rounded">AiVoiceKbSearcher</code> to use <code className="text-[11px] bg-muted px-1 py-0.5 rounded">llama-3.2-3b-preview</code> — replaces deprecated <code className="text-[11px] bg-muted px-1 py-0.5 rounded">llama-3.1-8b-instant</code>.</p>
+                </CardContent>
+              </Card>
+            </a>
           </div>
         </Section>
       </div>
