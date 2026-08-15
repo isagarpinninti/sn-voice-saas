@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@connector-schema": ["./packages/connector-schema/src/index.ts"]
     }
   },
   "include": [

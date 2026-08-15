@@ -1,0 +1,16 @@
+{
+  "_comment": "Intentionally invalid: 'name' has illegal characters for an LLM function name, and the enum param declares no enum_values. Used to prove both the TS and Python validators reject the same fixture.",
+  "connector_id": "9f2c1a10-0000-4000-8000-000000000003",
+  "name": "Halo Create Ticket!",
+  "description": "Bad name and missing enum values.",
+  "method": "POST",
+  "path_template": "/api/Tickets",
+  "params": [
+    { "name": "urgency", "location": "body", "type": "enum", "required": false }
+  ],
+  "response_mapping": {
+    "success_path": "[0].id",
+    "template": "Ticket #{id} created.",
+    "error_template": "Failed ({status})."
+  }
+}

@@ -10,26 +10,26 @@ import {
 } from 'lucide-react'
 
 const FEATURES = [
-  { Icon: Mic, title: 'Neural voice quality', desc: 'Deepgram Nova-3 STT and Aura TTS. Sub-second latency with natural turn-taking and barge-in.' },
-  { Icon: Zap, title: 'Direct tool execution', desc: 'Tools run via GlideRecord on your instance. Check tickets, create incidents, approve requests — by voice.' },
+  { Icon: Mic, title: 'Neural voice quality', desc: 'Whisper STT and Kokoro TTS deliver sub-second latency with natural turn-taking and barge-in.' },
+  { Icon: Zap, title: 'Any backend, one tool schema', desc: 'Tools run against any REST API through a generic connector, or via GlideRecord on ServiceNow. Check tickets, create incidents, approve requests — by voice.' },
   { Icon: Brain, title: 'Cross-session memory', desc: 'The agent remembers users across calls and picks up where the last conversation left off.' },
-  { Icon: ShieldCheck, title: 'Enterprise security', desc: 'Data stays in your ServiceNow instance. PII masking, prompt-injection detection, configurable guardrails.' },
+  { Icon: ShieldCheck, title: 'PII redacted before the LLM', desc: 'Every transcript is redacted before it reaches an LLM call — names, emails, and IDs are stripped and only rehydrated at the moment a tool call needs the real value.' },
   { Icon: Activity, title: 'Streaming pipeline', desc: 'STT, LLM, and TTS stream in parallel. First words spoken before the response is fully generated.' },
-  { Icon: Layers, title: 'Zero external portals', desc: 'Agent config, tools, analytics, conversations — everything managed from ServiceNow.' },
+  { Icon: Layers, title: 'Bring your own LLM', desc: 'Route every call through your own Groq, OpenAI, or Anthropic key via our BYOK proxy — same redaction guarantees, your model, your cost.' },
 ]
 
 const STEPS = [
-  { n: '01', t: 'Connect ServiceNow', d: 'Enter your instance URL and service account credentials. One-time setup.' },
-  { n: '02', t: 'Configure your agent', d: 'Write the personality, add tools, set guardrails — all from your ServiceNow workspace.' },
-  { n: '03', t: 'Add your LLM key', d: 'Paste your Groq (free) or OpenAI key in the ServiceNow LLM config. You control the model and cost.' },
+  { n: '01', t: 'Connect your backend', d: 'Point us at ServiceNow, HaloITSM, or any REST API you already run. One-time setup.' },
+  { n: '02', t: 'Configure your agent', d: 'Write the personality and guardrails, then enable connectors and tools — all from your ZeVox dashboard.' },
+  { n: '03', t: 'Add your LLM key', d: 'Bring a Groq, OpenAI, or Anthropic key. Every call routes through our self-hosted BYOK proxy, so you control the model and the cost.' },
   { n: '04', t: 'Embed or call', d: 'Drop the widget into any page — or, on Premium, point a real phone number at your agent.' },
 ]
 
 const STATS = [
   { v: '<500ms', l: 'Voice latency' },
   { v: '50 min', l: 'Free to try' },
-  { v: '100%', l: 'Managed in SN' },
-  { v: '0', l: 'External portals' },
+  { v: 'PII', l: 'Redacted pre-LLM' },
+  { v: 'Any', l: 'REST API backend' },
 ]
 
 const PHONE_BULLETS = [
@@ -37,6 +37,25 @@ const PHONE_BULLETS = [
   { Icon: Hash, t: 'DTMF & menu routing', d: '“Press 1 for billing.” Touch-tones map to agent intents, so you can build voice IVRs that actually work.' },
   { Icon: Radio, t: 'Same agent, both channels', d: 'The widget and the phone line share one agent config, one knowledge base, one set of tools.' },
 ]
+
+// Presentational only — not a real billable Plan (no Prisma/RevenueCat entry).
+// "Talk to sales" routes straight to email; there's no self-serve checkout for this tier.
+const ENTERPRISE_PLAN = {
+  name: 'Enterprise',
+  tagline: 'Custom terms for scale and compliance',
+  price: 'Custom',
+  minutesLabel: 'Custom volume',
+  features: [
+    'Everything in Premium',
+    'Dedicated infrastructure',
+    'White-label widget & domain',
+    'Custom SLAs & DPA',
+    'SSO / SAML',
+    'Dedicated onboarding & support',
+  ],
+  cta: 'Talk to sales',
+  ctaHref: 'mailto:sales@zevox.com',
+} as const
 
 const FAQ = [
   {
@@ -49,11 +68,11 @@ const FAQ = [
   },
   {
     q: 'Do I bring my own LLM key?',
-    a: 'Yes. Paste a Groq (free tier works) or OpenAI key into your ServiceNow LLM config. You own the cost and the model choice.',
+    a: 'Yes. Bring a Groq (free tier works), OpenAI, or Anthropic key — every call routes through our self-hosted BYOK proxy. You own the cost and the model choice.',
   },
   {
     q: 'Is my data sent anywhere else?',
-    a: 'Agent config, tools, and conversation state live on your ServiceNow instance. Only the audio stream touches our STT/TTS providers during a live call.',
+    a: 'Transcripts are redacted before they ever reach your LLM provider — the real values are only rehydrated at the moment a tool call needs them.',
   },
   {
     q: 'What happens when I hit my monthly minutes?',
@@ -76,7 +95,6 @@ export default function LandingPage() {
               </svg>
             </div>
             <span className="text-[14px] font-semibold tracking-[-0.01em]">ZeVox</span>
-            <span className="hidden sm:inline text-[10px] text-muted-foreground/60 ml-1 tracking-widest uppercase">by ZeTechno</span>
           </a>
           <div className="hidden md:flex items-center gap-7 text-[12.5px] text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
@@ -119,13 +137,13 @@ export default function LandingPage() {
             <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-semibold tracking-[-0.045em] leading-[1.02] mb-6">
               Voice AI for
               <br />
-              <span className="text-gradient-brand">ServiceNow</span>
+              <span className="text-gradient-brand">your stack</span>
               <span className="text-foreground">, done right.</span>
             </h1>
 
             <p className="text-[17px] text-muted-foreground max-w-[540px] mb-9 leading-[1.6]">
-              A neural-quality voice agent that checks tickets, creates records, and resolves issues —
-              embedded as a widget or reached on a real phone number. Managed entirely from your ServiceNow instance.
+              A voice agent that checks tickets, creates records, and resolves issues —
+              embedded as a widget or reached on a real phone number, with every transcript redacted before it ever reaches an LLM.
             </p>
 
             <div className="flex flex-wrap items-center gap-2.5 mb-14">
@@ -161,32 +179,18 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Logos / Social proof ── */}
-      <section className="py-14 border-t border-border">
-        <p className="text-center text-[10px] text-muted-foreground/60 tracking-[0.2em] uppercase mb-7">
-          Trusted by teams running ServiceNow
-        </p>
-        <div className="flex items-center justify-center gap-10 opacity-30 flex-wrap">
-          {['Enterprise', 'Acme Corp', 'TechFlow', 'CloudOps', 'InfraHQ'].map((name) => (
-            <span key={name} className="text-[14px] font-semibold tracking-tight text-foreground">
-              {name}
-            </span>
-          ))}
-        </div>
-      </section>
-
       {/* ── Features ── */}
       <section id="features" className="py-28 px-6 border-t border-border">
         <div className="max-w-[1140px] mx-auto">
           <div className="max-w-[620px] mb-14">
             <p className="text-[10px] text-primary tracking-[0.2em] uppercase mb-3 font-medium">Capabilities</p>
             <h2 className="text-[clamp(1.75rem,3.5vw,2.5rem)] font-semibold tracking-[-0.035em] leading-[1.1] mb-4">
-              Built <span className="text-gradient-brand">for ServiceNow</span>.
+              Built <span className="text-gradient-brand">for your stack</span>.
               <br />
               Not bolted on.
             </h2>
             <p className="text-[15px] text-muted-foreground leading-relaxed">
-              Every feature designed for ServiceNow workflows — direct table access, not webhooks. Same agent on every channel.
+              Direct table access on ServiceNow, or any REST API through the same connector model — not webhooks. Same agent on every channel.
             </p>
           </div>
 
@@ -223,7 +227,7 @@ export default function LandingPage() {
             </h2>
 
             <p className="text-[15px] text-muted-foreground leading-relaxed mb-9 max-w-[500px]">
-              Skip the widget. Premium customers get a dedicated inbound phone number that rings straight to your ServiceNow agent —
+              Skip the widget. Premium customers get a dedicated inbound phone number that rings straight to your agent —
               the same agent, tools, and memory as the widget.
             </p>
 
@@ -338,24 +342,20 @@ export default function LandingPage() {
               Start free. <span className="text-gradient-brand">Scale when ready.</span>
             </h2>
             <p className="text-[15px] text-muted-foreground max-w-[520px] mx-auto">
-              Neural STT and TTS included on every plan. You bring your own LLM key.
+              Neural voice quality included on every plan. You bring your own LLM key.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-3 max-w-[960px] mx-auto">
+          <div className="grid md:grid-cols-4 gap-3 max-w-[1140px] mx-auto">
             <PricingCard plan={PLANS.FREE} />
             <PricingCard plan={PLANS.PRO} highlighted />
             <PricingCard plan={PLANS.PREMIUM} accent="violet" />
+            <PricingCard plan={ENTERPRISE_PLAN} accent="slate" />
           </div>
 
-          <div className="mt-10 text-center">
-            <p className="text-[13px] text-muted-foreground">
-              Need volume, dedicated infra, white-label, or custom SLAs?{' '}
-              <a href="mailto:sales@zevox.com" className="text-foreground hover:text-primary transition-colors underline decoration-border underline-offset-4">
-                Talk to sales
-              </a>
-            </p>
-          </div>
+          <p className="mt-8 text-center text-[12px] text-muted-foreground/70">
+            Minutes are total conversation time across widget and phone, pooled per tenant. Overage billed per-minute — never a hard cutoff.
+          </p>
         </div>
       </section>
 
@@ -389,7 +389,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 mesh-bg pointer-events-none" />
         <div className="relative max-w-[640px] mx-auto text-center">
           <h2 className="text-[clamp(1.75rem,3.5vw,2.5rem)] font-semibold tracking-[-0.035em] mb-4 leading-[1.1]">
-            Give your ServiceNow <span className="text-gradient-brand">a voice.</span>
+            Give your stack <span className="text-gradient-brand">a voice.</span>
           </h2>
           <p className="text-[15px] text-muted-foreground mb-8">
             50 free minutes. No credit card. Five-minute setup.
@@ -430,7 +430,7 @@ export default function LandingPage() {
             <a href="/docs" className="hover:text-muted-foreground transition-colors">Documentation</a>
           </div>
           <p className="text-[11px] text-muted-foreground/60">
-            © {new Date().getFullYear()} ZeVox — A <span className="text-muted-foreground">ZeTechno</span> Product
+            © {new Date().getFullYear()} ZeVox. All rights reserved.
           </p>
         </div>
       </footer>
@@ -443,11 +443,15 @@ function PricingCard({
   highlighted,
   accent,
 }: {
-  plan: (typeof PLANS)[keyof typeof PLANS]
+  plan: (typeof PLANS)[keyof typeof PLANS] | typeof ENTERPRISE_PLAN
   highlighted?: boolean
-  accent?: 'violet'
+  accent?: 'violet' | 'slate'
 }) {
   const isPopular = 'popular' in plan && plan.popular === true
+  const minutesLine = 'minutesLabel' in plan
+    ? plan.minutesLabel
+    : `${plan.minutesPerMonth.toLocaleString()} minutes ${'oneTimeTrial' in plan && plan.oneTimeTrial ? 'total' : 'per month'}`
+  const ctaHref = 'ctaHref' in plan ? plan.ctaHref : '/auth'
 
   return (
     <Card
@@ -455,6 +459,7 @@ function PricingCard({
         'relative flex flex-col h-full transition-all duration-300 hover:-translate-y-0.5',
         highlighted && 'border-primary/40 bg-primary/[0.04] glow-ring',
         accent === 'violet' && 'border-indigo-400/30 bg-indigo-400/[0.04]',
+        accent === 'slate' && 'border-border bg-secondary/20',
       )}
     >
       {isPopular && (
@@ -463,22 +468,26 @@ function PricingCard({
         </div>
       )}
       <CardContent className="p-6 flex flex-col h-full">
-        <h3 className="text-[14px] font-semibold text-foreground mb-2">{plan.name}</h3>
+        <h3 className="text-[14px] font-semibold text-foreground mb-1">{plan.name}</h3>
+        <p className="text-[11.5px] text-muted-foreground/80 mb-3 leading-snug min-h-[28px]">{plan.tagline}</p>
         <div className="flex items-baseline gap-1 mb-1.5">
-          <span className="text-[30px] font-semibold tracking-tight text-foreground tabular-nums">${plan.price}</span>
-          {plan.price > 0 && <span className="text-[12px] text-muted-foreground">/mo</span>}
+          {typeof plan.price === 'number' ? (
+            <>
+              <span className="text-[30px] font-semibold tracking-tight text-foreground tabular-nums">${plan.price}</span>
+              {plan.price > 0 && <span className="text-[12px] text-muted-foreground">/mo</span>}
+            </>
+          ) : (
+            <span className="text-[30px] font-semibold tracking-tight text-foreground">{plan.price}</span>
+          )}
         </div>
-        <p className="text-[11.5px] text-muted-foreground mb-6">
-          {plan.minutesPerMonth.toLocaleString()} minutes{' '}
-          {'oneTimeTrial' in plan && plan.oneTimeTrial ? 'total' : 'per month'}
-        </p>
+        <p className="text-[11.5px] text-muted-foreground mb-6">{minutesLine}</p>
 
         <ul className="space-y-2.5 mb-6 flex-1">
           {plan.features.map((f: string) => (
             <li key={f} className="text-[12.5px] text-muted-foreground flex items-start gap-2">
               <Check className={cn(
                 'w-3.5 h-3.5 shrink-0 mt-[2px]',
-                accent === 'violet' ? 'text-indigo-400/80' : 'text-primary/80',
+                accent === 'violet' ? 'text-indigo-400/80' : accent === 'slate' ? 'text-muted-foreground' : 'text-primary/80',
               )} />
               <span className="leading-snug">{f}</span>
             </li>
@@ -486,7 +495,7 @@ function PricingCard({
         </ul>
 
         <a
-          href="/auth"
+          href={ctaHref}
           className={cn(
             buttonVariants({ variant: highlighted ? 'default' : 'outline', size: 'sm' }),
             'w-full',

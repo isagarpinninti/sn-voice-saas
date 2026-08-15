@@ -1,6 +1,7 @@
 export const PLANS = {
   FREE: {
     name: 'Free Trial',
+    tagline: 'Try the full pipeline, no card required',
     price: 0,
     minutesPerMonth: 50,
     oneTimeTrial: true,
@@ -10,16 +11,17 @@ export const PLANS = {
     overageRate: null,
     features: [
       '50 minutes total (one-time)',
-      '1 ServiceNow instance',
+      '1 backend connection · unlimited connectors',
       '1 voice agent',
       'Neural STT + TTS included',
-      'ServiceNow tool execution',
+      'ServiceNow, HaloITSM, or any REST API',
       'Basic analytics',
     ],
     cta: 'Start free trial',
   },
   PRO: {
     name: 'Pro',
+    tagline: 'For teams running real support volume',
     price: 79,
     minutesPerMonth: 500,
     concurrentLimit: 5,
@@ -29,11 +31,11 @@ export const PLANS = {
     popular: true,
     features: [
       '500 minutes per month',
-      '3 ServiceNow instances',
+      '3 backend connections · unlimited connectors',
       '5 voice agents',
       'All premium TTS voices',
       'Cross-session memory',
-      'KB search integration',
+      'Knowledge base search',
       'Full analytics dashboard',
       'Priority email support',
     ],
@@ -41,6 +43,7 @@ export const PLANS = {
   },
   PREMIUM: {
     name: 'Premium',
+    tagline: 'Full coverage — widget and phone, one agent',
     price: 199,
     minutesPerMonth: 2000,
     concurrentLimit: 25,
@@ -50,9 +53,9 @@ export const PLANS = {
     features: [
       '2,000 minutes per month',
       'Dedicated inbound phone number',
-      'Unlimited instances and agents',
+      'Unlimited backend connections, agents, and connectors',
       'BYOK TTS & STT option',
-      'Cross-session memory + KB search',
+      'Cross-session memory + knowledge base search',
       'Advanced guardrails & compliance',
       'SLA guarantee (99.9%)',
       'Priority support + onboarding',

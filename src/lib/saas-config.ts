@@ -17,7 +17,7 @@ export interface SaasConfigData {
 
 const DEFAULTS: SaasConfigData = {
   saasName:     'ZeVox',
-  tagline:      'AI Voice Agents for ServiceNow',
+  tagline:      'Voice AI for Your Entire Stack',
   logoUrl:      null,
   faviconUrl:   null,
   primaryColor: '#10b981',

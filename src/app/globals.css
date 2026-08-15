@@ -51,8 +51,8 @@
   --color-sidebar-border: rgba(255,255,255,0.08);
   --color-sidebar-ring: #6366f1;
 
-  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "SF Mono", "Fira Code", ui-monospace, monospace;
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), "SF Mono", "Fira Code", ui-monospace, monospace;
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -75,7 +75,7 @@ html {
 body {
   background-color: #000;
   color: #ededed;
-  font-family: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   margin: 0;
   line-height: 1.5;
   letter-spacing: -0.011em;

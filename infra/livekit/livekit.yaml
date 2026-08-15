@@ -1,0 +1,32 @@
+# Self-hosted LiveKit server config, local dev only (see M-livekit of the
+# merge plan). Production deploys must generate their own keys and set
+# use_external_ip: true with a real public IP/domain for Twilio's SIP trunk
+# to reach livekit-sip through.
+port: 7880
+
+# Required for SIP trunk/dispatch-rule management RPCs (shared coordination
+# layer with livekit-sip) — livekit-server's core room APIs work fine
+# without this, but everything under SipClient does not.
+redis:
+  address: livekit-redis:6379
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+
+keys:
+  # local-dev-only key/secret — never used in production, not a real secret.
+  zevoxlocaldevkey: qJv0gbLt4cOLnfxEDNXYNmytJ5aMsYxocyJcSQNh
+
+room:
+  auto_create: true
+
+# LiveKit signs each webhook POST with these same keys — our receiver
+# verifies the signature before ever calling fetch_agent_config(). See
+# voice_engine/livekit_server.py.
+webhook:
+  api_key: zevoxlocaldevkey
+  urls:
+    - http://voice-engine-livekit:7861/livekit/webhook

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/ui/page-header'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useToast } from '@/components/ui/toast'
+import { Avatar } from '@/components/ui/avatar'
 import {
   MessageSquare, X, Loader2, User, Bot, Wrench,
   RefreshCw, Search, Clock, Hash,
@@ -73,19 +74,10 @@ function msgText(content: HistoryMessage['content']): string {
   return ''
 }
 
-function initials(name: string | null | undefined) {
-  if (!name) return '?'
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-}
-
 // ── Sub-components ─────────────────────────────────────────────────────────
 
 function AgentAvatar({ name }: { name: string | null }) {
-  return (
-    <div className="w-8 h-8 rounded-full bg-primary/15 text-primary text-[11px] font-bold flex items-center justify-center shrink-0">
-      {initials(name)}
-    </div>
-  )
+  return <Avatar name={name} size={32} />
 }
 
 function MessageBubble({ msg, idx }: { msg: HistoryMessage; idx: number }) {

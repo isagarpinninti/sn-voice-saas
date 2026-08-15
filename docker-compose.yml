@@ -1,0 +1,130 @@
+# Local dev stack for the VoiceConnect merge (self-hosted voice-engine +
+# connectors). ZeVox's Next.js app itself runs on the host via `npm run dev`
+# for fast iteration (its own Dockerfile at repo root is a production build,
+# not meant for hot-reload dev) — this compose file covers only its backing
+# services: Postgres, the LiteLLM proxy, and the forked voice-engine.
+#
+# Usage:
+#   docker compose up -d --build
+#   npx prisma db push                      # apply schema to the local db
+#   psql "$LOCAL_DATABASE_URL" -f prisma/migrations/add_voice_engine_role.sql
+#   DATABASE_URL="$LOCAL_DATABASE_URL" npm run dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=zevox
+      - POSTGRES_PASSWORD=zevox_dev
+      - POSTGRES_DB=zevox
+    volumes:
+      - zevox_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zevox"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [zevox]
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    ports:
+      - "4001:4000"
+    environment:
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-zevox-local-dev}
+    volumes:
+      - ./voice-engine/litellm_config.yaml:/app/config.yaml
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    networks: [zevox]
+
+  voice-engine:
+    build:
+      context: ./voice-engine
+      dockerfile: Dockerfile
+    ports:
+      - "7860:7860"
+    environment:
+      - VOICE_ENGINE_DB_URL=postgresql://zevox_voice_engine_role:${ZEVOX_VOICE_ENGINE_ROLE_PASSWORD:-localdev_only_password}@postgres:5432/zevox
+      - LITELLM_BASE_URL=http://litellm:4000
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-zevox-local-dev}
+      - LITELLM_MODEL=${LITELLM_MODEL:-zevox-mock}
+      - VOICE_SESSION_SIGNING_KEY=${VOICE_SESSION_SIGNING_KEY:-local-dev-signing-key-not-for-prod}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    networks: [zevox]
+
+  # Phone calls (LiveKit path). Separate process/service from `voice-engine`
+  # above (which stays WebRTC-widget-only) — different transport, same
+  # pipeline code (pipeline.py). See voice_engine/livekit_server.py.
+  voice-engine-livekit:
+    build:
+      context: ./voice-engine
+      dockerfile: Dockerfile
+    command: ["uv", "run", "python", "-m", "voice_engine.livekit_server"]
+    ports:
+      - "7861:7861"
+    environment:
+      - VOICE_ENGINE_DB_URL=postgresql://zevox_voice_engine_role:${ZEVOX_VOICE_ENGINE_ROLE_PASSWORD:-localdev_only_password}@postgres:5432/zevox
+      - LITELLM_BASE_URL=http://litellm:4000
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-zevox-local-dev}
+      - LITELLM_MODEL=${LITELLM_MODEL:-zevox-mock}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - LIVEKIT_URL=ws://livekit-server:7880
+      - LIVEKIT_API_KEY=zevoxlocaldevkey
+      - LIVEKIT_API_SECRET=qJv0gbLt4cOLnfxEDNXYNmytJ5aMsYxocyJcSQNh
+    depends_on:
+      postgres:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+      livekit-server:
+        condition: service_started
+    networks: [zevox]
+
+  livekit-server:
+    image: livekit/livekit-server:latest
+    command: ["--config", "/etc/livekit.yaml"]
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      - ./infra/livekit/livekit.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      livekit-redis:
+        condition: service_started
+    networks: [zevox]
+
+  livekit-sip:
+    image: livekit/sip:latest
+    command: ["--config", "/etc/sip.yaml"]
+    ports:
+      - "5060:5060/udp"
+      - "10000-10100:10000-10100/udp"
+    volumes:
+      - ./infra/livekit/sip.yaml:/etc/sip.yaml:ro
+    depends_on:
+      livekit-server:
+        condition: service_started
+      livekit-redis:
+        condition: service_started
+    networks: [zevox]
+
+  livekit-redis:
+    image: redis:7-alpine
+    networks: [zevox]
+
+networks:
+  zevox:
+    driver: bridge
+
+volumes:
+  zevox_pg_data:

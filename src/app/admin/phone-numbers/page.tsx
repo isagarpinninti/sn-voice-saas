@@ -494,7 +494,7 @@ export default function PhoneNumbersAdminPage() {
         <EmptyState
           icon={Phone}
           title="No phone numbers yet"
-          description="Buy a number in Twilio or Telnyx, point its voice webhook at /api/phone/incoming, then add it here to route calls to a tenant's agent."
+          description="Buy or import a Twilio number from a tenant's Phone Numbers page and assign it to an agent — inbound routing to the voice engine is configured automatically."
         />
       ) : (
         <Card>

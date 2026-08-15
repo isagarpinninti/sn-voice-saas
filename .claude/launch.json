@@ -7,6 +7,13 @@
       "runtimeArgs": ["-m", "http.server", "4444"],
       "port": 4444,
       "cwd": "/Users/sagarpinninti/Desktop/SN/sn-voice-saas/public"
+    },
+    {
+      "name": "sn-voice-saas",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "3005"],
+      "port": 3005,
+      "cwd": "/Users/sagarpinninti/Desktop/SN/sn-voice-saas"
     }
   ]
 }

@@ -16,13 +16,13 @@ export default function TermsPage() {
         <h1 className="text-[28px] font-bold text-white tracking-[-0.02em] mb-2">Terms of Service</h1>
         <p className="text-[13px] text-zinc-600 mb-10">Last updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
 
-        <p className="mb-6">These terms govern your use of ZeVox, an AI voice agent platform for ServiceNow, operated by ZeTechno.</p>
+        <p className="mb-6">These terms govern your use of ZeVox, an AI voice agent platform for ServiceNow, HaloITSM, and other connected backends.</p>
 
         <H>1. Service Description</H>
         <p className="mb-6">ZeVox provides a voice gateway that enables AI-powered voice conversations with ServiceNow. The service includes speech-to-text processing, text-to-speech synthesis, and a real-time voice pipeline. All agent configuration, tool execution, and conversation data storage occurs on your ServiceNow instance.</p>
 
         <H>2. Accounts</H>
-        <p className="mb-6">You must provide accurate information when creating an account. You are responsible for maintaining the security of your account credentials, API tokens, and ServiceNow connection details. You must notify us immediately of any unauthorized use.</p>
+        <p className="mb-6">You must provide accurate information when creating an account. You are responsible for maintaining the security of your account credentials, API tokens, and backend connection details (ServiceNow, HaloITSM, or any other connector). You must notify us immediately of any unauthorized use.</p>
 
         <H>3. Free Trial</H>
         <p className="mb-6">New accounts receive a one-time allocation of 50 minutes of voice processing. This trial does not renew. Once the 50 minutes are consumed, you must upgrade to a paid plan to continue using the service.</p>
@@ -43,8 +43,8 @@ export default function TermsPage() {
         <H>6. Your Data</H>
         <p className="mb-6">You retain full ownership of all data processed through the service. Conversation content, tool outputs, and user interactions are stored on your ServiceNow instance, not on our servers. We process audio in real-time memory only. See our <a href="/privacy" className="text-emerald-400 hover:underline">Privacy Policy</a> for full details.</p>
 
-        <H>7. ServiceNow Credentials</H>
-        <p className="mb-6">You are responsible for creating and managing the ServiceNow service account used by ZeVox. We recommend creating a dedicated account with the minimum required roles. Credentials are encrypted at rest on our servers and used solely for API communication with your instance.</p>
+        <H>7. Backend Credentials</H>
+        <p className="mb-6">You are responsible for creating and managing the ServiceNow service account, and any other connector credentials (e.g. HaloITSM), used by ZeVox. We recommend creating dedicated accounts with the minimum required roles. Credentials are encrypted at rest on our servers and used solely for API communication with the backend they belong to.</p>
 
         <H>8. Availability</H>
         <p className="mb-6">We target 99.9% uptime for paid plans but do not guarantee it for the free tier. We reserve the right to perform maintenance with reasonable notice. The voice gateway depends on third-party services (Deepgram, your LLM provider) whose availability is outside our control.</p>
@@ -59,7 +59,7 @@ export default function TermsPage() {
         <p>For questions about these terms, contact <a href="mailto:legal@zevox.com" className="text-emerald-400 hover:underline">legal@zevox.com</a>.</p>
 
         <div className="mt-12 pt-6 border-t border-white/[0.04] text-[11px] text-zinc-700">
-          ZeVox — A ZeTechno Product
+          ZeVox
         </div>
       </article>
     </div>

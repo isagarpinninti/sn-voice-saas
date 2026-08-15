@@ -22,7 +22,7 @@ interface SaasConfig {
 
 const DEFAULTS: SaasConfig = {
   saasName: 'ZeVox',
-  tagline: 'AI Voice Agents for ServiceNow',
+  tagline: 'Voice AI for Your Entire Stack',
   logoUrl: '',
   faviconUrl: '',
   primaryColor: '#10b981',
@@ -131,7 +131,7 @@ export default function SaasConfigPage() {
                 <Input
                   value={config.tagline}
                   onChange={e => update('tagline', e.target.value)}
-                  placeholder="AI Voice Agents for ServiceNow"
+                  placeholder="Voice AI for Your Entire Stack"
                   className="bg-[#111] border-white/10 text-[#ededed]"
                 />
                 <p className="text-[10px] text-[#555]">Shown on the login page and marketing meta description.</p>

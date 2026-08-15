@@ -5,6 +5,8 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { decrypt } from '@/lib/encrypt'
 import { PHONE_ELIGIBLE_PLANS } from '@/lib/plans'
+import { instanceBasicAuthValue } from '@/lib/instance-credentials'
+import { registerPhoneNumberWithLiveKit } from '@/lib/livekit-sip'
 
 // POST — purchase a number from Twilio and import it
 // body: { e164, agentId?, friendly? }
@@ -44,13 +46,13 @@ export async function POST(req: NextRequest) {
     authToken: decrypt(tenant.twilioConnection.authToken),
   }
   const basic = Buffer.from(`${accountSid}:${authToken}`).toString('base64')
-  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/phone/incoming`
 
-  // Purchase the number
+  // Purchase the number. No VoiceUrl webhook — inbound routing is via the
+  // Twilio Elastic SIP Trunk association (external, Twilio-console-side)
+  // feeding self-hosted livekit-sip, registered by registerPhoneNumberWithLiveKit
+  // below, not a Voice webhook on this number.
   const buyForm = new URLSearchParams()
   buyForm.set('PhoneNumber', e164)
-  buyForm.set('VoiceUrl', webhookUrl)
-  buyForm.set('VoiceMethod', 'POST')
   if (friendly) buyForm.set('FriendlyName', friendly)
 
   const buyRes = await fetch(
@@ -74,6 +76,9 @@ export async function POST(req: NextRequest) {
     if (instanceId && agentId) {
       await syncPhoneToSN(instanceId, phone.id, e164, agentId, friendly)
     }
+    if (agentId) {
+      registerPhoneNumberWithLiveKit(e164, agentId).catch(() => {})
+    }
 
     return NextResponse.json({ phoneNumber: phone })
   } catch (e: any) {
@@ -89,11 +94,11 @@ export async function POST(req: NextRequest) {
 async function syncPhoneToSN(instanceId: string, phoneId: string, e164: string, agentId: string, friendly: string | null) {
   try {
     const [instance, agent] = await Promise.all([
-      db.instance.findUnique({ where: { id: instanceId }, select: { snInstanceUrl: true, snUsername: true, snPassword: true } }),
+      db.instance.findUnique({ where: { id: instanceId }, select: { snInstanceUrl: true, snUsername: true, snPassword: true, snPasswordEncrypted: true } }),
       db.agent.findUnique({ where: { id: agentId }, select: { snAgentId: true } }),
     ])
     if (!instance || !agent?.snAgentId) return
-    const basic = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
+    const basic = instanceBasicAuthValue(instance)
     await fetch(`${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/phone-numbers`, {
       method: 'POST',
       headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/json' },

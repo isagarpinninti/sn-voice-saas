@@ -1,0 +1,26 @@
+{
+  "connector_id": "9f2c1a10-0000-4000-8000-000000000001",
+  "name": "halo_create_ticket",
+  "description": "Create a new support ticket in Halo ITSM.",
+  "method": "POST",
+  "path_template": "/api/Tickets",
+  "params": [
+    { "name": "summary", "location": "body", "type": "string", "required": true },
+    { "name": "details", "location": "body", "type": "string", "required": true },
+    {
+      "name": "urgency",
+      "location": "body",
+      "type": "enum",
+      "enum_values": ["low", "medium", "high"],
+      "required": false
+    }
+  ],
+  "body_template": { "tickettype_id": 1 },
+  "response_mapping": {
+    "success_path": "[0]",
+    "template": "Ticket #{id} created.",
+    "error_template": "Sorry, I couldn't create that ticket ({status})."
+  },
+  "timeout_ms": 8000,
+  "enabled": true
+}

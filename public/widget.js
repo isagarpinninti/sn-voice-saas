@@ -23,7 +23,7 @@
   }
   var SN_USER_ID=getSnUserId()
 
-  var C={color:'#059669',pos:'right',name:'',brand:true,logo:'',radius:'full',mode:'voice_only',greeting:'',launcherLabel:'Start a call',launcherDark:true}
+  var C={color:'#059669',pos:'right',name:'',brand:true,logo:'',radius:'full',mode:'voice_only',greeting:'',launcherLabel:'Start a call',launcherDark:true,engine:'legacy',agentId:''}
   var pendingNavUrls=[]
 
   function detectOriginPortal(){
@@ -91,6 +91,8 @@
     if(c.greeting)C.greeting=c.greeting
     if(c.launcherLabel)C.launcherLabel=c.launcherLabel
     if(c.launcherDark===false)C.launcherDark=false
+    if(c.engine==='webrtc')C.engine='webrtc'
+    if(c.agentId)C.agentId=c.agentId
   }).catch(function(){}).finally(build)
 
   /* ── STYLES ── */
@@ -100,54 +102,47 @@
 #zv{position:fixed;bottom:24px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;align-items:flex-end;gap:12px}
 #zv *{box-sizing:border-box;margin:0;padding:0;font-family:inherit}
 
-/* ZeVox orb — holographic metallic disc */
+/* ZeVox orb — soft blurred plasma sphere */
 .zvorb{
   background:
-    conic-gradient(from 200deg at 50% 50%,
-      #a0b8e8 0deg,
-      #c0b8f8 50deg,
-      #dcd0ff 90deg,
-      #c4d4f8 140deg,
-      #a8c0f0 180deg,
-      #b0acf0 230deg,
-      #ccc4fc 270deg,
-      #b8d0f8 310deg,
-      #a0b8e8 360deg)!important;
+    radial-gradient(circle at 34% 30%, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 26%),
+    radial-gradient(circle at 68% 66%, #6b8cff 0%, transparent 55%),
+    radial-gradient(circle at 30% 70%, #b088ff 0%, transparent 60%),
+    radial-gradient(circle at 70% 30%, #6ee7f5 0%, transparent 60%),
+    #0a0a0c!important;
   border-radius:50%!important;
   position:relative!important;
   overflow:hidden!important;
   flex-shrink:0!important;
-  aspect-ratio:1/1!important
+  aspect-ratio:1/1!important;
+  filter:blur(.4px) saturate(1.15)!important
 }
 .zvorb::after{
   content:''!important;position:absolute!important;inset:0!important;border-radius:50%!important;
-  background:
-    repeating-radial-gradient(circle at 50% 50%,
-      rgba(255,255,255,.0) 0px, rgba(255,255,255,.0) 7px,
-      rgba(255,255,255,.22) 8px, rgba(255,255,255,.0) 9px),
-    radial-gradient(ellipse at 30% 26%, rgba(255,255,255,.96) 0%, rgba(255,255,255,.35) 20%, transparent 46%)!important;
+  background:radial-gradient(ellipse at 32% 24%, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 22%, transparent 48%)!important;
+  mix-blend-mode:screen!important;
   pointer-events:none!important
 }
 
-@keyframes zvhue{0%{filter:hue-rotate(0deg) brightness(1)}50%{filter:hue-rotate(15deg) brightness(1.04)}100%{filter:hue-rotate(0deg) brightness(1)}}
+@keyframes zvhue{0%{filter:hue-rotate(0deg) blur(.4px) saturate(1.15)}50%{filter:hue-rotate(24deg) blur(.4px) saturate(1.3)}100%{filter:hue-rotate(0deg) blur(.4px) saturate(1.15)}}
 @keyframes zvpop{from{opacity:0;transform:translateY(16px) scale(.93)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes zvring{0%,100%{transform:scale(1);opacity:.3}50%{transform:scale(1.06);opacity:.8}}
+@keyframes zvring{0%,100%{transform:scale(1);opacity:.25}50%{transform:scale(1.07);opacity:.7}}
 @keyframes zvwave{0%,100%{transform:scaleY(.2)}50%{transform:scaleY(1)}}
 @keyframes zvdot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
-@keyframes zvglow{0%,100%{box-shadow:0 0 20px rgba(52,211,153,.3),0 4px 20px rgba(0,0,0,.18)}50%{box-shadow:0 0 35px rgba(52,211,153,.55),0 4px 20px rgba(0,0,0,.18)}}
+@keyframes zvglow{0%,100%{box-shadow:0 0 22px rgba(140,150,255,.35),0 4px 24px rgba(0,0,0,.5)}50%{box-shadow:0 0 40px rgba(140,150,255,.6),0 4px 24px rgba(0,0,0,.5)}}
 
 /* ── LAUNCHER ── */
 #zv-launcher{
   display:inline-flex;align-items:center;
-  background:var(--zvl-bg,#0f172a);
+  background:var(--zvl-bg,#000);
   border-radius:999px;
   padding:5px 20px 5px 5px;
   gap:12px;
-  box-shadow:0 2px 16px rgba(0,0,0,.22),0 0 0 1px rgba(255,255,255,.06);
+  box-shadow:0 4px 24px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08);
   cursor:pointer;
   transition:box-shadow .2s,transform .2s
 }
-#zv-launcher:hover{box-shadow:0 6px 28px rgba(0,0,0,.32);transform:translateY(-2px)}
+#zv-launcher:hover{box-shadow:0 8px 32px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.14);transform:translateY(-2px)}
 #zv-launcher.zv-light{background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.06)}
 #zv-launcher.zv-light:hover{box-shadow:0 6px 24px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.12)}
 #zv-orb{
@@ -173,9 +168,9 @@
 #zv-card{
   display:none;
   width:320px;
-  background:#fff;
+  background:#0a0a0a;
   border-radius:28px;
-  box-shadow:0 0 0 1px rgba(0,0,0,.07),0 24px 64px -8px rgba(0,0,0,.22);
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 24px 64px -8px rgba(0,0,0,.6);
   flex-direction:column;
   align-items:center;
   position:relative;
@@ -188,12 +183,12 @@
 #zv-card-x{
   position:absolute;top:14px;right:14px;
   width:30px;height:30px;border-radius:50%;
-  border:1px solid #e5e7eb;background:#fff;
+  border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);
   color:#9ca3af;font-size:15px;line-height:1;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
   z-index:4;transition:all .15s;outline:none
 }
-#zv-card-x:hover{background:#f3f4f6;color:#374151}
+#zv-card-x:hover{background:rgba(255,255,255,.1);color:#fff}
 
 /* Agent label */
 #zv-agent{
@@ -217,7 +212,7 @@
 }
 #zv-ring{
   position:absolute;inset:-12px;border-radius:50%;
-  border:2.5px solid rgba(52,211,153,.5);
+  border:2.5px solid rgba(255,255,255,.35);
   opacity:0;pointer-events:none;transition:opacity .3s
 }
 #zv-ring.on{opacity:1;animation:zvring 2s ease-in-out infinite}
@@ -226,10 +221,10 @@
   transform:translateX(-50%);
   width:52px;height:52px;border-radius:50%;
   background:var(--zvc);
-  border:3.5px solid #fff;
+  border:3.5px solid #0a0a0a;
   cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 20px rgba(0,0,0,.2);
+  box-shadow:0 4px 20px rgba(0,0,0,.4);
   z-index:3;transition:transform .15s,background .15s;outline:none
 }
 #zv-phone-btn:hover{transform:translateX(-50%) scale(1.1)}
@@ -258,11 +253,11 @@
 #zv-wave span:nth-child(7){height:10px;animation-delay:-.9s}
 
 #zv-status{
-  font-size:15px;font-weight:600;color:#111827;
+  font-size:15px;font-weight:600;color:#fff;
   letter-spacing:-.02em;margin-top:8px
 }
 #zv-sub{
-  font-size:12.5px;color:#9ca3af;
+  font-size:12.5px;color:#8a8a8e;
   margin-top:4px;min-height:18px;
   text-align:center;padding:0 24px
 }
@@ -271,14 +266,14 @@
 #zv-mute{
   display:none;
   width:34px;height:34px;border-radius:50%;
-  border:1.5px solid #e5e7eb;background:#fff;
+  border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);
   align-items:center;justify-content:center;
   cursor:pointer;transition:all .15s;
   margin-top:8px;outline:none
 }
 #zv-mute.show{display:flex}
 #zv-mute.on{background:#ef4444;border-color:#ef4444}
-#zv-mute svg{width:15px;height:15px;stroke:#6b7280}
+#zv-mute svg{width:15px;height:15px;stroke:#a1a1aa}
 #zv-mute.on svg{stroke:#fff}
 
 /* Attachment box */
@@ -287,7 +282,7 @@
   width:calc(100% - 32px);
   margin:14px 0 0;padding:12px;
   border-radius:14px;
-  background:color-mix(in srgb,var(--zvc) 8%,#fff);border:1px solid color-mix(in srgb,var(--zvc) 30%,#fff)
+  background:color-mix(in srgb,var(--zvc) 12%,#0a0a0a);border:1px solid color-mix(in srgb,var(--zvc) 35%,#0a0a0a)
 }
 #zv-attach.on{display:block}
 
@@ -296,19 +291,19 @@
   display:flex;align-items:center;
   width:calc(100% - 28px);
   margin:18px 0 16px;
-  border:1.5px solid #e5e7eb;border-radius:14px;
-  background:#f9fafb;overflow:hidden;
+  border:1.5px solid rgba(255,255,255,.12);border-radius:14px;
+  background:rgba(255,255,255,.04);overflow:hidden;
   transition:border-color .15s
 }
-#zv-card-input-row:focus-within{border-color:var(--zvc);background:#fff}
+#zv-card-input-row:focus-within{border-color:var(--zvc);background:rgba(255,255,255,.06)}
 #zv-card-input{
   flex:1;border:none;background:transparent;
-  padding:11px 14px;font-size:13.5px;outline:none;color:#111827
+  padding:11px 14px;font-size:13.5px;outline:none;color:#fff
 }
-#zv-card-input::placeholder{color:#9ca3af}
+#zv-card-input::placeholder{color:#71717a}
 #zv-card-send{
   width:36px;height:36px;border:none;background:transparent;
-  color:#d1d5db;cursor:pointer;
+  color:#71717a;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;margin-right:3px;
   transition:color .15s;outline:none
@@ -316,24 +311,24 @@
 #zv-card-send:hover{color:var(--zvc)}
 #zv-card-send svg{width:14px;height:14px}
 
-#zv-br{font-size:10.5px;color:#d1d5db;margin-bottom:6px;text-align:center}
-#zv-br a{color:#9ca3af;text-decoration:none}
+#zv-br{font-size:10.5px;color:#52525b;margin-bottom:6px;text-align:center}
+#zv-br a{color:#71717a;text-decoration:none}
 
 /* ── CHAT CARD ── */
 #zv-chat{
   display:none;
   width:360px;height:520px;
-  background:#fff;border-radius:24px;
-  box-shadow:0 0 0 1px rgba(0,0,0,.07),0 24px 64px -8px rgba(0,0,0,.22);
+  background:#0a0a0a;border-radius:24px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 24px 64px -8px rgba(0,0,0,.6);
   flex-direction:column;overflow:hidden
 }
 #zv-chat.on{display:flex;animation:zvpop .35s cubic-bezier(.22,1,.36,1)}
 
-/* Chat header — white */
+/* Chat header — black */
 #zv-chat-hdr{
   display:flex;align-items:center;gap:10px;
   padding:14px 16px;
-  background:#fff;border-bottom:1px solid #f3f4f6;
+  background:#0a0a0a;border-bottom:1px solid rgba(255,255,255,.08);
   flex-shrink:0
 }
 #zv-chat-hdr-orb{
@@ -342,7 +337,7 @@
 }
 #zv-chat-hdr-info{flex:1;min-width:0}
 #zv-chat-hdr-name{
-  font-size:14px;font-weight:600;color:#111827;
+  font-size:14px;font-weight:600;color:#fff;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis
 }
 #zv-chat-hdr-st{
@@ -355,36 +350,36 @@
 }
 #zv-chat-cls{
   width:30px;height:30px;border-radius:50%;
-  border:1px solid #e5e7eb;background:#fff;
+  border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);
   color:#9ca3af;font-size:15px;line-height:1;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
   flex-shrink:0;transition:all .15s;outline:none
 }
-#zv-chat-cls:hover{background:#f3f4f6;color:#374151}
+#zv-chat-cls:hover{background:rgba(255,255,255,.1);color:#fff}
 
 /* Tabs */
-#zv-tabs{display:none!important;flex-shrink:0;background:#fff;border-bottom:1px solid #f3f4f6;flex-direction:row!important}
+#zv-tabs{display:none!important;flex-shrink:0;background:#0a0a0a;border-bottom:1px solid rgba(255,255,255,.08);flex-direction:row!important}
 #zv-tabs.show{display:flex!important;flex-direction:row!important;align-items:stretch}
 .zv-tab{
   flex:1!important;padding:10px;
-  font-size:12.5px;font-weight:500;color:#9ca3af;
+  font-size:12.5px;font-weight:500;color:#71717a;
   border-top:none!important;border-left:none!important;border-right:none!important;
   border-bottom:2px solid transparent!important;
   background:transparent!important;cursor:pointer;
   display:flex;align-items:center;justify-content:center;gap:6px;
   transition:color .15s;outline:none!important;box-shadow:none!important
 }
-.zv-tab.active{color:var(--zvc)!important;border-bottom:2px solid var(--zvc)!important}
+.zv-tab.active{color:#fff!important;border-bottom:2px solid var(--zvc)!important}
 .zv-tab svg{width:13px;height:13px}
 
 /* Messages */
 #zv-chat-msgs{
   flex:1!important;overflow-y:auto!important;padding:14px 12px!important;
   display:flex!important;flex-direction:column!important;gap:10px;scroll-behavior:smooth;
-  min-height:0!important
+  min-height:0!important;background:#000!important
 }
 #zv-chat-msgs::-webkit-scrollbar{width:4px}
-#zv-chat-msgs::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:4px}
+#zv-chat-msgs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:4px}
 .zv-msg{max-width:82%!important;display:flex!important;flex-direction:column!important;gap:3px!important}
 .zv-msg.user{align-self:flex-end!important;align-items:flex-end!important}
 .zv-msg.agent{align-self:flex-start!important;align-items:flex-start!important}
@@ -399,16 +394,16 @@
   display:block!important;margin:0!important
 }
 .zv-msg.user .zv-msg-bubble{
-  background:var(--zvc)!important;
-  color:#fff!important;border-bottom-right-radius:4px!important
+  background:#fff!important;
+  color:#000!important;border-bottom-right-radius:4px!important
 }
 .zv-msg.agent .zv-msg-bubble{
-  background:#f3f4f6!important;color:#111827!important;border-bottom-left-radius:4px!important
+  background:#1c1c1e!important;color:#f4f4f5!important;border-bottom-left-radius:4px!important
 }
-.zv-msg-time{font-size:10px!important;color:#d1d5db!important;padding:0 2px!important}
+.zv-msg-time{font-size:10px!important;color:#52525b!important;padding:0 2px!important}
 .zv-msg-upload{display:flex;flex-direction:column;gap:6px;min-width:180px}
-.zv-upload-label{font-size:12px;font-weight:600;color:#374151}
-.zv-upload-reason{font-size:12.5px;color:#6b7280;line-height:1.4}
+.zv-upload-label{font-size:12px;font-weight:600;color:#f4f4f5}
+.zv-upload-reason{font-size:12.5px;color:#a1a1aa;line-height:1.4}
 .zv-upload-btn{
   display:inline-flex;align-items:center;gap:6px;
   margin-top:4px;padding:8px 14px;
@@ -422,13 +417,13 @@
 /* Typing */
 #zv-typing{
   display:none;align-self:flex-start;
-  padding:10px 14px;background:#f3f4f6;
+  padding:10px 14px;background:#1c1c1e;
   border-radius:18px;border-bottom-left-radius:4px;gap:4px
 }
 #zv-typing.show{display:flex}
 #zv-typing span{
   width:6px;height:6px;border-radius:50%;
-  background:#c4c4c4;animation:zvdot 1.4s ease-in-out infinite
+  background:#71717a;animation:zvdot 1.4s ease-in-out infinite
 }
 #zv-typing span:nth-child(2){animation-delay:.2s}
 #zv-typing span:nth-child(3){animation-delay:.4s}
@@ -436,25 +431,25 @@
 /* Chat input */
 #zv-chat-input-row{
   padding:10px 12px;
-  border-top:1px solid #f3f4f6;
-  background:#fff;flex-shrink:0
+  border-top:1px solid rgba(255,255,255,.08);
+  background:#0a0a0a;flex-shrink:0
 }
 #zv-chat-input-wrap{
   display:flex;align-items:center;
-  border:1.5px solid #e5e7eb;border-radius:14px;
-  background:#f9fafb;overflow:hidden;transition:border-color .15s
+  border:1.5px solid rgba(255,255,255,.12);border-radius:14px;
+  background:rgba(255,255,255,.04);overflow:hidden;transition:border-color .15s
 }
-#zv-chat-input-wrap:focus-within{border-color:var(--zvc);background:#fff}
+#zv-chat-input-wrap:focus-within{border-color:var(--zvc);background:rgba(255,255,255,.06)}
 #zv-chat-input{
   flex:1;border:none;background:transparent;
   padding:10px 14px;font-size:13.5px;outline:none;
   resize:none;max-height:100px;min-height:38px;
-  line-height:1.4;color:#111827
+  line-height:1.4;color:#fff
 }
-#zv-chat-input::placeholder{color:#9ca3af}
+#zv-chat-input::placeholder{color:#71717a}
 #zv-chat-send{
   width:34px;height:34px;border:none;background:transparent;
-  color:#d1d5db;cursor:pointer;
+  color:#71717a;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;margin-right:5px;
   transition:color .15s;outline:none
@@ -463,10 +458,10 @@
 #zv-chat-send:disabled{opacity:.35;cursor:default}
 #zv-chat-send svg{width:14px;height:14px}
 #zv-chat-br{
-  font-size:10.5px;color:#d1d5db;
+  font-size:10.5px;color:#52525b;
   text-align:center;padding:4px 0 8px
 }
-#zv-chat-br a{color:#9ca3af;text-decoration:none}
+#zv-chat-br a{color:#71717a;text-decoration:none}
 #zv-voice-panel{
   flex:1;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:10px;padding:24px
@@ -756,10 +751,10 @@
         // Large orb + overlapping phone button — same design as voice-only card
         panel.innerHTML='<div style="position:relative;margin-bottom:0">'
           +'<div id="zv-orb-lg" class="zvorb" style="width:140px;height:140px;animation:zvhue 6s ease-in-out infinite;display:block"><div id="zv-ring"></div></div>'
-          +'<button id="zv-start-tab" style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:3px solid #fff;background:var(--zvc);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.2);outline:none;padding:0">'
+          +'<button id="zv-start-tab" style="position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:3px solid #0a0a0a;background:var(--zvc);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.4);outline:none;padding:0">'
           +'<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.27-.27.7-.38 1.06-.2 1.1.37 2.28.57 3.54.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C4.61 21 2 18.39 2 15.23V5a2 2 0 0 1 2-2h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02L6.6 10.8z"/></svg>'
           +'</button>'
-          +'<button id="zv-end" style="display:none;position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:3px solid #fff;background:linear-gradient(135deg,#dc2626,#b91c1c);cursor:pointer;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(220,38,38,.45);outline:none;padding:0">'
+          +'<button id="zv-end" style="display:none;position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);width:46px;height:46px;border-radius:50%;border:3px solid #0a0a0a;background:linear-gradient(135deg,#dc2626,#b91c1c);cursor:pointer;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(220,38,38,.45);outline:none;padding:0">'
           +'<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.27-.27.7-.38 1.06-.2 1.1.37 2.28.57 3.54.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1C4.61 21 2 18.39 2 15.23V5a2 2 0 0 1 2-2h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.1.31.03.66-.25 1.02L6.6 10.8z"/></svg>'
           +'</button>'
           +'</div>'
@@ -801,6 +796,11 @@
 
   // ── Voice state + functions ─────────────────────────────────────────────
   var ws,micCtx,micStr,micP,active=false,muted=false
+  // WebRTC path (VoiceConnect merge, M9) — parallel to the WS path above,
+  // used only when C.engine==='webrtc' (opted-in per-agent, see
+  // /api/widget/config's `engine` field). Legacy WS tenants never touch
+  // this code path.
+  var pc,rtcLocalStream,rtcRemoteAudioEl
 
   function startMic(){
     return navigator.mediaDevices.getUserMedia({audio:{channelCount:1,sampleRate:16000,echoCancellation:true,noiseSuppression:true}}).then(function(s){
@@ -847,6 +847,12 @@
       var ms=g('zv-mute');if(ms)ms.classList.add('show')
     }
     setSt('Connecting...','')
+
+    if(C.engine==='webrtc'){
+      startCallWebRTC()
+      return
+    }
+
     await initAudioWorklet()
 
     try{
@@ -878,9 +884,81 @@
     }catch(e){setSt('Failed',e.message);setTimeout(endCall,2000)}
   }
 
+  // ── WebRTC path (VoiceConnect merge, M9) ────────────────────────────────
+  // Plain browser RTCPeerConnection talking directly to the self-hosted
+  // voice-engine's /api/offer endpoint — no AudioWorklet/PCM plumbing
+  // needed, the browser decodes Opus natively via the <audio> element below.
+  async function startCallWebRTC(){
+    try{
+      var tokenResp=await fetch(GW+'/api/public/session-token',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({token:TK,agent_id:C.agentId||AGENT})
+      })
+      if(!tokenResp.ok){
+        var eb=await tokenResp.json().catch(function(){return{}})
+        throw new Error(eb.error||'session-token request failed ('+tokenResp.status+')')
+      }
+      var session=await tokenResp.json()
+
+      rtcLocalStream=await navigator.mediaDevices.getUserMedia({audio:true})
+      pc=new RTCPeerConnection({iceServers:session.ice_servers&&session.ice_servers.length?session.ice_servers:[{urls:'stun:stun.l.google.com:19302'}]})
+      rtcLocalStream.getTracks().forEach(function(t){pc.addTrack(t,rtcLocalStream)})
+
+      rtcRemoteAudioEl=document.createElement('audio')
+      rtcRemoteAudioEl.autoplay=true
+      rtcRemoteAudioEl.style.display='none'
+      document.body.appendChild(rtcRemoteAudioEl)
+      var remoteStream=new MediaStream()
+      pc.ontrack=function(ev){
+        remoteStream.addTrack(ev.track)
+        rtcRemoteAudioEl.srcObject=remoteStream
+        setSt('Listening...','Say something');setRing(true);setWave(true)
+      }
+      pc.onconnectionstatechange=function(){
+        if(pc&&(pc.connectionState==='failed'||pc.connectionState==='closed')&&active){
+          setSt('Connection lost','');setTimeout(function(){if(active)endCall()},1500)
+        }
+      }
+
+      var offer=await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      await waitForIceGatheringComplete(pc)
+
+      var offerResp=await fetch(session.voice_engine_base_url+'/api/offer',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({sdp:pc.localDescription.sdp,type:pc.localDescription.type,request_data:{session_ticket:session.ticket}})
+      })
+      if(!offerResp.ok)throw new Error('voice-engine /api/offer failed ('+offerResp.status+')')
+      var answer=await offerResp.json()
+      await pc.setRemoteDescription(answer)
+    }catch(e){
+      setSt('Failed',e.message||'Connection error')
+      setTimeout(endCall,2000)
+    }
+  }
+
+  function waitForIceGatheringComplete(peerConn){
+    if(peerConn.iceGatheringState==='complete')return Promise.resolve()
+    return new Promise(function(resolve){
+      function check(){
+        if(peerConn.iceGatheringState==='complete'){
+          peerConn.removeEventListener('icegatheringstatechange',check)
+          resolve()
+        }
+      }
+      peerConn.addEventListener('icegatheringstatechange',check)
+    })
+  }
+
+  function stopWebRTC(){
+    if(pc){try{pc.close()}catch(e){}pc=null}
+    if(rtcLocalStream){rtcLocalStream.getTracks().forEach(function(t){t.stop()});rtcLocalStream=null}
+    if(rtcRemoteAudioEl){try{rtcRemoteAudioEl.pause();rtcRemoteAudioEl.srcObject=null;rtcRemoteAudioEl.remove()}catch(e){}rtcRemoteAudioEl=null}
+  }
+
   function endCall(){
     try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch(e){}
-    ws=null;stopMic();clearAudio();active=false;muted=false;setRing(false);setWave(false)
+    ws=null;stopMic();stopWebRTC();clearAudio();active=false;muted=false;setRing(false);setWave(false)
     pendingNavUrls=[]
     if(C.mode==='both'){
       var stBtn=g('zv-start-tab');if(stBtn)stBtn.style.display='flex'
@@ -901,7 +979,7 @@
     setSt('Call ending...','')
     setTimeout(function(){
       try{if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'stop'}));ws.close()}}catch(e){}
-      ws=null;clearAudio();muted=false
+      ws=null;stopWebRTC();clearAudio();muted=false
       if(C.mode==='both'){
         var stBtn=g('zv-start-tab');if(stBtn)stBtn.style.display='flex'
         var endBtn=g('zv-end');if(endBtn)endBtn.style.display='none'

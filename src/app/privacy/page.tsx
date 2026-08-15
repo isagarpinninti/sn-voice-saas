@@ -16,11 +16,11 @@ export default function PrivacyPage() {
         <h1 className="text-[28px] font-bold text-white tracking-[-0.02em] mb-2">Privacy Policy</h1>
         <p className="text-[13px] text-zinc-600 mb-10">Last updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
 
-        <p className="mb-6">ZeVox, operated by ZeTechno (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;), provides AI voice agent services for ServiceNow. This policy explains how we collect, use, and protect your information.</p>
+        <p className="mb-6">ZeVox (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) provides AI voice agent services for ServiceNow, HaloITSM, and other backends you connect. This policy explains how we collect, use, and protect your information.</p>
 
         <H>1. What We Collect</H>
         <p className="mb-2"><strong className="text-white">Account data:</strong> Name, email address, and profile image from your Google or GitHub account when you sign in.</p>
-        <p className="mb-2"><strong className="text-white">ServiceNow credentials:</strong> Instance URL, username, and password that you provide to connect your instance. These are encrypted at rest and used solely to communicate with your ServiceNow instance.</p>
+        <p className="mb-2"><strong className="text-white">Backend credentials:</strong> Your ServiceNow instance URL, username, and password, and credentials for any additional connector you configure (e.g. a HaloITSM API key or OAuth client secret). These are encrypted at rest and used solely to communicate with the backend you connect.</p>
         <p className="mb-6"><strong className="text-white">Usage data:</strong> Call duration (minutes), number of calls, token counts, and tool execution metadata. We do not store conversation transcripts or audio on our servers.</p>
 
         <H>2. What We Don&apos;t Collect</H>
@@ -37,7 +37,7 @@ export default function PrivacyPage() {
         <p className="mb-6"><strong className="text-white">RevenueCat / Stripe:</strong> Payment processing. We do not store credit card information.</p>
 
         <H>5. Data Security</H>
-        <p className="mb-6">ServiceNow credentials are encrypted at rest. All data in transit uses TLS 1.2+. We apply the principle of least privilege — our gateway only accesses the ServiceNow API endpoints required for voice agent operation.</p>
+        <p className="mb-6">All backend credentials (ServiceNow, and any other connector you configure) are encrypted at rest. All data in transit uses TLS 1.2+. We apply the principle of least privilege — our gateway only accesses the API endpoints required for voice agent operation.</p>
 
         <H>6. Data Retention</H>
         <p className="mb-6">Account and usage data is retained while your account is active. Upon deletion of your account, all associated data is permanently removed within 30 days.</p>
@@ -49,7 +49,7 @@ export default function PrivacyPage() {
         <p>We may update this policy from time to time. We will notify you of any material changes by email or through the dashboard.</p>
 
         <div className="mt-12 pt-6 border-t border-white/[0.04] text-[11px] text-zinc-700">
-          ZeVox — A ZeTechno Product
+          ZeVox
         </div>
       </article>
     </div>

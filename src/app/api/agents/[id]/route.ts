@@ -2,10 +2,17 @@
  * Single agent API.
  *
  * GET    /api/agents/[id]   — fetch one agent
- * PATCH  /api/agents/[id]   — update name, snAgentId, active
+ * PATCH  /api/agents/[id]   — update name, active, systemPrompt, llmModel, voiceId
  * DELETE /api/agents/[id]   — hard-delete (cascades to ApiToken)
  *
  * Widget config is now on Tenant (one widget per instance), not per agent.
+ *
+ * systemPrompt/llmModel/voiceId are the self-hosted voice-engine's config
+ * (see config/agent_config_zevox.py) — independent of ServiceNow. Before
+ * this route exposed them, the only way to set an agent's personality was
+ * through the SN scoped app's Agent Instructions field, which meant
+ * tenants without a ServiceNow instance had no way to customize their
+ * agent at all.
  */
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +66,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
     active: a.active,
     createdAt: a.createdAt,
     token: tokenValue,
+    systemPrompt: a.systemPrompt,
+    llmModel: a.llmModel,
+    voiceId: a.voiceId,
   })
 }
 
@@ -77,6 +87,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   const data: Record<string, unknown> = {}
   if (typeof body.name === 'string') data.name = body.name.trim() || 'Untitled Agent'
   if (typeof body.active === 'boolean') data.active = body.active
+  if (typeof body.systemPrompt === 'string') data.systemPrompt = body.systemPrompt.trim() || null
+  if (typeof body.llmModel === 'string') data.llmModel = body.llmModel.trim() || null
+  if (typeof body.voiceId === 'string') data.voiceId = body.voiceId.trim() || null
 
   const updated = await db.agent.update({
     where: { id: owned.agent.id },

@@ -24,6 +24,7 @@ export default async function OnboardingPage() {
     where: { userId: session.user.id },
     include: {
       instances: { where: { active: true }, take: 1, orderBy: { createdAt: 'asc' } },
+      connectors: { take: 1 },
       agents: { where: { active: true }, take: 1 },
       tokens: { where: { active: true }, take: 1 },
     },
@@ -31,30 +32,30 @@ export default async function OnboardingPage() {
   if (!tenant) redirect('/dashboard')
 
   const instance = tenant.instances[0]
-  const hasInstance = !!instance
   const hasCredentials = !!instance && !!instance.snUsername && !!instance.snPassword
+  const hasConnector = tenant.connectors.length > 0
   const hasAgent = tenant.agents.length > 0
   const hasToken = tenant.tokens.length > 0
 
   const steps: Step[] = [
     {
       key: 'connect',
-      title: 'Connect your ServiceNow instance',
-      description: 'Enter the instance URL, admin username, and password so ZeVox can talk to your ServiceNow.',
-      done: hasCredentials,
-      cta: { label: 'Open Connection', href: '/dashboard/connection' },
+      title: 'Connect a backend',
+      description: 'Add a generic connector (HaloITSM or any REST API) from Connectors, or a ServiceNow instance from Connection — either works.',
+      done: hasCredentials || hasConnector,
+      cta: { label: 'Open Connectors', href: '/dashboard/connectors' },
     },
     {
       key: 'sync',
-      title: 'Sync your first voice agent',
-      description: 'Create an agent in ServiceNow (under AI Voice Agent → Voice Agents). It auto-syncs back here once the SaaS URL and API key are configured in ServiceNow.',
+      title: 'Create your first voice agent',
+      description: 'Create an agent directly in ZeVox (Agents → New agent), or sync one from ServiceNow under AI Voice Agent → Voice Agents once SaaS sync is configured there.',
       done: hasAgent,
       cta: { label: 'Open Agents', href: '/dashboard/agents' },
     },
     {
       key: 'voice',
       title: 'Pick a voice and test',
-      description: 'Choose a Deepgram voice for your agent and play a sample to confirm.',
+      description: 'Choose a voice for your agent and play a sample to confirm.',
       done: hasAgent, // voice is always defaulted; consider this done when agent exists
       cta: { label: 'Configure agent', href: '/dashboard/agents' },
     },

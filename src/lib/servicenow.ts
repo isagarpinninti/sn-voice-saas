@@ -9,6 +9,7 @@
  */
 
 import { db } from './db'
+import { getInstancePassword } from './instance-credentials'
 
 export interface ServiceNowCredentials {
   instanceUrl: string
@@ -44,7 +45,7 @@ export async function getTenantServiceNowCreds(
   return {
     instanceUrl: instance.snInstanceUrl.replace(/\/$/, ''),
     username: instance.snUsername,
-    password: instance.snPassword,
+    password: getInstancePassword(instance),
   }
 }
 

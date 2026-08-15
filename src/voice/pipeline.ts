@@ -6,6 +6,7 @@ import { EventEmitter } from 'events'
 import { addLog } from '../lib/log-store'
 import { signUploadToken } from '../lib/upload-tokens'
 import { createPendingUpload, cancelPendingUpload, readCompletedMeta, type UploadMeta } from '../lib/upload-registry'
+import { instanceBasicAuthValue } from '../lib/instance-credentials'
 
 // ServiceNow client types
 interface SNConfig {
@@ -26,6 +27,7 @@ interface Tenant {
   snInstanceUrl: string | null
   snUsername: string | null
   snPassword: string | null
+  snPasswordEncrypted: boolean | null
 }
 
 // Groq's llama-3.3 guided decoding rejects any tool whose JSON Schema has
@@ -610,7 +612,7 @@ export class VoicePipeline extends EventEmitter {
       return { success: false, error: 'No fields provided to update.' }
     }
     try {
-      const auth = Buffer.from(`${this.tenant.snUsername}:${this.tenant.snPassword}`).toString('base64')
+      const auth = instanceBasicAuthValue(this.tenant)
       const url = `${this.tenant.snInstanceUrl}/api/now/table/${encodeURIComponent(this.recordTable)}/${encodeURIComponent(this.recordSysId)}`
       const res = await fetch(url, {
         method: 'PATCH',
@@ -1635,7 +1637,7 @@ export class VoicePipeline extends EventEmitter {
 
   // ── ServiceNow REST ──
   private async fetchRecord(table: string, sysId: string): Promise<Record<string, string> | null> {
-    const auth = Buffer.from(`${this.tenant.snUsername}:${this.tenant.snPassword}`).toString('base64')
+    const auth = instanceBasicAuthValue(this.tenant)
     // Request a broad but useful set of fields; SN silently ignores unknown ones
     const fields = 'number,short_description,description,state,priority,urgency,impact,category,subcategory,assignment_group,assigned_to,caller_id,opened_by,opened_at,updated_at,sys_updated_on,close_notes,resolution_code,active,stage,contact_type,sys_class_name,table_name,name,title,u_type,type,business_service,cmdb_ci'
     const url = `${this.tenant.snInstanceUrl}/api/now/table/${encodeURIComponent(table)}/${encodeURIComponent(sysId)}?sysparm_fields=${encodeURIComponent(fields)}&sysparm_display_value=true&sysparm_exclude_reference_link=true`
@@ -1656,7 +1658,7 @@ export class VoicePipeline extends EventEmitter {
 
   private async snFetch(method: string, path: string, body?: any): Promise<unknown> {
     const baseUrl = `${this.tenant.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1${path}`
-    const auth = Buffer.from(`${this.tenant.snUsername}:${this.tenant.snPassword}`).toString('base64')
+    const auth = instanceBasicAuthValue(this.tenant)
 
     // Circuit breaker — skip the call entirely if this tenant has been hammering SN failures.
     const breaker = SN_CIRCUITS.get(this.tenant.id)

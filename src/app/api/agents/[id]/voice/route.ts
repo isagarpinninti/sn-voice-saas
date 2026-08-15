@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { instanceBasicAuthHeader, type InstanceCredentialSource } from '@/lib/instance-credentials'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -22,8 +23,8 @@ async function getAgentWithInstance(userId: string, agentId: string) {
   return agent
 }
 
-function snAuth(instance: { snUsername: string; snPassword: string }) {
-  return 'Basic ' + Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
+function snAuth(instance: InstanceCredentialSource) {
+  return instanceBasicAuthHeader(instance)
 }
 
 export async function GET(_req: Request, ctx: RouteContext) {

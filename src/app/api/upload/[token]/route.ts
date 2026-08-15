@@ -8,6 +8,7 @@ import { findActivePendingUpload, completePendingUpload } from '@/lib/upload-reg
 import { extractText } from '@/lib/file-extract'
 import { addLog } from '@/lib/log-store'
 import { logAudit } from '@/lib/audit'
+import { instanceBasicAuthValue } from '@/lib/instance-credentials'
 
 const MAX_BYTES = 10 * 1024 * 1024 // 10MB
 
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   // we look up the sys_id by number via SN REST and attach there instead.
   // Lookup failure falls back to the session and carries an error note back
   // to the LLM via the registry meta so it can tell the user.
-  const auth = Buffer.from(`${inst.snUsername}:${inst.snPassword}`).toString('base64')
+  const auth = instanceBasicAuthValue(inst)
   const bytes = Buffer.from(await file.arrayBuffer())
   const snBase = inst.snInstanceUrl.replace(/\/$/, '')
 

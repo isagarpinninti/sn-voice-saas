@@ -3,8 +3,9 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { decrypt } from '@/lib/encrypt'
 import { PHONE_ELIGIBLE_PLANS } from '@/lib/plans'
+import { instanceBasicAuthValue } from '@/lib/instance-credentials'
+import { registerPhoneNumberWithLiveKit } from '@/lib/livekit-sip'
 
 // POST — import an existing Twilio number into our system and configure its webhook
 export async function POST(req: NextRequest) {
@@ -34,25 +35,9 @@ export async function POST(req: NextRequest) {
 
   if (!sid || !e164) return NextResponse.json({ error: 'sid and e164 required' }, { status: 400 })
 
-  const { accountSid, authToken } = {
-    accountSid: tenant.twilioConnection.accountSid,
-    authToken: decrypt(tenant.twilioConnection.authToken),
-  }
-  const basic = Buffer.from(`${accountSid}:${authToken}`).toString('base64')
-  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/phone/incoming`
-
-  // Point Twilio webhook at our inbound route
-  const form = new URLSearchParams()
-  form.set('VoiceUrl', webhookUrl)
-  form.set('VoiceMethod', 'POST')
-  const patchRes = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/IncomingPhoneNumbers/${encodeURIComponent(sid)}.json`,
-    { method: 'POST', headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString(), signal: AbortSignal.timeout(10_000) },
-  )
-  if (!patchRes.ok) {
-    const err = await patchRes.json().catch(() => ({}))
-    return NextResponse.json({ error: `Failed to configure webhook: ${err?.message || patchRes.status}` }, { status: 502 })
-  }
+  // No Voice webhook to configure — inbound routing is via the Twilio Elastic
+  // SIP Trunk association (external, Twilio-console-side) feeding self-hosted
+  // livekit-sip, registered by registerPhoneNumberWithLiveKit below.
 
   // Validate agent ownership
   if (agentId) {
@@ -71,6 +56,7 @@ export async function POST(req: NextRequest) {
 
     // Sync to SN if instance is configured
     if (instanceId && agentId) await syncPhoneToSN(tenant.id, instanceId, phone.id, e164, agentId, friendly)
+    if (agentId) registerPhoneNumberWithLiveKit(e164, agentId).catch(() => {})
 
     return NextResponse.json({ phoneNumber: phone })
   } catch (e: any) {
@@ -81,12 +67,12 @@ export async function POST(req: NextRequest) {
 async function syncPhoneToSN(tenantId: string, instanceId: string, phoneId: string, e164: string, agentId: string, friendly: string | null) {
   try {
     const [instance, agent] = await Promise.all([
-      db.instance.findUnique({ where: { id: instanceId }, select: { snInstanceUrl: true, snUsername: true, snPassword: true } }),
+      db.instance.findUnique({ where: { id: instanceId }, select: { snInstanceUrl: true, snUsername: true, snPassword: true, snPasswordEncrypted: true } }),
       db.agent.findUnique({ where: { id: agentId }, select: { snAgentId: true, name: true } }),
     ])
     if (!instance || !agent?.snAgentId) return
 
-    const basic = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
+    const basic = instanceBasicAuthValue(instance)
     await fetch(`${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/phone-numbers`, {
       method: 'POST',
       headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/json' },

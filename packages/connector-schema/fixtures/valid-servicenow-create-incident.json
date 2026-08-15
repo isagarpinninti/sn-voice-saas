@@ -1,0 +1,30 @@
+{
+  "connector_id": "9f2c1a10-0000-4000-8000-000000000002",
+  "name": "sn_create_incident",
+  "description": "Create a new incident in ServiceNow via the x_vcon_voiceagent scoped app.",
+  "method": "POST",
+  "path_template": "/api/x_vcon/voiceagent/incidents",
+  "params": [
+    { "name": "short_description", "location": "body", "type": "string", "required": true },
+    { "name": "description", "location": "body", "type": "string", "required": false },
+    {
+      "name": "urgency",
+      "location": "body",
+      "type": "enum",
+      "enum_values": ["1", "2", "3"],
+      "required": false
+    }
+  ],
+  "auth_override": {
+    "type": "oauth2_client_credentials",
+    "token_url": "https://example.service-now.com/oauth_token.do",
+    "credential_ref": "vault:9f2c1a10-0000-4000-8000-000000000002:default"
+  },
+  "response_mapping": {
+    "success_path": "result.number",
+    "template": "Incident {result} created.",
+    "error_template": "Sorry, I couldn't create that incident ({status})."
+  },
+  "timeout_ms": 8000,
+  "enabled": true
+}

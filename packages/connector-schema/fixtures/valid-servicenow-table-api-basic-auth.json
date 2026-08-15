@@ -1,0 +1,22 @@
+{
+  "connector_id": "9f2c1a10-0000-4000-8000-000000000003",
+  "name": "sn_table_create_incident",
+  "description": "Create a new incident via ServiceNow's Table API using HTTP Basic Auth.",
+  "method": "POST",
+  "path_template": "/api/now/table/incident",
+  "params": [
+    { "name": "short_description", "location": "body", "type": "string", "required": true },
+    { "name": "description", "location": "body", "type": "string", "required": false }
+  ],
+  "auth_override": {
+    "type": "basic_auth",
+    "credential_ref": "local:9f2c1a10-0000-4000-8000-000000000003"
+  },
+  "response_mapping": {
+    "success_path": "result.number",
+    "template": "Incident {result} created.",
+    "error_template": "Sorry, I couldn't create that incident ({status})."
+  },
+  "timeout_ms": 8000,
+  "enabled": true
+}

@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { encryptInstancePassword } from '@/lib/instance-credentials'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -63,7 +64,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   if (typeof body.name === 'string') data.name = body.name.trim() || 'Untitled Instance'
   if (typeof body.snInstanceUrl === 'string') data.snInstanceUrl = body.snInstanceUrl.replace(/\/$/, '')
   if (typeof body.snUsername === 'string') data.snUsername = body.snUsername
-  if (body.snPassword && body.snPassword !== '••••••••') data.snPassword = body.snPassword
+  if (body.snPassword && body.snPassword !== '••••••••') Object.assign(data, encryptInstancePassword(body.snPassword))
   if (typeof body.active === 'boolean') data.active = body.active
 
   // Widget fields

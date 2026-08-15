@@ -63,33 +63,35 @@ model User {
 }
 
 model Tenant {
-  id                String         @id @default(cuid())
-  userId            String         @unique
-  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  plan              Plan           @default(FREE)
-  revenuecat_id     String?        @unique
-  subscription_id   String?
-  plan_expires_at   DateTime?
+  plan            Plan      @default(FREE)
+  revenuecat_id   String?   @unique
+  subscription_id String?
+  plan_expires_at DateTime?
 
-  minutes_per_month Int            @default(50)
-  concurrent_limit  Int            @default(1)
-  max_agents        Int            @default(1)
-  max_instances     Int            @default(1)
+  minutes_per_month Int @default(50)
+  concurrent_limit  Int @default(1)
+  max_agents        Int @default(1)
+  max_instances     Int @default(1)
 
-  instances         Instance[]
-  tokens            ApiToken[]
-  agents            Agent[]
-  usageLogs         UsageLog[]
-  phoneNumbers      PhoneNumber[]
-  allowedCallers    AllowedCaller[]
-  attachmentUploads AttachmentUpload[]
-  twilioConnection  TwilioConnection?
+  instances            Instance[]
+  tokens               ApiToken[]
+  agents               Agent[]
+  usageLogs            UsageLog[]
+  phoneNumbers         PhoneNumber[]
+  allowedCallers       AllowedCaller[]
+  attachmentUploads    AttachmentUpload[]
+  twilioConnection     TwilioConnection?
+  connectors           Connector[]
+  connectorCredentials ConnectorCredential[]
 
-  company           String?
+  company String?
 
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum Plan {
@@ -107,35 +109,41 @@ enum Plan {
 // =====================================================
 
 model Instance {
-  id             String   @id @default(cuid())
-  tenantId       String
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  name           String   @default("Default Instance")
-  snInstanceUrl  String
-  snUsername     String
-  snPassword     String
+  name          String @default("Default Instance")
+  snInstanceUrl String
+  snUsername    String
+  snPassword    String
+  // AES-256-GCM (src/lib/encrypt.ts) once true — see M11 of the merge plan.
+  // Defaults false so every pre-existing row keeps working as plaintext
+  // until the one-time migration script (scripts/encrypt-instance-passwords.ts)
+  // re-encrypts it; new/updated rows are always written encrypted (see
+  // src/lib/instance-credentials.ts's encryptInstancePassword()).
+  snPasswordEncrypted Boolean @default(false)
 
   // Widget customization (one widget per instance)
-  widgetColor        String?  @default("#10b981")
-  widgetPosition     String?  @default("right")
-  widgetVoiceOnly    Boolean  @default(false)
-  widgetAutoOpen     Boolean  @default(false)
-  widgetGreeting     String?
-  widgetAgentName    String?
-  widgetShowBranding   Boolean  @default(true)
-  widgetLogoUrl        String?
-  widgetBorderRadius   String?  @default("full")
-  widgetLauncherLabel  String?  @default("Start a call")
-  widgetLauncherDark   Boolean  @default(true)
+  widgetColor         String? @default("#10b981")
+  widgetPosition      String? @default("right")
+  widgetVoiceOnly     Boolean @default(false)
+  widgetAutoOpen      Boolean @default(false)
+  widgetGreeting      String?
+  widgetAgentName     String?
+  widgetShowBranding  Boolean @default(true)
+  widgetLogoUrl       String?
+  widgetBorderRadius  String? @default("full")
+  widgetLauncherLabel String? @default("Start a call")
+  widgetLauncherDark  Boolean @default(true)
 
-  active         Boolean  @default(true)
-  agents         Agent[]
-  tokens         ApiToken[]
-  phoneNumbers   PhoneNumber[]
+  active       Boolean       @default(true)
+  agents       Agent[]
+  tokens       ApiToken[]
+  phoneNumbers PhoneNumber[]
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
 }
@@ -152,29 +160,40 @@ model Agent {
   instance   Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
 
   // Identity
-  name       String   @default("Default Agent")
-  snAgentId  String?
+  name      String  @default("Default Agent")
+  snAgentId String?
+
+  // Self-hosted voice-engine config (VoiceConnect merge — Phase 1). Nullable:
+  // the forked voice-engine's fetch_agent_config() falls back to its own
+  // DEFAULT_SYSTEM_PROMPT / DEFAULT_LLM_MODEL / "kokoro:af_heart" when unset,
+  // same pattern VoiceConnect itself uses for its llm_provider_configs join.
+  systemPrompt String? @db.Text
+  llmModel     String?
+  voiceId      String?
+
+  agentConnectors AgentConnector[]
+  callSessions    CallSession[]
 
   // Widget customization (per-agent — overrides instance-level settings)
-  widgetMode         String?  @default("voice_only")  // voice_only | chat_only | both
-  widgetColor        String?
-  widgetPosition     String?  @default("right")
-  widgetAutoOpen     Boolean  @default(false)
-  widgetGreeting     String?
-  widgetTitle        String?
-  widgetShowBranding   Boolean  @default(true)
-  widgetLogoUrl        String?
-  widgetBorderRadius   String?  @default("full")
-  widgetLauncherLabel    String?
-  widgetLauncherDark     Boolean?
-  widgetWorkspaceTables  String?  // comma-separated SN table names, e.g. "incident,change_request"
+  widgetMode            String?  @default("voice_only") // voice_only | chat_only | both
+  widgetColor           String?
+  widgetPosition        String?  @default("right")
+  widgetAutoOpen        Boolean  @default(false)
+  widgetGreeting        String?
+  widgetTitle           String?
+  widgetShowBranding    Boolean  @default(true)
+  widgetLogoUrl         String?
+  widgetBorderRadius    String?  @default("full")
+  widgetLauncherLabel   String?
+  widgetLauncherDark    Boolean?
+  widgetWorkspaceTables String? // comma-separated SN table names, e.g. "incident,change_request"
 
-  active     Boolean  @default(true)
-  tokens     ApiToken[]
+  active       Boolean       @default(true)
+  tokens       ApiToken[]
   phoneNumbers PhoneNumber[]
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([instanceId])
@@ -208,16 +227,16 @@ model ApiToken {
 // =====================================================
 
 model UsageLog {
-  id            String   @id @default(cuid())
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  date          DateTime @default(now()) @db.Date
-  calls         Int      @default(0)
-  minutes       Float    @default(0)
-  inputTokens   Int      @default(0)
-  outputTokens  Int      @default(0)
-  toolCalls     Int      @default(0)
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  date         DateTime @default(now()) @db.Date
+  calls        Int      @default(0)
+  minutes      Float    @default(0)
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  toolCalls    Int      @default(0)
+  createdAt    DateTime @default(now())
 
   @@unique([tenantId, date])
   @@index([tenantId, date])
@@ -264,7 +283,7 @@ model AuditLog {
 model FeatureFlag {
   id          String   @id @default(cuid())
   key         String
-  tenantId    String?  // null = global default
+  tenantId    String? // null = global default
   enabled     Boolean  @default(false)
   rolloutPct  Int      @default(0)
   description String?
@@ -283,11 +302,11 @@ model FeatureFlag {
 // =====================================================
 
 model PhoneNumber {
-  id                 String    @id @default(cuid())
-  e164               String    @unique // e.g. +14155550123
+  id                 String  @id @default(cuid())
+  e164               String  @unique // e.g. +14155550123
   friendly           String?
-  provider           String    @default("TWILIO") // TWILIO
-  providerExternalId String?   @unique @map("twilioSid") // DB column kept as twilioSid for zero-migration rename
+  provider           String  @default("TWILIO") // TWILIO
+  providerExternalId String? @unique @map("twilioSid") // DB column kept as twilioSid for zero-migration rename
 
   tenantId   String
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -296,10 +315,10 @@ model PhoneNumber {
   instanceId String?
   instance   Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
 
-  active     Boolean   @default(true)
+  active Boolean @default(true)
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([agentId])
@@ -314,19 +333,19 @@ model PhoneNumber {
 // =====================================================
 
 model AllowedCaller {
-  id           String   @id @default(cuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  phoneE164    String   // e.g. +14155550123 — match key
-  name         String?
-  email        String?
-  employeeId   String?
-  snUserSysId  String?  // 32-char ServiceNow sys_user sys_id for tool impersonation
-  active       Boolean  @default(true)
+  phoneE164   String // e.g. +14155550123 — match key
+  name        String?
+  email       String?
+  employeeId  String?
+  snUserSysId String? // 32-char ServiceNow sys_user sys_id for tool impersonation
+  active      Boolean @default(true)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, phoneE164])
   @@index([tenantId, active])
@@ -338,21 +357,21 @@ model AllowedCaller {
 // =====================================================
 
 model AttachmentUpload {
-  id         String   @id @default(cuid())
-  token      String   @unique
-  tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  token    String @unique
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  sessionId  String   // SN conversation session sys_id
-  agentId    String
+  sessionId String // SN conversation session sys_id
+  agentId   String
 
   // Agent-requested target (optional). Resolved to sys_id at upload time.
   targetTable  String?
   targetNumber String?
 
   // Lifecycle. Pipeline polls for 'completed'. Set to 'cancelled' on stop().
-  status     String   @default("pending")    // pending | completed | cancelled
-  expiresAt  DateTime
+  status      String    @default("pending") // pending | completed | cancelled
+  expiresAt   DateTime
   completedAt DateTime?
 
   // Populated on completion by the upload route
@@ -368,8 +387,8 @@ model AttachmentUpload {
   extractedTruncated    Boolean?
   targetResolutionError String?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([token])
   @@index([tenantId, status])
@@ -380,24 +399,24 @@ model AttachmentUpload {
 // =====================================================
 
 model ChatSession {
-  id             String   @id @default(cuid())
-  sessionId      String   @unique  // widget-generated UUID
-  tenantId       String
-  instanceId     String
-  agentId        String   @default("")
-  snUserId       String   @default("")
-  history        Json     @default("[]")  // {role,content}[]
+  id         String @id @default(cuid())
+  sessionId  String @unique // widget-generated UUID
+  tenantId   String
+  instanceId String
+  agentId    String @default("")
+  snUserId   String @default("")
+  history    Json   @default("[]") // {role,content}[]
 
   // Cached from first /gateway/init — avoids calling it on every message
-  llmEndpoint    String   @default("")
-  llmKey         String   @default("")
-  llmModel       String   @default("")
-  systemPrompt   String   @default("") @db.Text
-  tools          Json     @default("[]")
+  llmEndpoint  String @default("")
+  llmKey       String @default("")
+  llmModel     String @default("")
+  systemPrompt String @default("") @db.Text
+  tools        Json   @default("[]")
 
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([sessionId])
   @@index([tenantId])
@@ -408,17 +427,17 @@ model ChatSession {
 // =====================================================
 
 model TwilioConnection {
-  id          String   @id @default(cuid())
-  tenantId    String   @unique
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   accountSid  String
-  authToken   String   // AES-256-GCM encrypted: iv:tag:ciphertext (hex)
-  accountName String?  // fetched from Twilio on connect (friendly label)
-  verified    Boolean  @default(false)
+  authToken   String // AES-256-GCM encrypted: iv:tag:ciphertext (hex)
+  accountName String? // fetched from Twilio on connect (friendly label)
+  verified    Boolean @default(false)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // =====================================================
@@ -446,25 +465,24 @@ model Waitlist {
 // =====================================================
 
 model PlanDefinition {
-  id               String   @id @default(cuid())
-  key              String   @unique
-  name             String
-  price            Int      @default(0)
-  minutesPerMonth  Int      @default(0)
-  concurrentLimit  Int      @default(1)
-  maxAgents        Int      @default(1)
-  maxInstances     Int      @default(1)
-  overageRate      Float?
-  oneTimeTrial     Boolean  @default(false)
-  features         Json
-  cta              String   @default("Get started")
-  popular          Boolean  @default(false)
-  displayOrder     Int      @default(100)
-  active           Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              String   @id @default(cuid())
+  key             String   @unique
+  name            String
+  price           Int      @default(0)
+  minutesPerMonth Int      @default(0)
+  concurrentLimit Int      @default(1)
+  maxAgents       Int      @default(1)
+  maxInstances    Int      @default(1)
+  overageRate     Float?
+  oneTimeTrial    Boolean  @default(false)
+  features        Json
+  cta             String   @default("Get started")
+  popular         Boolean  @default(false)
+  displayOrder    Int      @default(100)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
-
 
 // =====================================================
 // SaaS Platform Configuration (singleton, id="default")
@@ -473,11 +491,115 @@ model PlanDefinition {
 model SaasConfig {
   id           String   @id @default("default")
   saasName     String   @default("ZeVox")
-  tagline      String   @default("AI Voice Agents for ServiceNow")
+  tagline      String   @default("Voice AI for Your Entire Stack")
   logoUrl      String?
   faviconUrl   String?
   primaryColor String   @default("#10b981")
   darkBg       String   @default("#000000")
   supportEmail String   @default("support@zevox.com")
   updatedAt    DateTime @updatedAt
+}
+
+// =====================================================
+// Connectors (generic REST-tool abstraction — VoiceConnect merge, Phase 1)
+//
+// Column/table names are @@map'd to match VoiceConnect's Supabase schema
+// (supabase/migrations/0001_init.sql) exactly, so the forked voice-engine's
+// connectors_config.py (config/connectors_config.py) ports over with zero
+// query changes. Do not rename columns here without also checking that file.
+// =====================================================
+
+model Connector {
+  id       String @id @default(cuid())
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  platform String // free-form: "halo_itsm" | "servicenow" | ...
+  name     String
+  baseUrl  String @map("base_url")
+
+  // Matches connector-schema's AuthConfigSchema; credential_ref points into
+  // ConnectorCredential (ZeVox has no Supabase Vault equivalent — see below).
+  authConfig Json @map("auth_config")
+
+  tools  ConnectorTool[]
+  agents AgentConnector[]
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([tenantId])
+  @@map("connectors")
+}
+
+model ConnectorTool {
+  id          String    @id @default(cuid())
+  connectorId String    @map("connector_id")
+  connector   Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  name            String
+  description     String
+  method          String // GET | POST | PUT | PATCH | DELETE
+  pathTemplate    String  @map("path_template")
+  params          Json    @default("[]")
+  bodyTemplate    Json?   @map("body_template")
+  authOverride    Json?   @map("auth_override") // null = inherit connector.authConfig
+  responseMapping Json    @map("response_mapping")
+  timeoutMs       Int     @default(8000) @map("timeout_ms")
+  enabled         Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([connectorId, name])
+  @@map("connector_tools")
+}
+
+model AgentConnector {
+  agentId String @map("agent_id")
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  connectorId String    @map("connector_id")
+  connector   Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  // Empty = every enabled tool on the connector is available. Non-empty =
+  // restrict to just those tool names.
+  enabledTools String[] @default([]) @map("enabled_tools")
+
+  @@id([agentId, connectorId])
+  @@map("agent_connectors")
+}
+
+// Call sessions — redacted transcript only, raw PII is never persisted.
+model CallSession {
+  id      String @id @default(cuid())
+  agentId String @map("agent_id")
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  startedAt          DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  endedAt            DateTime? @map("ended_at") @db.Timestamptz
+  transcriptRedacted Json      @default("[]") @map("transcript_redacted")
+  toolCalls          Json      @default("[]") @map("tool_calls")
+  status             String    @default("active") // active | completed | failed
+
+  @@index([agentId])
+  @@map("call_sessions")
+}
+
+// ZeVox-only table: VoiceConnect stores connector credentials in Supabase
+// Vault (auth_config.credential_ref = "vault:<uuid>"), which ZeVox has no
+// equivalent of. Ciphertext uses the same AES-256-GCM iv:tag:ciphertext hex
+// format as TwilioConnection.authToken; resolved by the forked voice-engine's
+// ZeVoxEncryptedCredentialResolver via credential_ref = "local:<id>" (see M4).
+model ConnectorCredential {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  kind       String // api_key | basic_auth | oauth2_client_secret
+  ciphertext String // AES-256-GCM: iv:tag:ciphertext (hex)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([tenantId])
 }

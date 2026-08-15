@@ -1,0 +1,33 @@
+# LiteLLM proxy config — the provider-agnostic layer between voice-engine and
+# whichever LLM a tenant configures. voice-engine always talks to this
+# proxy's OpenAI-compatible /v1 endpoint and never to a provider SDK
+# directly, so BYOK is a config change, not a code change.
+#
+# Forked from VoiceConnect's own voice-engine/litellm_config.yaml (see the
+# ZeVox merge plan) — same structure, just renamed the mock model.
+
+model_list:
+  # Deterministic, zero-cost model for local dev/integration testing — proves
+  # the full voice-engine -> litellm proxy -> "LLM" -> TTS wiring without
+  # needing a real provider key.
+  - model_name: zevox-mock
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: "sk-mock-not-a-real-key"
+      mock_response: "This is a mock response from the LiteLLM proxy."
+
+  # Example of a real BYOK entry shape — commented out since no real key is
+  # available here. ZeVox's legacy pipeline already uses Groq's
+  # llama-3.3-70b-versatile directly; wiring that same key through here is
+  # the natural next step once this path is proven.
+  # - model_name: zevox_default
+  #   litellm_params:
+  #     model: groq/llama-3.3-70b-versatile
+  #     api_key: os.environ/GROQ_API_KEY
+
+litellm_settings:
+  drop_params: true
+  num_retries: 0
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

@@ -3,16 +3,19 @@
 /**
  * Slim top bar above the dashboard content.
  * Left: workspace name + breadcrumb (Workspace / Current page)
- * Right: ServiceNow connection status pill + user dropdown
+ * Right: backend connection status pill (ServiceNow instance or generic
+ * connector, either counts) + user dropdown
  */
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import { ChevronDown } from 'lucide-react'
+import { Avatar } from '@/components/ui/avatar'
 
 const PAGE_LABELS: Record<string, string> = {
   '/dashboard': 'Overview',
   '/dashboard/connection': 'Connection',
+  '/dashboard/connectors': 'Connectors',
   '/dashboard/embed': 'Widget',
   '/dashboard/agents': 'Agents',
   '/dashboard/usage': 'Usage',
@@ -49,15 +52,18 @@ export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboa
 
   useEffect(() => {
     if (variant === 'admin') return
-    // SN connection lives on the Instance table now (one tenant → many instances).
-    // We're "connected" if at least one active instance has a snInstanceUrl set.
-    fetch('/api/instances')
-      .then((r) => r.json())
-      .then((d) => {
-        const list = Array.isArray(d?.instances) ? d.instances : []
-        setConnected(list.some((i: { active?: boolean; snInstanceUrl?: string | null }) => i.active !== false && !!i.snInstanceUrl))
-      })
-      .catch(() => setConnected(false))
+    // "Connected" means the tenant has at least one working backend — a
+    // ServiceNow instance (Instance table) or a generic connector
+    // (Connector table). Either satisfies it; this isn't ServiceNow-only.
+    Promise.all([
+      fetch('/api/instances').then((r) => r.json()).catch(() => null),
+      fetch('/api/connectors').then((r) => r.json()).catch(() => null),
+    ]).then(([instancesRes, connectorsRes]) => {
+      const instances = Array.isArray(instancesRes?.instances) ? instancesRes.instances : []
+      const hasInstance = instances.some((i: { active?: boolean; snInstanceUrl?: string | null }) => i.active !== false && !!i.snInstanceUrl)
+      const hasConnector = Array.isArray(connectorsRes?.connectors) && connectorsRes.connectors.length > 0
+      setConnected(hasInstance || hasConnector)
+    })
   }, [variant])
 
   // Close the menu on outside click
@@ -100,7 +106,7 @@ export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboa
               <span
                 className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-[#22c55e]' : 'bg-[#f59e0b]'}`}
               />
-              {connected ? 'ServiceNow connected' : 'Not connected'}
+              {connected ? 'Backend connected' : 'Not connected'}
             </div>
           )}
 
@@ -113,14 +119,7 @@ export function TopBar({ workspaceName, userEmail, userImage, variant = 'dashboa
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
-              {userImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={userImage} alt="" className="w-7 h-7 rounded-full ring-1 ring-white/10" />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-[#6366f1]/20 flex items-center justify-center text-[#6366f1] text-[11px] font-bold ring-1 ring-[#6366f1]/20">
-                  {userEmail?.[0]?.toUpperCase() || '?'}
-                </div>
-              )}
+              <Avatar src={userImage} name={userEmail} size={28} />
               <ChevronDown className="w-3.5 h-3.5 text-[#666]" />
             </button>
 

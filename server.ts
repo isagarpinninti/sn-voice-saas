@@ -35,7 +35,13 @@ app.prepare().then(() => {
 
   // Three WebSocket routes on the same HTTP server:
   //   /voice      — browser widget (linear16 @ 16kHz)
-  //   /phone      — Twilio/Telnyx Media Streams (mulaw @ 8kHz)
+  //   /phone      — Twilio/Telnyx Media Streams (mulaw @ 8kHz), OUTBOUND calls
+  //                 only (admin "call out" tool, see outbound-connect/[phoneId]).
+  //                 Inbound calls no longer reach this app at all — they route
+  //                 Twilio SIP trunk -> self-hosted livekit-sip -> LiveKit
+  //                 dispatch rule -> voice-engine-livekit's webhook (see
+  //                 voice-engine/src/voice_engine/livekit_server.py). The old
+  //                 inbound webhook (/api/phone/incoming) has been removed.
   //   /transcribe — SN Voice Assistant transcription widget (linear16 @ 16kHz)
   const wssVoice = new WebSocketServer({ noServer: true })
   const wssPhone = new WebSocketServer({ noServer: true })
@@ -330,6 +336,7 @@ app.prepare().then(() => {
         snInstanceUrl: instanceRef.snInstanceUrl,
         snUsername: instanceRef.snUsername,
         snPassword: instanceRef.snPassword,
+        snPasswordEncrypted: instanceRef.snPasswordEncrypted,
       })
       pipeline.on('ready', (d: any) => { addLog('info', 'pipeline', 'READY ' + d.sessionId, { tenantId: tenantRef.id }); send(ws, { type: 'ready', ...d }) })
       pipeline.on('state', (s: string) => send(ws, { type: 'state', state: s }))
@@ -350,11 +357,13 @@ app.prepare().then(() => {
     })()
   })
 
-  // ── /phone — telephony Media Streams bridge ──
+  // ── /phone — telephony Media Streams bridge (OUTBOUND calls only) ──
   // Provider-neutral: all provider-specific framing lives behind TelephonyProvider.
-  // This handler identifies the tenant/agent from the `phoneId` custom parameter
-  // set by /api/phone/incoming (which already authenticated the call), plan-gates,
-  // then bridges the stream into a VoicePipeline configured for 'phone' audio.
+  // The only remaining caller is outbound-connect/[phoneId] (the admin "call out"
+  // tool) — it identifies the tenant/agent from the `phoneId` custom parameter it
+  // sets, plan-gates, then bridges the stream into a VoicePipeline configured for
+  // 'phone' audio. Inbound calls used to arrive here too (via /api/phone/incoming,
+  // now removed); they're handled entirely by the LiveKit path instead.
   wssPhone.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const url = parse(req.url || '', true)
     // Provider is embedded in the stream URL by /api/phone/incoming. Unknown
@@ -450,6 +459,7 @@ app.prepare().then(() => {
               snInstanceUrl: phone.instance.snInstanceUrl,
               snUsername: phone.instance.snUsername,
               snPassword: phone.instance.snPassword,
+              snPasswordEncrypted: phone.instance.snPasswordEncrypted,
             },
             { audioFormat: 'phone' },
           )

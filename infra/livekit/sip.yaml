@@ -1,0 +1,12 @@
+# livekit-sip config, local dev only. Bridges a SIP trunk (e.g. Twilio
+# Elastic SIP Trunking pointed at this service in production) into LiveKit
+# rooms. Dispatch rules (which room a call lands in) are registered via the
+# LiveKit server API at runtime — see src/lib/livekit-sip.ts.
+api_key: zevoxlocaldevkey
+api_secret: qJv0gbLt4cOLnfxEDNXYNmytJ5aMsYxocyJcSQNh
+ws_url: ws://livekit-server:7880
+redis:
+  address: livekit-redis:6379
+sip_port: 5060
+rtp_port: 10000-10100
+use_external_ip: false

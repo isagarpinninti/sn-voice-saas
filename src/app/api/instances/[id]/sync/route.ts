@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { instanceBasicAuthValue } from '@/lib/instance-credentials'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -28,7 +29,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
   if (!instance) return NextResponse.json({ error: 'Instance not found' }, { status: 404 })
 
   // Call SN scoped API to list agents
-  const authHeader = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
+  const authHeader = instanceBasicAuthValue(instance)
   let snAgents: { sys_id: string; name: string; active: boolean }[] = []
 
   try {

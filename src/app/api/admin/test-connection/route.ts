@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { isUserAdmin } from '@/lib/admin'
+import { instanceBasicAuthValue } from '@/lib/instance-credentials'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const authHeader = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
+    const authHeader = instanceBasicAuthValue(instance)
     const res = await fetch(`${instance.snInstanceUrl}/api/now/table/sys_properties?sysparm_limit=1`, {
       headers: { 'Authorization': `Basic ${authHeader}`, 'Accept': 'application/json' },
       signal: AbortSignal.timeout(10000),
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
 
   const firstAgent = instance.agents[0] || null
   try {
-    const authHeader = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
+    const authHeader = instanceBasicAuthValue(instance)
     const res = await fetch(`${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/gateway/init`, {
       method: 'POST',
       headers: { 'Authorization': `Basic ${authHeader}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },

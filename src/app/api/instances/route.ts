@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { encryptInstancePassword } from '@/lib/instance-credentials'
 
 export async function GET() {
   const session = await auth()
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
       name,
       snInstanceUrl: body.snInstanceUrl.replace(/\/$/, ''),
       snUsername: body.snUsername,
-      snPassword: body.snPassword,
+      ...encryptInstancePassword(body.snPassword),
       tokens: {
         create: { tenantId: tenant.id, name: 'Default', token },
       },

@@ -10,7 +10,10 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
 import { Section } from '@/components/ui/section'
 import { useToast } from '@/components/ui/toast'
+import { AgentConnectorsSection } from '@/components/dashboard/agent-connectors-section'
+import { Textarea } from '@/components/ui/textarea'
 import { VOICES } from '@/lib/voices'
+import { KOKORO_VOICES } from '@/lib/kokoro-voices'
 import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Send, Bot, Phone, ExternalLink } from 'lucide-react'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
@@ -21,6 +24,9 @@ interface AgentConfig {
   snAgentId: string | null
   active: boolean
   token: string | null
+  systemPrompt: string | null
+  llmModel: string | null
+  voiceId: string | null
 }
 
 interface WidgetConfig {
@@ -140,7 +146,13 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
       const res = await fetch(`/api/agents/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: agent.name, active: agent.active }),
+        body: JSON.stringify({
+          name: agent.name,
+          active: agent.active,
+          systemPrompt: agent.systemPrompt ?? '',
+          llmModel: agent.llmModel ?? '',
+          voiceId: agent.voiceId ?? '',
+        }),
       })
       if (res.ok) {
         const fresh = await fetch(`/api/agents/${id}`, { cache: 'no-store' }).then((r) => r.json())
@@ -258,7 +270,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
 
       <PageHeader
         title={agent.name}
-        description="Agent settings — maps to a ServiceNow Voice Agent record."
+        description="Agent settings. Optionally linked to a ServiceNow Voice Agent record."
         actions={
           <Button onClick={handleSave} disabled={saving} size="sm">
             {saving ? 'Saving...' : 'Save changes'}
@@ -283,15 +295,15 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 <p className="text-[10px] text-muted-foreground/70">For your reference only.</p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="sn-id">ServiceNow Voice Agent sys_id</Label>
+                <Label htmlFor="sn-id">ServiceNow Voice Agent sys_id (optional)</Label>
                 <Input
                   id="sn-id"
                   value={agent.snAgentId || ''}
                   readOnly
-                  placeholder="Auto-filled by SaaS sync"
+                  placeholder="Not linked — this agent isn't backed by a ServiceNow Voice Agent record"
                   className="font-mono text-[12px] bg-muted/50 cursor-not-allowed"
                 />
-                <p className="text-[10px] text-muted-foreground/70">Read-only — synced from ServiceNow.</p>
+                <p className="text-[10px] text-muted-foreground/70">Read-only — synced from ServiceNow, if connected. Agents built purely on connectors don&apos;t need this.</p>
               </div>
               <div className="flex items-center gap-2">
                 <Label htmlFor="active" className="cursor-pointer">Active</Label>
@@ -303,6 +315,82 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                   className="accent-primary"
                 />
                 <p className="text-[10px] text-muted-foreground/70">Inactive agents are excluded from the orchestrator.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Section>
+
+        {/* Personality & voice — self-hosted engine, no ServiceNow required */}
+        <Section title="Personality & voice" description="How this agent talks, on the widget (WebRTC) and phone paths. Works independently of ServiceNow.">
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="agent-prompt">Instructions</Label>
+                <Textarea
+                  id="agent-prompt"
+                  value={agent.systemPrompt || ''}
+                  onChange={(e) => update('systemPrompt', e.target.value)}
+                  placeholder="You are a helpful voice assistant. Your responses will be spoken aloud, so avoid emojis, bullet points, or any formatting that can't be spoken. Keep responses brief and conversational."
+                  rows={6}
+                />
+                <p className="text-[10px] text-muted-foreground/70">
+                  Personality, tone, and guardrails for this agent. Leave blank to use ZeVox&apos;s default prompt.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="agent-llm">LLM model</Label>
+                <Input
+                  id="agent-llm"
+                  value={agent.llmModel || ''}
+                  onChange={(e) => update('llmModel', e.target.value)}
+                  placeholder="e.g. groq/llama-3.3-70b-versatile"
+                  className="font-mono text-[12px]"
+                />
+                <p className="text-[10px] text-muted-foreground/70">
+                  Must match a model configured on your voice-engine&apos;s LiteLLM proxy. Leave blank for the tenant default.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Voice</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {KOKORO_VOICES.map((v) => {
+                    const isSelected = (agent.voiceId || 'af_heart') === v.id
+                    return (
+                      <div
+                        key={v.id}
+                        onClick={() => update('voiceId', v.id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); update('voiceId', v.id) } }}
+                        role="radio"
+                        aria-checked={isSelected}
+                        tabIndex={0}
+                        className={`cursor-pointer text-left p-2.5 rounded-lg border transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          isSelected
+                            ? 'border-primary/60 bg-primary/[0.04] ring-1 ring-primary/30'
+                            : 'border-border bg-card hover:border-border/80'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[12.5px] font-semibold text-foreground">{v.name}</span>
+                          {isSelected && (
+                            <svg className="w-3 h-3 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full ml-auto ${v.gender === 'female' ? 'bg-pink-500/10 text-pink-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                            {v.gender === 'female' ? 'F' : 'M'}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground/60">{v.accent}</span>
+                        </div>
+                        <p className="text-[10.5px] text-muted-foreground leading-snug">{v.description}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-muted-foreground/70">
+                  Kokoro voice for the self-hosted STT/TTS pipeline — separate from the ServiceNow widget voice below.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -561,8 +649,9 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           )}
         </Section>
 
-        {/* Voice Selection */}
-        <Section title="Voice" description="Pick the voice this agent speaks with. Saved directly to ServiceNow. Click to preview.">
+        {/* Voice Selection (legacy ServiceNow WS widget path only — needs a linked SN Voice Agent) */}
+        {agent.snAgentId && (
+        <Section title="Voice (ServiceNow widget)" description="For the legacy ServiceNow-connected widget path only. Saved directly to ServiceNow. Click to preview.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {VOICES.map((v) => {
               const isSelected = currentVoice === v.id
@@ -612,6 +701,10 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
             })}
           </div>
         </Section>
+        )}
+
+        {/* Connectors */}
+        <AgentConnectorsSection agentId={id} />
 
         {/* Test Agent */}
         <Section title="Test agent" description="Send a message and see how this agent responds via the chat API. Requires an active ServiceNow connection with a configured LLM.">

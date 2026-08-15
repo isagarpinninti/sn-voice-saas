@@ -6,19 +6,20 @@ import { cn } from '@/lib/utils'
 
 const SECTIONS: TocItem[] = [
   { id: 'prerequisites', num: '00', title: 'Prerequisites' },
-  { id: 'install', num: '01', title: 'Install the ServiceNow scoped app' },
-  { id: 'connect-sn', num: '02', title: 'Connect ServiceNow to ZeVox' },
-  { id: 'llm', num: '03', title: 'Configure the LLM' },
-  { id: 'agent', num: '04', title: 'Create your first voice agent' },
-  { id: 'standard-tools', num: '05', title: 'Seed standard tools' },
-  { id: 'connect-saas', num: '06', title: 'Set up your ZeVox tenant' },
-  { id: 'instructions', num: '07', title: 'Agent Instructions playbook' },
-  { id: 'kb', num: '08', title: 'Link a Knowledge Base' },
-  { id: 'guardrails', num: '09', title: 'Add Guardrails' },
-  { id: 'widget', num: '10', title: 'Embed the widget' },
-  { id: 'custom-tools', num: '11', title: 'Custom tools — advanced' },
-  { id: 'monitoring', num: '12', title: 'Monitoring' },
-  { id: 'troubleshooting', num: '13', title: 'Troubleshooting' },
+  { id: 'connect-backend', num: '01', title: 'Connect a backend' },
+  { id: 'configure-agent', num: '02', title: 'Configure your agent' },
+  { id: 'add-tools', num: '03', title: 'Add tools' },
+  { id: 'widget', num: '04', title: 'Embed the widget' },
+  { id: 'phone', num: '05', title: 'Phone calls' },
+  { id: 'monitoring', num: '06', title: 'Monitoring' },
+  { id: 'troubleshooting', num: '07', title: 'Troubleshooting' },
+  { id: 'sn-install', num: '08', title: 'ServiceNow: install the scoped app' },
+  { id: 'sn-connect', num: '09', title: 'ServiceNow: connect to ZeVox' },
+  { id: 'sn-llm', num: '10', title: 'ServiceNow: configure the LLM' },
+  { id: 'sn-instructions', num: '11', title: 'ServiceNow: Agent Instructions playbook' },
+  { id: 'sn-kb', num: '12', title: 'ServiceNow: link a Knowledge Base' },
+  { id: 'sn-guardrails', num: '13', title: 'ServiceNow: add Guardrails' },
+  { id: 'sn-custom-tools', num: '14', title: 'ServiceNow: custom tools — advanced' },
 ]
 
 const STANDARD_TOOLS = [
@@ -72,16 +73,26 @@ export default function DocsPage() {
             ZeVox setup guide
           </h1>
           <p className="text-[15px] text-muted-foreground leading-relaxed">
-            Install the ServiceNow scoped app, connect it to ZeVox, configure an AI voice agent, and embed the widget.
-            End-to-end setup is about 15 minutes for a working demo agent.
+            Connect a backend, configure your agent, add tools, and embed the widget. There are two ways to
+            connect a backend: a <strong className="text-foreground font-medium">generic connector</strong> (HaloITSM,
+            or any REST API you run — no extra install, ~5 minutes) or the{' '}
+            <strong className="text-foreground font-medium">ServiceNow scoped app</strong> (deepest integration:
+            native forms for instructions, guardrails, and knowledge base search — ~15 minutes). Sections 00–07 cover
+            the end-to-end path with either; sections 08+ are ServiceNow-specific reference material.
           </p>
           <div className="flex flex-wrap items-center gap-2 mt-6">
             <Link
-              href="/dashboard/downloads/sn-app"
+              href="/dashboard/connectors"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:bg-foreground/90 transition-colors"
             >
-              Download the SN app
+              Connect a backend
               <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <Link
+              href="/dashboard/downloads/sn-app"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md text-[12.5px] text-foreground border border-border hover:border-border/80 hover:bg-secondary transition-colors"
+            >
+              Download the SN app
             </Link>
             <a
               href="mailto:support@zevox.com"
@@ -108,30 +119,235 @@ export default function DocsPage() {
             <Section id="prerequisites" num="00" title="Prerequisites">
               <ul className="space-y-2.5">
                 <BulletItem>
-                  A ServiceNow instance on Vancouver or newer (Washington / Xanadu / Yokohama all supported).
-                </BulletItem>
-                <BulletItem>
-                  Admin rights to install a scoped application.
-                </BulletItem>
-                <BulletItem>
-                  An LLM API key —{' '}
-                  <ExternalLink href="https://console.groq.com">Groq</ExternalLink>{' '}
-                  (<InlineCode>llama-3.3-70b-versatile</InlineCode>, recommended &amp; tested) or{' '}
-                  <ExternalLink href="https://platform.openai.com">OpenAI</ExternalLink>{' '}
-                  (<InlineCode>gpt-4o-mini</InlineCode>) or{' '}
-                  <ExternalLink href="https://console.anthropic.com">Anthropic</ExternalLink>{' '}
-                  (<InlineCode>claude-haiku-4-5-20251001</InlineCode>).
-                </BulletItem>
-                <BulletItem>
                   A ZeVox account — free tier includes 50 lifetime minutes.
                 </BulletItem>
                 <BulletItem>
-                  Node.js 18+ with the ServiceNow SDK installed: <InlineCode>npm i -g @servicenow/sdk</InlineCode>
+                  A backend to connect: any REST API you run, a HaloITSM tenant, or a ServiceNow instance on
+                  Vancouver or newer (Washington / Xanadu / Yokohama all supported).
+                </BulletItem>
+                <BulletItem>
+                  If you&apos;re going the ServiceNow route: admin rights to install a scoped application, plus
+                  Node.js 18+ with the ServiceNow SDK: <InlineCode>npm i -g @servicenow/sdk</InlineCode>
                 </BulletItem>
               </ul>
             </Section>
 
-            <Section id="install" num="01" title="Install the ServiceNow scoped app">
+            <Section id="connect-backend" num="01" title="Connect a backend">
+              <p className="text-[14px] text-muted-foreground leading-relaxed mb-6">
+                Pick whichever fits how you run today. Both are first-class — you can also connect more than one
+                backend to the same agent later.
+              </p>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg border border-border bg-card">
+                  <p className="text-[13px] font-semibold text-foreground mb-1">Generic connector</p>
+                  <p className="text-[12px] text-muted-foreground/70 mb-3">HaloITSM, or any REST API — ~5 min</p>
+                  <p className="text-[12.5px] text-muted-foreground leading-relaxed mb-3">
+                    Open{' '}
+                    <Link href="/dashboard/connectors" className="text-primary hover:underline">
+                      Dashboard → Connectors
+                    </Link>{' '}
+                    and add one: a base URL plus an auth method (none, API key, HTTP Basic, or OAuth2 client
+                    credentials). Credentials are encrypted at rest, never stored in plaintext.
+                  </p>
+                  <div className="space-y-1 text-[11.5px] font-mono">
+                    <KvLine k="platform" v="halo_itsm" />
+                    <KvLine k="base_url" v="https://tenant.haloitsm.com" />
+                    <KvLine k="auth" v="OAuth2 client credentials" />
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg border border-border bg-card">
+                  <p className="text-[13px] font-semibold text-foreground mb-1">ServiceNow scoped app</p>
+                  <p className="text-[12px] text-muted-foreground/70 mb-3">Deepest integration — ~15 min</p>
+                  <p className="text-[12.5px] text-muted-foreground leading-relaxed mb-3">
+                    Install ZeVox as a scoped app in your instance. Gets you native forms for Agent Instructions,
+                    Guardrails, and Knowledge Base search — configured on the ServiceNow side instead of the ZeVox
+                    dashboard.
+                  </p>
+                  <p className="text-[12px] text-muted-foreground">
+                    Full walkthrough:{' '}
+                    <a href="#sn-install" className="text-primary hover:underline">
+                      Section 08 — Install the ServiceNow scoped app
+                    </a>
+                  </p>
+                </div>
+              </div>
+            </Section>
+
+            <Section id="configure-agent" num="02" title="Configure your agent">
+              <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
+                Every agent — whether it&apos;s backed by a generic connector, ServiceNow, or both — is configured
+                from{' '}
+                <Link href="/dashboard/agents" className="text-primary hover:underline">
+                  Dashboard → Agents
+                </Link>
+                . Open an agent and fill in the{' '}
+                <strong className="text-foreground font-medium">Personality &amp; voice</strong> section:
+              </p>
+              <KvCard
+                rows={[
+                  ['Instructions', 'Personality, tone, and guardrails — spoken responses, so no formatting/emoji.'],
+                  ['LLM model', 'e.g. groq/llama-3.3-70b-versatile — must match a model on your LiteLLM proxy.'],
+                  ['Voice', 'A Kokoro voice (e.g. af_heart) for the self-hosted STT/TTS pipeline.'],
+                ]}
+              />
+              <p className="text-[13.5px] text-muted-foreground mt-3">
+                Changes take effect on the next session — no redeploy needed. Example instructions for an IT
+                support agent:
+              </p>
+              <CodeBlock>{`You are a helpful voice assistant. Your responses will be spoken aloud, so
+avoid emojis, bullet points, or any formatting that can't be spoken. Keep
+responses brief and conversational (1-3 sentences per turn).
+
+Always use tools — never guess or make up ticket numbers, statuses, or
+record details. After a tool call, speak the result naturally instead of
+reading raw data back.`}</CodeBlock>
+              <p className="text-[13.5px] text-muted-foreground mt-3">
+                Going the ServiceNow route instead? The scoped app&apos;s{' '}
+                <strong className="text-foreground font-medium">Agent Instructions</strong> field does the same
+                job with a deeper playbook format — see{' '}
+                <a href="#sn-instructions" className="text-primary hover:underline">Section 11</a>.
+              </p>
+            </Section>
+
+            <Section id="add-tools" num="03" title="Add tools">
+              <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
+                Tools are what let the agent actually do something — look up a ticket, create a record, search a
+                knowledge base. What you add here depends on which backend(s) you connected in Section 01.
+              </p>
+              <div className="space-y-4">
+                <div className="p-4 rounded-lg border border-border bg-card">
+                  <p className="text-[13px] font-semibold text-foreground mb-2">On a generic connector</p>
+                  <p className="text-[12.5px] text-muted-foreground leading-relaxed mb-3">
+                    Open the connector&apos;s detail page and add a tool: an HTTP method, a path template, its
+                    parameters, and how to turn the response into something the agent can say out loud. Toggle
+                    which connectors a given agent can use from that agent&apos;s detail page.
+                  </p>
+                  <div className="space-y-1 text-[11.5px] font-mono">
+                    <KvLine k="tool" v="halo_create_ticket — POST /api/Tickets" />
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg border border-border bg-card">
+                  <p className="text-[13px] font-semibold text-foreground mb-2">On ServiceNow</p>
+                  <p className="text-[12.5px] text-muted-foreground leading-relaxed">
+                    Click <strong className="text-foreground font-medium">Seed Standard Tools</strong> on the Voice
+                    Agent form for 9 ready-made tools (ticket lookup, incident creation, KB search, and more), or
+                    build your own — see{' '}
+                    <a href="#sn-custom-tools" className="text-primary hover:underline">Section 14</a>.
+                  </p>
+                </div>
+              </div>
+            </Section>
+
+            <Section id="widget" num="04" title="Embed the widget">
+              <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
+                Open <strong className="text-foreground font-medium">Connection</strong> in ZeVox, copy the embed
+                snippet, and paste it before your <InlineCode>{'</body>'}</InlineCode>:
+              </p>
+              <CodeBlock language="html">{`<script>window.ZEVOX_TOKEN = "sk_live_your_token_here";</script>
+<script src="https://zevox.onrender.com/widget.js"></script>`}</CodeBlock>
+              <p className="text-[13.5px] text-muted-foreground mt-3">
+                Customize the widget (colors, position, greeting, voice-only mode) on the{' '}
+                <strong className="text-foreground font-medium">Connection</strong> page — changes apply instantly.
+              </p>
+              <p className="text-[13.5px] text-muted-foreground mt-2">
+                For ServiceNow Service Portal: add this snippet to the portal theme header widget.
+              </p>
+            </Section>
+
+            <Section id="phone" num="05" title="Phone calls">
+              <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
+                Premium plans get a dedicated inbound phone number — callers dial in and speak directly to your
+                agent, no widget or app required. Same agent config as the widget (Section 02); phone is just
+                another channel.
+              </p>
+              <ol className="space-y-3">
+                <Numbered n="1">
+                  Open <strong className="text-foreground font-medium">Dashboard → Phone Numbers</strong> and buy a
+                  number, or import one you already own in Twilio.
+                </Numbered>
+                <Numbered n="2">
+                  Assign it to an agent. Inbound routing is configured automatically — no separate webhook setup.
+                </Numbered>
+                <Numbered n="3">
+                  Optional: restrict who can call in from{' '}
+                  <strong className="text-foreground font-medium">Dashboard → Phone Allowlist</strong>. Leave it
+                  empty for open access.
+                </Numbered>
+              </ol>
+              <p className="text-[13.5px] text-muted-foreground mt-3">
+                Rejected calls (plan not eligible, caller not on the allowlist) are logged — see{' '}
+                <a href="#monitoring" className="text-primary hover:underline">Monitoring</a> below.
+              </p>
+            </Section>
+
+            <Section id="monitoring" num="06" title="Monitoring">
+              <ul className="space-y-2.5">
+                <BulletItem>
+                  <strong className="text-foreground font-medium">ZeVox dashboard:</strong> the{' '}
+                  <strong className="text-foreground font-medium">Usage</strong> page shows minutes, tokens, and a
+                  month-end forecast. <strong className="text-foreground font-medium">Conversations</strong> has
+                  full transcripts.
+                </BulletItem>
+                <BulletItem>
+                  <strong className="text-foreground font-medium">Admin ops:</strong> the{' '}
+                  <strong className="text-foreground font-medium">Live Logs</strong> page tails gateway events in
+                  real time.
+                </BulletItem>
+                <BulletItem>
+                  <strong className="text-foreground font-medium">Phone allowlist audit:</strong> denied calls are
+                  logged with <InlineCode>phone.call.rejected</InlineCode> +{' '}
+                  <InlineCode>reason: caller_not_on_allowlist</InlineCode> (or{' '}
+                  <InlineCode>plan_not_phone_eligible</InlineCode>).
+                </BulletItem>
+                <BulletItem>
+                  <strong className="text-foreground font-medium">ServiceNow route only:</strong>{' '}
+                  <InlineCode>Conversation Sessions</InlineCode>, <InlineCode>Conversation Logs</InlineCode>, and{' '}
+                  <InlineCode>Guardrail Violations</InlineCode> contain every call and rule trigger.
+                </BulletItem>
+              </ul>
+            </Section>
+
+            <Section id="troubleshooting" num="07" title="Troubleshooting">
+              <div className="space-y-3">
+                <Issue q='Agent responds "Sorry, I am having trouble right now"'>
+                  Check the LLM model on the agent (Section 02) — it must match a model configured on your
+                  voice-engine&apos;s LiteLLM proxy. On the ServiceNow route, click{' '}
+                  <strong className="text-foreground font-medium">Test Connection</strong> on the LLM Configuration
+                  record and check SN system logs for the provider&apos;s full error response.
+                </Issue>
+                <Issue q="Agent invents ticket numbers or record details">
+                  Add an anti-fabrication rule to the agent&apos;s Instructions (Section 02) — e.g. &quot;never
+                  guess a ticket number, always use a tool.&quot; On ServiceNow, refresh Standard Tools so output
+                  schema enforcement is active.
+                </Issue>
+                <Issue q="Phone caller hears immediate hangup">
+                  Either the caller&apos;s number isn&apos;t on your allowlist (when the allowlist is non-empty), or
+                  the tenant isn&apos;t on the Premium plan. Check the audit log for{' '}
+                  <InlineCode>phone.call.rejected</InlineCode> with the reason metadata.
+                </Issue>
+                <Issue q="search_knowledge returns nothing (ServiceNow route)">
+                  If KB Cache is empty (new install), the tool falls back to direct{' '}
+                  <InlineCode>kb_knowledge</InlineCode> text search. For richer results, link a KB to the agent
+                  (Section 12) and run Reprocess All Articles.
+                </Issue>
+                <Issue q="Free tier keeps charging minutes past the limit">
+                  The gate is enforced at connection start. If you still see overage, check Admin → Live Logs for{' '}
+                  <InlineCode>quota.exceeded</InlineCode> events.
+                </Issue>
+              </div>
+            </Section>
+
+            <div className="pt-4 pb-2">
+              <p className="text-[11px] font-mono tabular-nums text-primary tracking-[0.14em] uppercase mb-2">ServiceNow reference</p>
+              <p className="text-[13.5px] text-muted-foreground leading-relaxed">
+                Sections 08–14 are a deep dive on the ServiceNow scoped-app path — install steps, the native
+                Agent Instructions / Guardrails / Knowledge Base forms, and Script Include / Flow Designer custom
+                tools. Skip this if you&apos;re on the generic-connector path from Section 01.
+              </p>
+            </div>
+
+            <Section id="sn-install" num="08" title="Install the ServiceNow scoped app">
               <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
                 ZeVox ships as a scoped application <InlineCode>x_ztpas_ai_voice_a</InlineCode> that owns agent
                 configuration, tools, guardrails, and conversation history.
@@ -159,7 +375,7 @@ npx now-sdk install --instance https://your-instance.service-now.com`}</CodeBloc
               </p>
             </Section>
 
-            <Section id="connect-sn" num="02" title="Connect ServiceNow to ZeVox">
+            <Section id="sn-connect" num="09" title="Connect ServiceNow to ZeVox">
               <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
                 The SN app needs the SaaS URL and a tenant API key to push agent configuration and serve the gateway.
               </p>
@@ -175,11 +391,14 @@ npx now-sdk install --instance https://your-instance.service-now.com`}</CodeBloc
               />
               <p className="text-[13.5px] text-muted-foreground mt-3">
                 Click <strong className="text-foreground font-medium">Test Connection</strong> — you should see{' '}
-                <InlineCode>Connected (tenant: …)</InlineCode>.
+                <InlineCode>Connected (tenant: …)</InlineCode>. Then, in ZeVox,{' '}
+                <strong className="text-foreground font-medium">Connection → Add Instance</strong> with the same
+                instance URL and a service-account username/password, and copy the generated API key back into the
+                SN SaaS Connection page above.
               </p>
             </Section>
 
-            <Section id="llm" num="03" title="Configure the LLM">
+            <Section id="sn-llm" num="10" title="Configure the LLM in ServiceNow">
               <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
                 Navigate to <InlineCode>AI Voice Agent &gt; LLM Configurations</InlineCode> and create a record (or
                 edit the auto-seeded <strong className="text-foreground font-medium">Demo LLM Config</strong>):
@@ -213,89 +432,12 @@ npx now-sdk install --instance https://your-instance.service-now.com`}</CodeBloc
               </p>
             </Section>
 
-            <Section id="agent" num="04" title="Create your first voice agent">
+            <Section id="sn-instructions" num="11" title="Agent Instructions playbook">
               <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
-                Open <InlineCode>AI Voice Agent &gt; Voice Agents</InlineCode> → New (or edit the auto-seeded
-                Demo Voice Agent). STT/TTS settings are inline on the form.
-              </p>
-              <KvCard
-                rows={[
-                  ['Name', 'Nova'],
-                  ['Agent Identity', 'You are Nova, a friendly IT support assistant.'],
-                  ['Agent Instructions', 'Workflow playbook — see Section 07'],
-                  ['LLM Configuration', 'Production LLM (from Section 03)'],
-                  ['STT Model', 'nova-3'],
-                  ['STT Language', 'en-US'],
-                  ['TTS Voice', 'aura-stella-en (female) or aura-orion-en (male)'],
-                  ['TTS Speaking Rate', '1.0'],
-                  ['Context Window (Messages)', '4'],
-                  ['Max Tool Calls Per Turn', '5'],
-                  ['Conversation Starters', '["Check my tickets","Create an incident"]'],
-                  ['Active', '✓'],
-                ]}
-              />
-              <p className="text-[13.5px] text-muted-foreground mt-3">
-                Save. The record auto-syncs to ZeVox within seconds — the agent appears in the dashboard's Agents
-                list.
-              </p>
-            </Section>
-
-            <Section id="standard-tools" num="05" title="Seed standard tools">
-              <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
-                On the Voice Agent form, click <strong className="text-foreground font-medium">Seed Standard Tools</strong>{' '}
-                (or <strong className="text-foreground font-medium">Refresh Standard Tools</strong> to re-apply
-                existing ones). This creates 9 ready-to-use tools:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
-                {STANDARD_TOOLS.map((c) => (
-                  <div key={c.name} className="p-3 rounded-md border border-border bg-card">
-                    <p className="text-[12px] font-mono text-primary mb-0.5">{c.name}</p>
-                    <p className="text-[11.5px] text-muted-foreground leading-snug">{c.desc}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[13.5px] text-muted-foreground">
-                Each tool has visual <strong className="text-foreground font-medium">Parameters</strong> and{' '}
-                <strong className="text-foreground font-medium">Output Fields</strong> related lists — no JSON
-                editing needed. Click <strong className="text-foreground font-medium">Test Tool</strong> on any
-                tool record to dry-run it with sample input.
-              </p>
-            </Section>
-
-            <Section id="connect-saas" num="06" title="Set up your ZeVox tenant">
-              <ol className="space-y-3">
-                <Numbered n="1">
-                  Sign in at <ExternalLink href="/auth">zevox.onrender.com</ExternalLink> with Google or GitHub.
-                </Numbered>
-                <Numbered n="2">
-                  New tenants land on the <strong className="text-foreground font-medium">Get Started</strong>{' '}
-                  page — a 5-step checklist that auto-detects progress.
-                </Numbered>
-                <Numbered n="3">
-                  Open <strong className="text-foreground font-medium">Connection</strong> →{' '}
-                  <strong className="text-foreground font-medium">Add Instance</strong>.
-                </Numbered>
-                <Numbered n="4">
-                  Enter the instance URL ({' '}
-                  <InlineCode>https://yourinstance.service-now.com</InlineCode>), a service-account username, and
-                  password.
-                </Numbered>
-                <Numbered n="5">
-                  Click <strong className="text-foreground font-medium">Test Connection</strong>. Green ticks on
-                  every check = ready.
-                </Numbered>
-                <Numbered n="6">
-                  Copy the generated <strong className="text-foreground font-medium">API key</strong> and paste it
-                  into the SN SaaS Connection page (Section 02).
-                </Numbered>
-              </ol>
-            </Section>
-
-            <Section id="instructions" num="07" title="Agent Instructions playbook">
-              <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
-                <strong className="text-foreground font-medium">Agent Instructions</strong> is where the personality
-                and workflow live. The SN app injects a generic anti-hallucination rule set; your instructions
-                define the rest. Example for an IT support agent:
+                On the Voice Agent form, <strong className="text-foreground font-medium">Agent Instructions</strong> is
+                where the personality and workflow live — the ServiceNow-native equivalent of the dashboard
+                Instructions field in Section 02, with the same anti-hallucination rule set injected automatically.
+                Example for an IT support agent:
               </p>
               <CodeBlock>{`CORE RULES:
 - Always use tools. Never guess or make up information.
@@ -322,11 +464,21 @@ ENDING THE CALL:
 - If the user says "thanks" / "bye" — give a warm 1-2 sentence
   closing. Do NOT call any tools.`}</CodeBlock>
               <p className="text-[13.5px] text-muted-foreground mt-3">
-                Stored on the agent record — hot-reloads on the next session, no redeploy.
+                Stored on the agent record — hot-reloads on the next session, no redeploy. On the Voice Agent form,
+                click <strong className="text-foreground font-medium">Seed Standard Tools</strong> to create the 9
+                tools these instructions reference:
               </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
+                {STANDARD_TOOLS.map((c) => (
+                  <div key={c.name} className="p-3 rounded-md border border-border bg-card">
+                    <p className="text-[12px] font-mono text-primary mb-0.5">{c.name}</p>
+                    <p className="text-[11.5px] text-muted-foreground leading-snug">{c.desc}</p>
+                  </div>
+                ))}
+              </div>
             </Section>
 
-            <Section id="kb" num="08" title="Link a Knowledge Base (optional)">
+            <Section id="sn-kb" num="12" title="Link a Knowledge Base (optional)">
               <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
                 <InlineCode>search_knowledge</InlineCode> works out of the box via direct{' '}
                 <InlineCode>kb_knowledge</InlineCode> text search. For better relevance ranking + a feedback loop,
@@ -356,7 +508,7 @@ ENDING THE CALL:
               </p>
             </Section>
 
-            <Section id="guardrails" num="09" title="Add Guardrails (optional)">
+            <Section id="sn-guardrails" num="13" title="Add Guardrails (optional)">
               <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
                 On the Voice Agent record, open the{' '}
                 <strong className="text-foreground font-medium">Guardrails</strong> related list. Each guardrail is
@@ -376,23 +528,7 @@ ENDING THE CALL:
               </p>
             </Section>
 
-            <Section id="widget" num="10" title="Embed the widget">
-              <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
-                Open <strong className="text-foreground font-medium">Connection</strong> in ZeVox, copy the embed
-                snippet, and paste it before your <InlineCode>{'</body>'}</InlineCode>:
-              </p>
-              <CodeBlock language="html">{`<script>window.ZEVOX_TOKEN = "sk_live_your_token_here";</script>
-<script src="https://zevox.onrender.com/widget.js"></script>`}</CodeBlock>
-              <p className="text-[13.5px] text-muted-foreground mt-3">
-                Customize the widget (colors, position, greeting, voice-only mode) on the{' '}
-                <strong className="text-foreground font-medium">Connection</strong> page — changes apply instantly.
-              </p>
-              <p className="text-[13.5px] text-muted-foreground mt-2">
-                For ServiceNow Service Portal: add this snippet to the portal theme header widget.
-              </p>
-            </Section>
-
-            <Section id="custom-tools" num="11" title="Custom tools — advanced">
+            <Section id="sn-custom-tools" num="14" title="Custom tools — advanced">
               <p className="text-[14px] text-muted-foreground leading-relaxed mb-4">
                 Create custom tools via{' '}
                 <InlineCode>AI Voice Agent &gt; Agent Tools &gt; New</InlineCode>. Three tool types are supported:
@@ -442,7 +578,7 @@ ENDING THE CALL:
                   <strong className="font-semibold">Security model:</strong> tool scripts run as the integration
                   user (the SN account ZeVox authenticates against), <em>not</em> as the caller. Use{' '}
                   <InlineCode>caller_user_id</InlineCode> for attribution, not gating. Scope down the integration
-                  user's permissions to limit blast radius. The pre-save business rule blocks{' '}
+                  user&apos;s permissions to limit blast radius. The pre-save business rule blocks{' '}
                   <InlineCode>Packages.*</InlineCode>, <InlineCode>java.*</InlineCode>,{' '}
                   <InlineCode>GlidePluginManager</InlineCode>, and <InlineCode>GlideDBConfiguration</InlineCode> as
                   a secondary safety net.
@@ -450,71 +586,11 @@ ENDING THE CALL:
               </div>
             </Section>
 
-            <Section id="monitoring" num="12" title="Monitoring">
-              <ul className="space-y-2.5">
-                <BulletItem>
-                  <strong className="text-foreground font-medium">SN:</strong>{' '}
-                  <InlineCode>Conversation Sessions</InlineCode> and{' '}
-                  <InlineCode>Conversation Logs</InlineCode> contain every call.
-                </BulletItem>
-                <BulletItem>
-                  <strong className="text-foreground font-medium">ZeVox dashboard:</strong> the{' '}
-                  <strong className="text-foreground font-medium">Usage</strong> page shows minutes, tokens, and a
-                  month-end forecast.
-                </BulletItem>
-                <BulletItem>
-                  <strong className="text-foreground font-medium">Admin ops:</strong> the{' '}
-                  <strong className="text-foreground font-medium">Live Logs</strong> page tails gateway events in
-                  real time.
-                </BulletItem>
-                <BulletItem>
-                  <strong className="text-foreground font-medium">Guardrail violations:</strong> admin-only list
-                  showing every triggered guardrail.
-                </BulletItem>
-                <BulletItem>
-                  <strong className="text-foreground font-medium">Phone allowlist audit:</strong> denied calls are
-                  logged with <InlineCode>phone.call.rejected</InlineCode> +{' '}
-                  <InlineCode>reason: caller_not_on_allowlist</InlineCode>.
-                </BulletItem>
-              </ul>
-            </Section>
-
-            <Section id="troubleshooting" num="13" title="Troubleshooting">
-              <div className="space-y-3">
-                <Issue q='Agent responds "Sorry, I am having trouble right now"'>
-                  Click <strong className="text-foreground font-medium">Test Connection</strong> on the LLM record.
-                  Verify your API key is active and the model name is correct (e.g.{' '}
-                  <InlineCode>llama-3.3-70b-versatile</InlineCode> for Groq). Check SN system logs for the full
-                  error response from the LLM provider.
-                </Issue>
-                <Issue q="Agent invents incident numbers or record details">
-                  Open the agent record → Refresh Standard Tools. Each tool now enforces output schema and the
-                  prompt includes anti-fabrication rules. Verify your{' '}
-                  <strong className="text-foreground font-medium">Agent Instructions</strong> includes a "never
-                  fabricate parameter values" section (Section 07).
-                </Issue>
-                <Issue q="search_knowledge returns nothing">
-                  If KB Cache is empty (new install), the tool falls back to direct{' '}
-                  <InlineCode>kb_knowledge</InlineCode> text search. For richer results, link a KB to the agent
-                  (Section 08) and run Reprocess All Articles.
-                </Issue>
-                <Issue q="Phone caller hears immediate hangup">
-                  Either the caller's number isn't on your allowlist (when allowlist is non-empty), or the tenant
-                  isn't on the Premium plan. Check the SN audit log for{' '}
-                  <InlineCode>phone.call.rejected</InlineCode> with the reason metadata.
-                </Issue>
-                <Issue q="Free tier keeps charging minutes past the limit">
-                  Fixed — the gate is now enforced at WebSocket connection. If you still see overage, check Admin
-                  → Live Logs for <InlineCode>quota.exceeded</InlineCode> events.
-                </Issue>
-              </div>
-            </Section>
-
           </main>
         </div>
 
         <footer className="mt-20 pt-8 border-t border-border max-w-[760px] lg:ml-[268px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <p className="text-[11px] text-muted-foreground/70">© {new Date().getFullYear()} ZeVox — A ZeTechno Product</p>
+          <p className="text-[11px] text-muted-foreground/70">© {new Date().getFullYear()} ZeVox</p>
           <a href="mailto:support@zevox.com" className="text-[12px] text-muted-foreground hover:text-foreground transition-colors">
             Need help? support@zevox.com
           </a>
@@ -541,14 +617,6 @@ function Section({ id, num, title, children }: { id: string; num: string; title:
 
 function InlineCode({ children }: { children: React.ReactNode }) {
   return <code className="px-1.5 py-0.5 rounded bg-secondary text-foreground font-mono text-[11.5px] tracking-tight">{children}</code>
-}
-
-function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-      {children}
-    </a>
-  )
 }
 
 function KvCard({ rows }: { rows: [string, string][] }) {

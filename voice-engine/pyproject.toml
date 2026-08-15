@@ -1,0 +1,45 @@
+[project]
+name = "voice-engine"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Sagar Pinninti", email = "pinnintisagar546@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "jsonschema>=4.23.0",
+    # mlx-whisper is required by pipecat's whisper module on Apple Silicon dev
+    # machines even when the service is configured to use the faster-whisper
+    # backend (module-level import, not just runtime) — Linux (Docker/prod)
+    # doesn't need or support it, hence the platform-conditional split.
+    "pipecat-ai[whisper,kokoro,webrtc,silero,runner,livekit]>=1.7.0 ; sys_platform != 'darwin' or platform_machine != 'arm64'",
+    "pipecat-ai[whisper,mlx-whisper,kokoro,webrtc,silero,runner,livekit]>=1.7.0 ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # For minting room-join tokens and registering SIP dispatch rules server-side.
+    "livekit-api>=0.9.0",
+    "loguru>=0.7.2",
+    "presidio-analyzer>=2.2.360",
+    "spacy>=3.7,<3.9",
+    # Pinned wheel (not `spacy download`) so the exact model is reproducible
+    # across dev/CI/Docker instead of a runtime download step.
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+    "httpx>=0.27.0",
+    "jmespath>=1.0.1",
+    "asyncpg>=0.30.0",
+    "pyjwt>=2.9.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "respx>=0.21.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.19,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -1,15 +1,10 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { GeistSans } from 'geist/font/sans'
+import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 import { getSaasConfig } from '@/lib/saas-config'
-
-const inter = Inter({
-  variable: '--font-inter',
-  subsets: ['latin'],
-  display: 'swap',
-})
 
 export async function generateMetadata(): Promise<Metadata> {
   const cfg = await getSaasConfig()
@@ -57,7 +52,7 @@ export default async function RootLayout({
   `.trim()
 
   return (
-    <html lang="en" className={`${inter.variable} h-full`} style={{ colorScheme: 'dark' }}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} h-full`} style={{ colorScheme: 'dark' }}>
       <head>
         {cfg.faviconUrl && <link rel="icon" href={cfg.faviconUrl} />}
         <style>{`:root { ${cssVars} }`}</style>

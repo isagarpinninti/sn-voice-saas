@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { decrypt } from '@/lib/encrypt'
+import { instanceBasicAuthValue } from '@/lib/instance-credentials'
+import { registerPhoneNumberWithLiveKit } from '@/lib/livekit-sip'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -44,6 +46,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
   // Sync agent assignment to SN if instance is configured
   if (body.agentId !== undefined && phone.instanceId) {
     syncAssignmentToSN(phone.instanceId, phone.id, phone.e164, body.agentId || null, updated.friendly).catch(() => {})
+  }
+  if (body.agentId) {
+    registerPhoneNumberWithLiveKit(phone.e164, body.agentId).catch(() => {})
   }
 
   return NextResponse.json({ success: true, phoneNumber: updated })
@@ -90,11 +95,11 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
 
 async function syncAssignmentToSN(instanceId: string, phoneId: string, e164: string, agentId: string | null, friendly: string | null) {
   const [instance, agent] = await Promise.all([
-    db.instance.findUnique({ where: { id: instanceId }, select: { snInstanceUrl: true, snUsername: true, snPassword: true } }),
+    db.instance.findUnique({ where: { id: instanceId }, select: { snInstanceUrl: true, snUsername: true, snPassword: true, snPasswordEncrypted: true } }),
     agentId ? db.agent.findUnique({ where: { id: agentId }, select: { snAgentId: true } }) : Promise.resolve(null),
   ])
   if (!instance) return
-  const basic = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
+  const basic = instanceBasicAuthValue(instance)
   await fetch(`${instance.snInstanceUrl}/api/x_ztpas_ai_voice_a/v1/phone-numbers`, {
     method: 'POST',
     headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/json' },

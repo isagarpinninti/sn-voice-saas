@@ -11,13 +11,13 @@ const HIGHLIGHTS = [
   },
   {
     Icon: ShieldCheck,
-    title: 'Data stays in ServiceNow',
-    desc: 'No copies of your records sit in our database. Tools execute on your instance via GlideRecord.',
+    title: 'PII redacted before the LLM',
+    desc: 'Every transcript is redacted before it reaches an LLM call — tools execute on ServiceNow, HaloITSM, or any REST API you connect.',
   },
   {
     Icon: Sparkles,
     title: '50 free minutes',
-    desc: 'No credit card required. Connect your instance, embed the widget, take it for a spin.',
+    desc: 'No credit card required. Connect a backend, embed the widget, take it for a spin.',
   },
 ]
 
@@ -35,18 +35,17 @@ export default function AuthPage() {
               </svg>
             </div>
             <span className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">ZeVox</span>
-            <span className="text-[10px] text-muted-foreground/60 ml-1 tracking-wide">by ZeTechno</span>
           </a>
 
-          <p className="text-[10px] text-primary tracking-widest uppercase mb-3 font-medium">Voice AI for ServiceNow</p>
+          <p className="text-[10px] text-primary tracking-widest uppercase mb-3 font-medium">Voice AI for your stack</p>
           <h2 className="text-[28px] font-semibold tracking-[-0.03em] leading-[1.1] mb-4 text-foreground">
-            Give your ServiceNow
+            Give your stack
             <br />
             a real voice.
           </h2>
           <p className="text-[13px] text-muted-foreground leading-relaxed max-w-[340px]">
-            Human-quality voice agents that check tickets, create incidents, and resolve issues — entirely managed
-            from your ServiceNow workspace.
+            Human-quality voice agents that check tickets, create incidents, and resolve issues — on ServiceNow,
+            HaloITSM, or any REST API you already run.
           </p>
         </div>
 
@@ -67,7 +66,7 @@ export default function AuthPage() {
 
           <div className="pt-5 border-t border-border">
             <p className="text-[10px] text-muted-foreground/60">
-              A <span className="text-muted-foreground">ZeTechno</span> Product. © {new Date().getFullYear()}.
+              © {new Date().getFullYear()} ZeVox.
             </p>
           </div>
         </div>

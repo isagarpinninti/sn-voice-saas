@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { signUploadToken } from '@/lib/upload-tokens'
 import { createPendingUpload } from '@/lib/upload-registry'
+import { instanceBasicAuthValue } from '@/lib/instance-credentials'
 
 const CORS: HeadersInit = {
   'Access-Control-Allow-Origin': '*',
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No instance configured' }, { status: 404, headers: CORS })
   }
 
-  const snAuth = Buffer.from(`${instance.snUsername}:${instance.snPassword}`).toString('base64')
+  const snAuth = instanceBasicAuthValue(instance)
 
   // ── Get or create session (DB-backed, survives deploys) ───────────────
   const now = new Date()

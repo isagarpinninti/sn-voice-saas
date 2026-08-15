@@ -76,11 +76,19 @@ export async function GET(req: Request) {
           borderRadius:  agent.widgetBorderRadius  || base.borderRadius,
           launcherLabel: agent.widgetLauncherLabel || base.launcherLabel,
           launcherDark:  agent.widgetLauncherDark  ?? base.launcherDark,
+          // VoiceConnect merge (M9): an agent only opts into the new
+          // self-hosted WebRTC path once it's been migrated — llmModel being
+          // set is that signal (it's only ever populated by the migration,
+          // never by the legacy Deepgram/Groq pipeline). Every existing
+          // tenant's agent has llmModel = null and keeps using the
+          // legacy WS path untouched.
+          engine:       agent.llmModel ? 'webrtc' : 'legacy',
+          agentId:      agent.id,
         },
         { headers: CORS_HEADERS }
       )
     }
   }
 
-  return NextResponse.json(base, { headers: CORS_HEADERS })
+  return NextResponse.json({ ...base, engine: 'legacy' }, { headers: CORS_HEADERS })
 }

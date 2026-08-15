@@ -308,7 +308,7 @@ function AddNumbersStep({ agents, onAdded }: { agents: Agent[]; onAdded: () => v
       {tab === 'owned' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-[12.5px] text-muted-foreground">Numbers in your Twilio account. Click Import to add them here and configure webhooks automatically.</p>
+            <p className="text-[12.5px] text-muted-foreground">Numbers in your Twilio account. Click Import to add them here and route calls through your voice agent.</p>
             <Button size="sm" variant="outline" onClick={loadOwned} disabled={loadingOwned} className="shrink-0">
               <RefreshCw className={`w-3.5 h-3.5 ${loadingOwned ? 'animate-spin' : ''}`} />
             </Button>
@@ -338,9 +338,6 @@ function AddNumbersStep({ agents, onAdded }: { agents: Agent[]; onAdded: () => v
                         {n.capabilities?.voice && <Badge variant="outline" className="text-[10px]">Voice</Badge>}
                       </div>
                       <p className="text-[11.5px] text-muted-foreground">{n.friendly}</p>
-                      {n.voiceUrl && !n.voiceUrl.includes('/api/phone/incoming') && (
-                        <p className="text-[11px] text-amber-400 mt-0.5">⚠ Webhook points elsewhere — import will overwrite it</p>
-                      )}
                     </div>
                     {!n.imported && (
                       <Button
