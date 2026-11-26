@@ -245,7 +245,7 @@ reading raw data back.`}</CodeBlock>
                 snippet, and paste it before your <InlineCode>{'</body>'}</InlineCode>:
               </p>
               <CodeBlock language="html">{`<script>window.ZEVOX_TOKEN = "sk_live_your_token_here";</script>
-<script src="https://zevox.onrender.com/widget.js"></script>`}</CodeBlock>
+<script src="https://zevox.up.railway.app/widget.js"></script>`}</CodeBlock>
               <p className="text-[13.5px] text-muted-foreground mt-3">
                 Customize the widget (colors, position, greeting, voice-only mode) on the{' '}
                 <strong className="text-foreground font-medium">Connection</strong> page — changes apply instantly.
@@ -385,7 +385,7 @@ npx now-sdk install --instance https://your-instance.service-now.com`}</CodeBloc
               </p>
               <KvCard
                 rows={[
-                  ['SaaS Base URL', 'https://zevox.onrender.com'],
+                  ['SaaS Base URL', 'https://zevox.up.railway.app'],
                   ['Tenant API Key', 'sk_live_… (from ZeVox → Connection)'],
                 ]}
               />

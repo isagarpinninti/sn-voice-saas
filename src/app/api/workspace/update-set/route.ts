@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   }
 
   const token = tenant.tokens[0]?.token || ''
-  const serverUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
+  const serverUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.up.railway.app'
   const panelUrl = `${serverUrl}/panel`
 
   const xml = buildUpdateSetXml({ token, serverUrl, panelUrl })

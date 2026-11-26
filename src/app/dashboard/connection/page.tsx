@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/toast'
 import { useConfirm } from '@/components/ui/confirm-dialog'
 import { CheckCircle2, XCircle, Loader2, Copy, Check, Plus, Server, Trash2 } from 'lucide-react'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.up.railway.app'
 
 interface TestResult { step: string; status: 'pass' | 'fail'; detail: string }
 

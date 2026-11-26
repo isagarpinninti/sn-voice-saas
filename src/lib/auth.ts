@@ -15,6 +15,9 @@ export const authOptions: NextAuthOptions = {
     GitHubProvider({
       clientId: process.env.GITHUB_CLIENT_ID || '',
       clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
+      // GitHub returns an `iss` parameter on the OAuth callback; next-auth
+      // rejects it unless the matching issuer is configured here.
+      issuer: 'https://github.com/login/oauth',
     }),
   ],
   callbacks: {

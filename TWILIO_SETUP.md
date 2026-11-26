@@ -6,7 +6,7 @@ End-to-end guide to turn the **Premium** tier on for a tenant. Currently MVP (v1
 
 ```
 Caller dials +1-XXX-XXX-XXXX
-  → Twilio POSTs to https://zevox-production.up.railway.app/api/phone/incoming
+  → Twilio POSTs to https://zevox.up.railway.app/api/phone/incoming
   → That webhook looks up the number, checks the tenant is on PREMIUM (or legacy PRO_VOICE/ENTERPRISE),
     and returns TwiML: <Connect><Stream url="wss://.../phone?phoneId=..."/>
   → Twilio opens a Media Streams WebSocket to our server
@@ -47,7 +47,7 @@ TWILIO_SIGNATURE_VALIDATION=true
 1. Click the number in the Twilio console
 2. Under **Voice Configuration**:
    - **A Call Comes In:** `Webhook`
-   - **URL:** `https://zevox-production.up.railway.app/api/phone/incoming`
+   - **URL:** `https://zevox.up.railway.app/api/phone/incoming`
    - **Method:** `HTTP POST`
 3. **Save**
 

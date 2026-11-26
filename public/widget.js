@@ -1,13 +1,13 @@
 /**
  * ZeVox Widget
  * <script>window.ZEVOX_TOKEN="sk_live_...";</script>
- * <script src="https://zevox.onrender.com/widget.js"></script>
+ * <script src="https://zevox.up.railway.app/widget.js"></script>
  */
 (function(){
   var sc=document.currentScript||document.querySelector('script[data-token]')
   var TK=(window.ZeVoxConfig&&window.ZeVoxConfig.token)||window.ZEVOX_TOKEN||(sc&&sc.getAttribute('data-token'))||''
   var AGENT=(window.ZeVoxConfig&&window.ZeVoxConfig.agent)||window.ZEVOX_AGENT||(sc&&sc.getAttribute('data-agent'))||''
-  var GW=(window.ZeVoxConfig&&window.ZeVoxConfig.gateway)||(sc&&sc.src?new URL(sc.src).origin:'')||'https://zevox.onrender.com'
+  var GW=(window.ZeVoxConfig&&window.ZeVoxConfig.gateway)||(sc&&sc.src?new URL(sc.src).origin:'')||'https://zevox.up.railway.app'
   if(!TK){console.error('[ZeVox] No token');return}
   if(window.__zv)return;window.__zv=true
 
@@ -570,8 +570,8 @@
     }
 
     /* Branding */
-    var br=g('zv-br');if(br)br.innerHTML=C.brand?'Powered by <a href="https://zevox.onrender.com" target="_blank">ZeVox</a>':''
-    var cbr=g('zv-chat-br');if(cbr)cbr.innerHTML=C.brand?'Powered by <a href="https://zevox.onrender.com" target="_blank">ZeVox</a>':''
+    var br=g('zv-br');if(br)br.innerHTML=C.brand?'Powered by <a href="https://zevox.up.railway.app" target="_blank">ZeVox</a>':''
+    var cbr=g('zv-chat-br');if(cbr)cbr.innerHTML=C.brand?'Powered by <a href="https://zevox.up.railway.app" target="_blank">ZeVox</a>':''
 
     /* Wire voice card */
     if(isVoice&&!isBoth){

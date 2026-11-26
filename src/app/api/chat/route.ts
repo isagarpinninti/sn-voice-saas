@@ -244,7 +244,7 @@ export async function POST(req: Request) {
             sessionId,
             agentId:  agentId || '',
           })
-          const baseUrl     = process.env.NEXTAUTH_URL || 'https://zevox.onrender.com'
+          const baseUrl     = process.env.NEXTAUTH_URL || 'https://zevox.up.railway.app'
           attachmentUrl     = `${baseUrl}/upload/${uploadToken}`
           attachmentReason  = input.reason || 'a file'
           toolOutput = JSON.stringify({ status: 'upload_requested', url: attachmentUrl })

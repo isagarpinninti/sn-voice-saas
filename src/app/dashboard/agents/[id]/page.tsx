@@ -16,7 +16,7 @@ import { VOICES } from '@/lib/voices'
 import { KOKORO_VOICES } from '@/lib/kokoro-voices'
 import { ArrowLeft, Trash2, AlertTriangle, X, Volume2, Loader2, Copy, Check, Send, Bot, Phone, ExternalLink } from 'lucide-react'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.up.railway.app'
 
 interface AgentConfig {
   id: string

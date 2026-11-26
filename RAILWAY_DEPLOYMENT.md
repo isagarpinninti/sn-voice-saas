@@ -2,6 +2,8 @@
 
 This guide walks through deploying `sn-voice-saas` (the ZeVox dashboard) to [Railway](https://railway.app). The Dockerfile, `railway.json`, and `.dockerignore` are already in place.
 
+**Live deployment:** https://zevox.up.railway.app
+
 > **Note on architecture:** ZeVox spans three repos. This deployment is **only for `sn-voice-saas`** (the Next.js dashboard + WebSocket voice pipeline). The `voice-gateway` repo deploys separately to Fly.io. The `AI_Voice_Agent` repo is a ServiceNow scoped app and does not deploy to Railway.
 
 ---
@@ -147,10 +149,10 @@ railway run npx prisma db push
 
 Change `startCommand` to:
 ```
-"startCommand": "npx prisma db push --accept-data-loss && npx tsx server.ts"
+"startCommand": "npx prisma db push && npx tsx server.ts"
 ```
 
-> Use `db push` for the initial schema. Switch to `prisma migrate deploy` once you have proper migration files. `--accept-data-loss` is fine for the first push to an empty database; remove it after.
+> Use `db push` for the initial schema. Switch to `prisma migrate deploy` once you have proper migration files. Don't add `--accept-data-loss`: without it, `db push` stops instead of making a destructive schema change.
 
 ---
 
@@ -201,7 +203,7 @@ You forgot to update `NEXTAUTH_URL` after generating the Railway domain. The OAu
 Check the browser console for the `wss://` URL. It should match your Railway domain. If you see CORS errors, the `widget.js` route in `server.ts` already sets `Access-Control-Allow-Origin: *` — but check that the request is going to the right host.
 
 **`tsx` not found at runtime**
-The Dockerfile installs all deps (including dev) via `npm ci` and uses `npx tsx server.ts` at runtime. If `tsx` is missing, your `package.json` may have moved it to a place that `npm ci` is skipping. It's currently in `devDependencies` — fine because the Dockerfile doesn't pass `--production` to `npm ci`.
+The server runs with `npx tsx server.ts`. `tsx` is listed in `dependencies`, so `npm ci` installs it during the image build.
 
 **Database schema isn't applied**
 You skipped Step 6. Run `railway run npx prisma db push` once, then redeploy.

@@ -10,7 +10,7 @@
   var params=new URLSearchParams(window.location.search)
   var TK=params.get('token')||window.ZEVOX_TOKEN||''
   var AGENT=params.get('agent')||window.ZEVOX_AGENT||''
-  var GW=params.get('gw')||(window.location.origin)||'https://zevox.onrender.com'
+  var GW=params.get('gw')||(window.location.origin)||'https://zevox.up.railway.app'
   var recordTable=params.get('table')||''
   var recordSysId=params.get('sys_id')||''
   var recordDisplay=params.get('display')||''
@@ -244,7 +244,7 @@ html,body{height:100%;background:#fff;overflow:hidden}
         '</div>',
       ].join('') : '',
       // Footer
-      C.brand ? '<div id="zvp-footer">Powered by <a href="https://zevox.onrender.com" target="_blank">ZeVox</a></div>' : '<div id="zvp-footer"></div>',
+      C.brand ? '<div id="zvp-footer">Powered by <a href="https://zevox.up.railway.app" target="_blank">ZeVox</a></div>' : '<div id="zvp-footer"></div>',
     ].join('')
 
     document.body.appendChild(el)

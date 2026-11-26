@@ -24,7 +24,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
   const token = tenant.tokens[0]?.token || ''
-  const serverUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.onrender.com'
+  const serverUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://zevox.up.railway.app'
   const agentLabel = agent.widgetTitle || agent.name || 'ZeVox Agent'
   const tables = (agent.widgetWorkspaceTables || '')
     .split(',')
